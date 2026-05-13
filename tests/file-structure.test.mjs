@@ -62,4 +62,6 @@ test('keeps package scripts and dependencies minimal', () => {
   assert.equal(pkg.devDependencies.wrangler, undefined);
   assert.equal(pkg.devDependencies['@cloudflare/workers-types'], undefined);
   assert.doesNotMatch(tsconfigApp, /ignoreDeprecations/);
+  assert.doesNotMatch(tsconfigApp, /"baseUrl"/);
+  assert.match(tsconfigApp, /"@\/\*":\s*\["\.\/src\/\*"\]/);
 });
