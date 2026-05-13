@@ -1,0 +1,8 @@
+.ace-tool/
+.wrangler/
+node_modules/
+dist/
+.env
+.env.local
+*.local
+*.tsbuildinfo
