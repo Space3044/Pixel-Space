@@ -35,6 +35,9 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/styles/main.css',
     'docs/PLAN.md',
     'db/migrations/0001_init.sql',
+    'functions/types.ts',
+    'tsconfig.functions.json',
+    'wrangler.toml',
     'tests/image-links.test.mjs',
     'tests/migration.test.mjs',
   ]) {
@@ -42,11 +45,8 @@ test('keeps only the starter code the owner will extend by hand', () => {
   }
 
   for (const path of [
-    'functions',
     'docs/DATABASE.md',
     'docs/references',
-    'tsconfig.functions.json',
-    'wrangler.toml',
     'src/features/auth/auth.store.ts',
     'src/features/images/ImageCard.vue',
     'src/features/images/images.api.ts',
@@ -63,10 +63,22 @@ test('keeps package scripts and dependencies minimal', () => {
   const pkg = JSON.parse(read('package.json'));
   const tsconfigApp = read('tsconfig.app.json');
 
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ['build', 'dev', 'preview', 'test', 'typecheck']);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), [
+    'build',
+    'db:migrate:local',
+    'db:migrate:remote',
+    'dev',
+    'dev:pages',
+    'preview',
+    'test',
+    'typecheck',
+  ]);
   assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['vue', 'vue-router']);
-  assert.equal(pkg.devDependencies.wrangler, undefined);
-  assert.equal(pkg.devDependencies['@cloudflare/workers-types'], undefined);
+  assert.ok(pkg.devDependencies.wrangler, 'wrangler must be installed from stage 4');
+  assert.ok(
+    pkg.devDependencies['@cloudflare/workers-types'],
+    '@cloudflare/workers-types must be installed from stage 4',
+  );
   assert.doesNotMatch(tsconfigApp, /ignoreDeprecations/);
   assert.doesNotMatch(tsconfigApp, /"baseUrl"/);
   assert.match(tsconfigApp, /"@\/\*":\s*\["\.\/src\/\*"\]/);
