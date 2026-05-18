@@ -55,7 +55,7 @@ tests/
 - D1 schema 随阶段渐进扩展，新增字段一律用 `ALTER TABLE ADD COLUMN`
 - 不写本地 sqlite3 替代实现，运行时代码只认 D1
 - 不做多用户、角色表、权限矩阵
-- 不保存 EXIF GPS 字段，位置只支持管理员手动添加
+- 上传时若 EXIF 含 GPS 坐标，前端解析后作为默认值 pre-fill 到地图与表单；最终是否落库由管理员在提交前确认或调整，避免无意泄露敏感坐标
 - 不写假接口、假数据、冗余兜底分支
 - 每阶段结束都要能运行 `npm test` 和 `npm run build`
 
@@ -67,7 +67,7 @@ tests/
 
 **图片 key 策略**。key 使用 `crypto.randomUUID()` 生成，对外不可枚举。`hash` 列存 SHA-256，用于上传时前端展示"可能重复"提示，不强制阻塞。R2 对象 key 与 D1 主键一致。
 
-**EXIF 处理路径**。在前端压缩之前用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门等非定位字段，单独作为 FormData 字段发到后端。压缩使用 `browser-image-compression` 输出 WebP，会自然清除所有 EXIF，包括 GPS。不依赖后端做 EXIF 解析。
+**EXIF 处理路径**。在前端压缩之前用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门以及 GPS 经纬度，单独作为 FormData 字段发到后端。GPS 解析出 WGS84 十进制坐标后只作为**地图标记与表单的默认值**，最终是否随 `location_lat` / `location_lng` 落库由管理员在上传页确认或调整（可清空、可拖动地图覆盖、可手动改数字）。压缩使用 `browser-image-compression` 输出 WebP，会自然清除所有 EXIF（包括 GPS），公开访问的压缩图不会泄露原始坐标。不依赖后端做 EXIF 解析。
 
 **AI 调用同步性**。上传接口返回时 `ai_status` 写 `pending`，AI 调用通过 `ctx.waitUntil` 在响应之后异步执行，不阻塞上传响应。失败重试上限 3 次，超过后 `ai_status` 写 `failed`，详情页展示原因，但不影响图片本身可用。当前阶段不引入 Cloudflare Queues，等流量真有压力再升级。
 
@@ -76,6 +76,8 @@ tests/
 **数据库迁移**。本地用 `wrangler d1 migrations apply imgbed --local` 跑，生产用 `wrangler d1 migrations apply imgbed --remote`。迁移文件按阶段编号，不修改已发布的迁移，新需求一律新增迁移。
 
 **图库布局策略**。图库页用 Justified Rows 算法（Flickr/Unsplash 风格）：按行布局、每行图片高度统一、按原始宽高比横向拼接、行末等比缩放刚好填满容器宽度。不裁切原图、视觉密度高、阅读顺序自然。算法依赖每张图的 `width`/`height` 字段，因此到阶段 5 拿到真实数据后才能接入，候选实现是 [`justified-layout`](https://www.npmjs.com/package/justified-layout) 这个 Flickr 团队官方包，约 4 KB，框架无关。阶段 1 期间用 CSS columns 多列瀑布流 + 多种 aspect ratio 的骨架占位演示视觉密度，等阶段 5 替换为真算法。图库页通过 `AppShell` 的 `fluid` prop 跳出 `max-w-7xl` 限宽，撑满视口宽度。
+
+**地图与坐标拾取**。地图组件统一选 [Leaflet](https://leafletjs.com/)（约 40 KB gzip）+ OpenStreetMap 公共瓦片，免费、无 token、无注册、坐标原始 WGS84 不偏移、自用流量在 OSM ToS 内。阶段 7 上传页用交互式地图让管理员点击地图拾取 `location_lat` / `location_lng`，地名搜索接 OSM Nominatim 免费 geocoding；阶段 11 lightbox 详情面板与 `/p/:key` 公开页复用同一个 Leaflet 实例渲染只读小地图（关掉拖拽缩放、固定缩放级别、放标记点），不再加任何额外依赖。国内访问主瓦片偶尔慢，需要时换 `tile.openstreetmap.de` 等兼容 Slippy Map 格式的镜像即可。不选 Mapbox / MapLibre / Google Maps 的原因：需要 token 或绑卡、bundle 大、视觉提升对图床详情页这种小地图收益有限。
 
 ## 阶段 0：最小骨架
 
@@ -160,14 +162,16 @@ npm run build
 
 目标：只先建 MVP 列表和详情页用得到的字段，后续阶段再加列。
 
+状态：已完成。
+
 任务：
 
-- [ ] 新建 `db/migrations/0001_init.sql`
-- [ ] 创建 `images` 表，字段：`key TEXT PK`、`title`、`caption`、`r2_key`、`width`、`height`、`format`、`bytes_compressed`、`bytes_original`、`hash`、`location_name`、`location_lat`、`location_lng`、`exif_taken_at`、`exif_camera`、`exif_iso`、`exif_aperture`、`exif_shutter`、`created_at`、`updated_at`
-- [ ] 不创建任何 GPS 字段
-- [ ] 不创建 AI 字段，不创建 Telegram 字段，等阶段 9、10 加列
-- [ ] 添加公开列表查询所需索引（按 `created_at DESC`）
-- [ ] 新建 `tests/migration.test.mjs`，校验迁移文件不含 `gps`、`latitude_exif`、`longitude_exif` 等关键字
+- [x] 新建 `db/migrations/0001_init.sql`
+- [x] 创建 `images` 表，字段：`key TEXT PK`、`title`、`caption`、`r2_key`、`width`、`height`、`format`、`bytes_compressed`、`bytes_original`、`hash`、`location_name`、`location_lat`、`location_lng`、`exif_taken_at`、`exif_camera`、`exif_iso`、`exif_aperture`、`exif_shutter`、`created_at`、`updated_at`
+- [x] schema 不放 EXIF GPS 专属列：`location_lat` / `location_lng` 是通用坐标列，由阶段 7 上传链路提供值（EXIF 默认值经管理员确认，或地图手动拾取）
+- [x] 不创建 AI 字段，不创建 Telegram 字段，等阶段 9、10 加列
+- [x] 添加公开列表查询所需索引（按 `created_at DESC`）
+- [x] 新建 `tests/migration.test.mjs`，校验迁移文件不含 `gps`、`latitude_exif`、`longitude_exif` 等关键字
 
 这一阶段不做：
 
@@ -250,11 +254,12 @@ npm run build
 - [ ] 安装 `browser-image-compression` 和 `exifr`
 - [ ] 上传页支持选择单张图片
 - [ ] 显示本地预览、原始文件名、原始大小
-- [ ] 用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门
+- [ ] 用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门，以及 GPS 经纬度（若存在，解析为 WGS84 十进制）
 - [ ] 用 `browser-image-compression` 压缩为 WebP，目标长边 2048
 - [ ] 显示压缩后大小
 - [ ] 单图大小超过 50MB 直接在前端阻断，提示当前不支持
-- [ ] 表单提供 `title`、`caption`、`location_name`、`location_lat`、`location_lng` 输入
+- [ ] 安装 `leaflet`，集成 OpenStreetMap 瓦片，上传表单内嵌交互式地图：EXIF 含 GPS 时自动落点作为默认值，否则等待管理员点击地图拾取 `location_lat` / `location_lng`，可选搜索框接 OSM Nominatim 按地名定位
+- [ ] 表单提供 `title`、`caption`、`location_name` 输入；`location_lat` / `location_lng` 由 EXIF / 地图拾取自动回填，可清空、可手动覆盖；提交时由管理员确认是否随图落库
 - [ ] 组装 `FormData`：`original`、`compressed`、`exif`(JSON)、`meta`(JSON)
 - [ ] 新建 `tests/exif.test.mjs`，覆盖典型 EXIF 数据解析
 
@@ -280,7 +285,7 @@ npm run build
 - [ ] 用 `crypto.randomUUID()` 生成 `key`
 - [ ] 计算 SHA-256 写入 `hash` 列
 - [ ] 压缩图写入 R2，对象 key 与图片 key 一致
-- [ ] D1 写入完整元数据，含 EXIF 非定位字段
+- [ ] D1 写入完整元数据，含 EXIF 拍摄信息以及管理员确认后的 `location_lat` / `location_lng` / `location_name`（未填则留空）
 - [ ] 接口响应返回新 `ImageRecord`
 - [ ] 前端调用上传接口，成功后跳转详情页
 - [ ] `GET /api/list` 和 `GET /api/image/:key` 返回 R2 公开 URL（基于 `PUBLIC_BASE_URL` 拼装）
@@ -347,7 +352,8 @@ npm run build
 - [ ] 实现 `DELETE /api/admin/image/:key`
 - [ ] 删除流程：先删 R2 压缩图，再尝试删除 Telegram 频道消息（失败仅记录日志不阻塞），最后从 D1 物理删除
 - [ ] 图库页增加关键词搜索，命中 `title`、`caption`、`search_content`、`location_name` 任一即可
-- [ ] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`
+- [ ] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`（坐标编辑复用上传页的 Leaflet 地图拾取组件）
+- [ ] lightbox 详情面板与 `/p/:key` 公开页用只读 Leaflet 渲染坐标小地图（无坐标则不显示）
 - [ ] 详情页支持复制 Markdown、HTML、直链
 - [ ] 公开页路由层注入 `og:image`、`og:title`、`og:description`
 
