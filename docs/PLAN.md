@@ -136,14 +136,16 @@ npm run build
 
 目标：定义前端真正需要的数据结构，让页面可以围绕真实字段开发。
 
+状态：已完成。
+
 任务：
 
-- [ ] 新建 `src/features/images/image.types.ts`，定义 `ImageRecord`
-- [ ] 字段只包含 MVP 页面会展示的内容：`key`、`title`、`caption`、`public_url`、`width`、`height`、`format`、`location_name`
-- [ ] 新建 `src/features/images/image-links.ts`，实现 Markdown、HTML、公开页直链生成
-- [ ] 新建 `tests/image-links.test.mjs`，覆盖三种链接格式
-- [ ] 详情页基于一个本地构造对象完成链接展示
-- [ ] 如果需要跨页面共享图片数据，再新建最小 Pinia store
+- [x] 新建 `src/features/images/image.types.ts`，定义 `ImageRecord`
+- [x] 字段只包含 MVP 页面会展示的内容：`key`、`title`、`caption`、`public_url`、`width`、`height`、`format`、`location_name`
+- [x] 新建 `src/features/images/image-links.ts`，实现 Markdown、HTML、公开页直链生成
+- [x] 新建 `tests/image-links.test.mjs`，覆盖三种链接格式
+- [x] `PublicImageView` 基于一个本地构造对象完成链接展示（详情已并入 lightbox，独立 detail 路由已删）
+- [x] 当前阶段无跨页面共享需求，暂不引入 Pinia store
 
 这一阶段不做：
 

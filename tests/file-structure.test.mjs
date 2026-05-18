@@ -26,12 +26,15 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/images/GalleryView.vue',
     'src/features/images/ImageLightbox.vue',
     'src/features/images/PublicImageView.vue',
+    'src/features/images/image.types.ts',
+    'src/features/images/image-links.ts',
     'src/features/random/RandomView.vue',
     'src/features/hive/HiveView.vue',
     'src/shared/ui/AppShell.vue',
     'src/shared/ui/SearchModal.vue',
     'src/styles/main.css',
     'docs/PLAN.md',
+    'tests/image-links.test.mjs',
   ]) {
     assert.equal(exists(path), true, `${path} should exist`);
   }
@@ -47,8 +50,6 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/images/ImageCard.vue',
     'src/features/images/images.api.ts',
     'src/features/images/images.store.ts',
-    'src/features/images/image.types.ts',
-    'src/features/images/image-links.ts',
     'tests/frontend-skeleton.test.mjs',
     'tests/backend-read.test.mjs',
     'tests/local-dev.test.mjs',
