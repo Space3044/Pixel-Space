@@ -19,15 +19,22 @@ src/
   features/
     auth/
       LoginView.vue
+    home/
+      HomeView.vue
+    hive/
+      HiveView.vue
     images/
       GalleryView.vue
-      ImageDetailView.vue
+      ImageLightbox.vue
       PublicImageView.vue
+    random/
+      RandomView.vue
     upload/
       UploadView.vue
   shared/
     ui/
       AppShell.vue
+      SearchModal.vue
   styles/
     main.css
 
@@ -68,6 +75,8 @@ tests/
 
 **数据库迁移**。本地用 `wrangler d1 migrations apply imgbed --local` 跑，生产用 `wrangler d1 migrations apply imgbed --remote`。迁移文件按阶段编号，不修改已发布的迁移，新需求一律新增迁移。
 
+**图库布局策略**。图库页用 Justified Rows 算法（Flickr/Unsplash 风格）：按行布局、每行图片高度统一、按原始宽高比横向拼接、行末等比缩放刚好填满容器宽度。不裁切原图、视觉密度高、阅读顺序自然。算法依赖每张图的 `width`/`height` 字段，因此到阶段 5 拿到真实数据后才能接入，候选实现是 [`justified-layout`](https://www.npmjs.com/package/justified-layout) 这个 Flickr 团队官方包，约 4 KB，框架无关。阶段 1 期间用 CSS columns 多列瀑布流 + 多种 aspect ratio 的骨架占位演示视觉密度，等阶段 5 替换为真算法。图库页通过 `AppShell` 的 `fluid` prop 跳出 `max-w-7xl` 限宽，撑满视口宽度。
+
 ## 阶段 0：最小骨架
 
 目标：只保留主人后续亲手开发所需的基础项目壳。
@@ -98,15 +107,20 @@ npm run build
 
 任务：
 
-- [ ] 登录页写明 GitHub 管理员登录入口
-- [ ] 上传页写出选图区域、预览区域、上传按钮区域
-- [ ] 图库页写出标题区、筛选区、图片网格空容器
-- [ ] 图片详情页写出图片展示区、信息区、复制链接区、位置区
-- [ ] 公开图片页写出单图展示结构
-- [ ] `AppShell` 完成导航和基础布局
-- [ ] 在 `index.html` 写入基础 SEO 元信息（`description`、`og:title`、`og:type`）
-- [ ] 公开图片页路由层面预留 `og:image` 注入位置，当前阶段先留空
-- [ ] 样式只写当前页面用到的 class，不做主题系统
+- [x] `AppShell` 完成导航和基础布局：左侧 Logo、中间「首页/探索/随机/上传/蜂巢」五项、右侧搜索按钮 + 语言/主题占位 + GitHub 链接 + 接入按钮
+- [x] 首页写出 Hero 区域、CTA 按钮、站点数据占位（Photos/Storage/AI Tagged）和功能卡片
+- [x] 登录页写明 Cloudflare Access + GitHub 管理员登录入口
+- [x] 上传页写出选图区域、缩略图队列、大图预览、EXIF 与表单侧栏
+- [x] 图库页用 CSS columns 多列占位排布骨架卡片（阶段 5 替换为 Justified Rows）
+- [x] 图片单图查看走 `ImageLightbox` 弹层（管理操作也挂在 lightbox 上，不再有独立的 `/images/:key` 详情路由）
+- [x] 图库点击图片打开全屏 `ImageLightbox`（参考 PixelPunk：顶部 navbar、左右翻页箭头、底部控件条；缩放/旋转/详情等占位待阶段 7、5 接入）
+- [x] 公开图片页写出单图展示结构
+- [x] 随机页：参考 PixelPunk 沉浸式设计——首屏占满一张随机大图、向下滚动展开详情卡（作者、AI、文件信息）、右下浮动刷新按钮（loading 时 spin）、左下键盘提示（Space 换一张）；阶段 5 接 `GET /api/random` 真实数据
+- [x] 蜂巢页：参考 PixelPunk 蜂窝马赛克设计——pointy-top 六边形 clip-path 密铺、奇偶行错位、深色渐变背景、浮动六边形装饰、左上角浮动提示卡（含收起按钮）；阶段 12 接入拖动浏览、全屏、滚动加载更多
+- [x] 全局搜索弹窗骨架（`SearchModal.vue`）已写好，阶段 11 搜索接入时再挂载入口
+- [x] 在 `index.html` 写入基础 SEO 元信息（`description`、`og:title`、`og:type` 等）
+- [x] 公开图片页路由层面预留 `og:image` 注入位置，当前阶段先留空
+- [x] 样式只写当前页面用到的 class，不做主题系统
 
 这一阶段不做：
 
@@ -194,6 +208,7 @@ npm run build
 - [ ] 实现 `GET /api/image/:key`
 - [ ] 前端新建 `src/features/images/images.api.ts`
 - [ ] 图库页调用列表接口，详情页调用详情接口
+- [ ] 安装 `justified-layout`，把图库页的 CSS columns 占位换成 Justified Rows 真实布局
 - [ ] 新建 `tests/api-shape.test.mjs`，断言响应字段集合（用 mock D1 或快照）
 
 这一阶段不做：
