@@ -5,14 +5,18 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/images',
+      name: 'home',
+      component: () => import('@/features/home/HomeView.vue'),
+      meta: {
+        title: '首页',
+      },
     },
     {
       path: '/login',
       name: 'login',
       component: () => import('@/features/auth/LoginView.vue'),
       meta: {
-        title: '登录',
+        title: '接入',
       },
     },
     {
@@ -28,16 +32,7 @@ const router = createRouter({
       name: 'gallery',
       component: () => import('@/features/images/GalleryView.vue'),
       meta: {
-        title: '图库',
-      },
-    },
-    {
-      path: '/images/:key',
-      name: 'image-detail',
-      component: () => import('@/features/images/ImageDetailView.vue'),
-      props: true,
-      meta: {
-        title: '图片详情',
+        title: '探索',
       },
     },
     {
@@ -49,11 +44,27 @@ const router = createRouter({
         title: '公开图片',
       },
     },
+    {
+      path: '/random',
+      name: 'random',
+      component: () => import('@/features/random/RandomView.vue'),
+      meta: {
+        title: '随机',
+      },
+    },
+    {
+      path: '/hive',
+      name: 'hive',
+      component: () => import('@/features/hive/HiveView.vue'),
+      meta: {
+        title: '蜂巢',
+      },
+    },
   ],
 });
 
 router.afterEach((to) => {
-  document.title = `${String(to.meta.title ?? '图库')} · 幽浮图床`;
+  document.title = `${String(to.meta.title ?? 'Pixel Space')} · Pixel Space`;
 });
 
 export default router;
