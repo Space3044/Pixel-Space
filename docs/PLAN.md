@@ -4,7 +4,7 @@
 
 这是一个个人自用图床。访客可以查看公开图片，管理员本人可以上传、删除、下载原图和维护图片信息。
 
-运行环境以 Cloudflare 为主：前端部署在 Cloudflare Pages，接口使用 Pages Functions，元数据使用 D1，压缩图使用 R2，原图归档到 Telegram 私有频道。登录使用 Cloudflare Access + GitHub，只允许管理员账号进入管理区。
+运行环境以 Cloudflare 为主：前端部署在 Cloudflare Pages，接口使用 Pages Functions，元数据使用 D1，压缩图使用 R2，原图归档到 Telegram 私有频道。登录使用 Cloudflare Access 内置的 OTP（一次性邮箱验证码），白名单邮箱填 CF 账号绑定邮箱，效果接近"用 CF 账号登录"，无需配置任何外部 IdP。
 
 当前代码已经退回到最小前端骨架。项目不再保留提前写好的后端、数据库迁移、API client、store、类型和示例业务逻辑，后续每个阶段再亲手补。
 
@@ -63,7 +63,7 @@ tests/
 
 提前在这里说清楚几件容易在中途反复纠结的事，避免后面阶段临场决定。
 
-**鉴权落地时机**。管理路径在第一次有真实写接口之前就用 Cloudflare Access 保护，不留裸奔窗口。本地开发用 `wrangler pages dev` 跑，Access 在边缘生效，本地 dev 不会触发，需要部署到 Pages Preview 才能完整验证。
+**鉴权落地时机与身份源**。管理路径在第一次有真实写接口之前就用 Cloudflare Access 保护，不留裸奔窗口。身份源选 Access 内置的 OTP（One-time PIN，邮箱一次性验证码）：白名单邮箱填 CF 账号绑定邮箱，体验等同于"用 CF 账号登录"，零外部依赖，无需创建 GitHub OAuth App 或其它 IdP。本地开发用 `wrangler pages dev` 跑，Access 在边缘生效，本地 dev 不会触发，需要部署到 Pages Preview 才能完整验证。
 
 **图片 key 策略**。key 使用 `crypto.randomUUID()` 生成，对外不可枚举。`hash` 列存 SHA-256，用于上传时前端展示"可能重复"提示，不强制阻塞。R2 对象 key 与 D1 主键一致。
 
@@ -111,7 +111,7 @@ npm run build
 
 - [x] `AppShell` 完成导航和基础布局：左侧 Logo、中间「首页/探索/随机/上传/蜂巢」五项、右侧搜索按钮 + 语言/主题占位 + GitHub 链接 + 接入按钮
 - [x] 首页写出 Hero 区域、CTA 按钮、站点数据占位（Photos/Storage/AI Tagged）和功能卡片
-- [x] 登录页写明 Cloudflare Access + GitHub 管理员登录入口
+- [x] 登录页写明 Cloudflare Access 管理员登录入口（当前 UI 文案展示通用接入，阶段 6 选定 OTP 后 LoginView 文案与图标同步调整）
 - [x] 上传页写出选图区域、缩略图队列、大图预览、EXIF 与表单侧栏
 - [x] 图库页用 CSS columns 多列占位排布骨架卡片（阶段 5 替换为 Justified Rows）
 - [x] 图片单图查看走 `ImageLightbox` 弹层（管理操作也挂在 lightbox 上，不再有独立的 `/images/:key` 详情路由）
@@ -184,14 +184,32 @@ npm run build
 
 目标：让本地可以用 Wrangler 跑 Pages Functions 和 D1。
 
+状态：已完成。
+
 任务：
 
-- [ ] 新建 `wrangler.toml`，配置 Pages 输出目录 `dist`、D1 binding `DB`、公开图基础 URL 变量
-- [ ] 新建 `functions/types.ts`，定义 `Env` 类型，只包含本阶段会用到的 `DB` 和 `PUBLIC_BASE_URL`
-- [ ] 新建 `tsconfig.functions.json`，加入 `npm run typecheck`
-- [ ] `package.json` 增加 `db:migrate:local` 和 `db:migrate:remote` 脚本
-- [ ] `package.json` 增加 `dev:pages` 脚本跑 `wrangler pages dev`
-- [ ] README 或 PLAN 写明本地启动顺序
+- [x] 新建 `wrangler.toml`，配置 Pages 输出目录 `dist`、D1 binding `DB`、公开图基础 URL 变量
+- [x] 新建 `functions/types.ts`，定义 `Env` 类型，只包含本阶段会用到的 `DB` 和 `PUBLIC_BASE_URL`
+- [x] 新建 `tsconfig.functions.json`，加入 `pnpm typecheck`
+- [x] `package.json` 增加 `db:migrate:local` 和 `db:migrate:remote` 脚本
+- [x] `package.json` 增加 `dev:pages` 脚本跑 `wrangler pages dev`
+- [x] 本地启动顺序写明在下方
+
+本地启动：
+
+1. 安装依赖：`pnpm install`
+2. 本地跑迁移：`pnpm db:migrate:local`（wrangler 只看 `wrangler.toml` 里的 `database_name`，把 schema 写到 `.wrangler/state/v3/d1/` 下的本地 SQLite 副本，**不需要远端 D1 实例存在**，`database_id` 留空也能跑）
+3. 起前端开发服务器：`pnpm dev`（端口 5173，纯 Vite，不接 binding）
+4. 起 Pages Functions：`pnpm build && pnpm dev:pages`（端口 8788，binding 真实生效，调接口走这个）
+
+部署侧（**等真要发上线那一刻再做**）：
+
+1. 在 Cloudflare Dashboard（dash.cloudflare.com → Workers & Pages → D1）手动创建数据库 `imgbed`，把返回的 `database_id` 填进 `wrangler.toml` 并提交
+2. 同样在 Dashboard 建好 R2 bucket、Pages 项目设置页关联 D1 / R2 binding、Secrets（Telegram bot token、AI proxy key 等）也都在该页填
+3. Git push 触发 Pages 自动构建部署前端 + Functions
+4. 每次新增 `db/migrations/*.sql` 后，去 Dashboard 的 D1 Console 把新 SQL 文件内容贴进去手动执行一次
+
+`pnpm db:migrate:remote` 这条脚本保留作为可选自动化路径，需要批量推迁移时再 `wrangler login` 用，日常不依赖。
 
 这一阶段不做：
 
@@ -229,10 +247,11 @@ npm run build
 
 任务：
 
-- [ ] 在 Cloudflare Zero Trust 接入 GitHub 作为身份源
+- [ ] 在 Cloudflare Zero Trust 启用 Access，选用内置的 OTP（One-time PIN）作为身份源，无需配置外部 IdP
 - [ ] 创建 Access Application，保护 `/upload`、`/api/upload`、`/api/original/*`、`/api/admin/*`
 - [ ] 公开路径保持开放：`/`、`/images`、`/p/*`、`/api/list`、`/api/image/*`
-- [ ] 邮箱白名单只放管理员 GitHub 账号绑定邮箱
+- [ ] 邮箱白名单只放管理员邮箱（CF 账号绑定邮箱）；首次访问受保护路径时 Access 发一次性 PIN 到该邮箱
+- [ ] 调整 LoginView UI：去掉 GitHub 字眼与图标，主按钮文案改为"邮箱验证码登录"，状态行 IdP 标签改为 OTP
 - [ ] 部署一次 Pages Preview 验证保护生效
 - [ ] 在 PLAN 或 README 记录 Access 应用 ID 和 AUD claim，供后续接口可选校验
 
@@ -243,7 +262,7 @@ npm run build
 - 不在前端保存登录 token
 - 接口暂不验证 `Cf-Access-Jwt-Assertion`，由 Access 边缘直接拦截
 
-验收：部署到 Pages Preview，未登录访问 `/upload` 跳到 GitHub 登录页；公开页面无需登录可访问。
+验收：部署到 Pages Preview，未登录访问 `/upload` 跳到 Access OTP 邮箱验证码页面；公开页面无需登录可访问。
 
 ## 阶段 7：上传页前端交互
 
