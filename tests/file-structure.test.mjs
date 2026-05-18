@@ -34,14 +34,15 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/shared/ui/SearchModal.vue',
     'src/styles/main.css',
     'docs/PLAN.md',
+    'db/migrations/0001_init.sql',
     'tests/image-links.test.mjs',
+    'tests/migration.test.mjs',
   ]) {
     assert.equal(exists(path), true, `${path} should exist`);
   }
 
   for (const path of [
     'functions',
-    'db',
     'docs/DATABASE.md',
     'docs/references',
     'tsconfig.functions.json',
