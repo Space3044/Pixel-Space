@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      justified-layout:
+        specifier: ^4.1.0
+        version: 4.1.0
       vue:
         specifier: ^3.5.0
         version: 3.5.34(typescript@5.9.3)
@@ -1186,6 +1189,9 @@ packages:
   jiti@1.21.7:
     resolution: {integrity: sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A==}
     hasBin: true
+
+  justified-layout@4.1.0:
+    resolution: {integrity: sha512-M5FimNMXgiOYerVRGsXZ2YK9YNCaTtwtYp7Hb2308U1Q9TXXHx5G0p08mcVR5O53qf8bWY4NJcPBxE6zuayXSg==}
 
   kleur@4.1.5:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
@@ -2381,6 +2387,8 @@ snapshots:
   is-number@7.0.0: {}
 
   jiti@1.21.7: {}
+
+  justified-layout@4.1.0: {}
 
   kleur@4.1.5: {}
 

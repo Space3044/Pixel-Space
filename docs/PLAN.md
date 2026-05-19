@@ -199,8 +199,10 @@ npm run build
 
 1. 安装依赖：`pnpm install`
 2. 本地跑迁移：`pnpm db:migrate:local`（wrangler 只看 `wrangler.toml` 里的 `database_name`，把 schema 写到 `.wrangler/state/v3/d1/` 下的本地 SQLite 副本，**不需要远端 D1 实例存在**，`database_id` 留空也能跑）
-3. 起前端开发服务器：`pnpm dev`（端口 5173，纯 Vite，不接 binding）
-4. 起 Pages Functions：`pnpm build && pnpm dev:pages`（端口 8788，binding 真实生效，调接口走这个）
+3. 起前端开发服务器：`pnpm dev`（端口 5173，纯 Vite + HMR；`/api/*` 自动 proxy 到 8788）
+4. 起 Pages Functions：`pnpm dev:pages`（端口 8788，binding 真实生效，接口由这边响应）
+
+日常开发**同时开两个**：浏览器始终访问 5173 拿 HMR，接口请求经 vite proxy 落到 8788 的真 Functions。改前端代码无需 build，改 Functions 代码 wrangler 自动重启。
 
 部署侧（**等真要发上线那一刻再做**）：
 
@@ -224,16 +226,18 @@ npm run build
 
 目标：先让图库和详情能读取 D1。
 
+状态：已完成。
+
 任务：
 
-- [ ] 新建 `functions/_shared/http.ts`，写最小 JSON 响应函数
-- [ ] 新建 `functions/_shared/images.ts`，写 D1 行到 `ImageRecord` 的转换
-- [ ] 实现 `GET /api/list`，按 `created_at DESC` 返回，无分页
-- [ ] 实现 `GET /api/image/:key`
-- [ ] 前端新建 `src/features/images/images.api.ts`
-- [ ] 图库页调用列表接口，详情页调用详情接口
-- [ ] 安装 `justified-layout`，把图库页的 CSS columns 占位换成 Justified Rows 真实布局
-- [ ] 新建 `tests/api-shape.test.mjs`，断言响应字段集合（用 mock D1 或快照）
+- [x] 新建 `functions/_shared/http.ts`，写最小 JSON 响应函数
+- [x] 新建 `functions/_shared/images.ts`，写 D1 行到 `ImageRecord` 的转换
+- [x] 实现 `GET /api/list`，按 `created_at DESC` 返回，无分页
+- [x] 实现 `GET /api/image/:key`
+- [x] 前端新建 `src/features/images/images.api.ts`
+- [x] 图库页调用列表接口，详情页调用详情接口
+- [x] 安装 `justified-layout`，把图库页的 CSS columns 占位换成 Justified Rows 真实布局
+- [x] 新建 `tests/api-shape.test.mjs`，断言响应字段集合（mock D1）
 
 这一阶段不做：
 

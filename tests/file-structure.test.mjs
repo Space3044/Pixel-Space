@@ -28,6 +28,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/images/PublicImageView.vue',
     'src/features/images/image.types.ts',
     'src/features/images/image-links.ts',
+    'src/features/images/images.api.ts',
     'src/features/random/RandomView.vue',
     'src/features/hive/HiveView.vue',
     'src/shared/ui/AppShell.vue',
@@ -36,10 +37,15 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'docs/PLAN.md',
     'db/migrations/0001_init.sql',
     'functions/types.ts',
+    'functions/_shared/http.ts',
+    'functions/_shared/images.ts',
+    'functions/api/list.ts',
+    'functions/api/image/[key].ts',
     'tsconfig.functions.json',
     'wrangler.toml',
     'tests/image-links.test.mjs',
     'tests/migration.test.mjs',
+    'tests/api-shape.test.mjs',
   ]) {
     assert.equal(exists(path), true, `${path} should exist`);
   }
@@ -49,7 +55,6 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'docs/references',
     'src/features/auth/auth.store.ts',
     'src/features/images/ImageCard.vue',
-    'src/features/images/images.api.ts',
     'src/features/images/images.store.ts',
     'tests/frontend-skeleton.test.mjs',
     'tests/backend-read.test.mjs',
@@ -62,6 +67,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
 test('keeps package scripts and dependencies minimal', () => {
   const pkg = JSON.parse(read('package.json'));
   const tsconfigApp = read('tsconfig.app.json');
+  const tsconfig = JSON.parse(read('tsconfig.json'));
 
   assert.deepEqual(Object.keys(pkg.scripts).sort(), [
     'build',
@@ -73,7 +79,7 @@ test('keeps package scripts and dependencies minimal', () => {
     'test',
     'typecheck',
   ]);
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['vue', 'vue-router']);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['justified-layout', 'vue', 'vue-router']);
   assert.ok(pkg.devDependencies.wrangler, 'wrangler must be installed from stage 4');
   assert.ok(
     pkg.devDependencies['@cloudflare/workers-types'],
@@ -82,4 +88,8 @@ test('keeps package scripts and dependencies minimal', () => {
   assert.doesNotMatch(tsconfigApp, /ignoreDeprecations/);
   assert.doesNotMatch(tsconfigApp, /"baseUrl"/);
   assert.match(tsconfigApp, /"@\/\*":\s*\["\.\/src\/\*"\]/);
+  assert.deepEqual(
+    tsconfig.references.map((reference) => reference.path).sort(),
+    ['./tsconfig.app.json', './tsconfig.functions.json', './tsconfig.node.json'],
+  );
 });

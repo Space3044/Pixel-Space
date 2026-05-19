@@ -15,6 +15,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply imgbed --remote"
   },
   "dependencies": {
+    "justified-layout": "^4.1.0",
     "vue": "^3.5.0",
     "vue-router": "^4.5.0"
   },
