@@ -46,6 +46,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'tests/image-links.test.mjs',
     'tests/migration.test.mjs',
     'tests/api-shape.test.mjs',
+    'tests/access-ui.test.mjs',
   ]) {
     assert.equal(exists(path), true, `${path} should exist`);
   }

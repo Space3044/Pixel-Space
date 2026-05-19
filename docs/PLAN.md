@@ -249,15 +249,22 @@ npm run build
 
 目标：在第一个写接口出现之前，把管理路径用 Cloudflare Access 保护起来。
 
+状态：本地代码已完成；Cloudflare Zero Trust 控制台配置与 Pages Preview 验证待部署时执行。
+
 任务：
 
 - [ ] 在 Cloudflare Zero Trust 启用 Access，选用内置的 OTP（One-time PIN）作为身份源，无需配置外部 IdP
 - [ ] 创建 Access Application，保护 `/upload`、`/api/upload`、`/api/original/*`、`/api/admin/*`
 - [ ] 公开路径保持开放：`/`、`/images`、`/p/*`、`/api/list`、`/api/image/*`
 - [ ] 邮箱白名单只放管理员邮箱（CF 账号绑定邮箱）；首次访问受保护路径时 Access 发一次性 PIN 到该邮箱
-- [ ] 调整 LoginView UI：去掉 GitHub 字眼与图标，主按钮文案改为"邮箱验证码登录"，状态行 IdP 标签改为 OTP
+- [x] 调整 LoginView UI：去掉 GitHub 字眼与图标，主按钮文案改为"邮箱验证码登录"，状态行 IdP 标签改为 OTP
 - [ ] 部署一次 Pages Preview 验证保护生效
 - [ ] 在 PLAN 或 README 记录 Access 应用 ID 和 AUD claim，供后续接口可选校验
+
+Access 配置记录（控制台配置完成后回填）：
+
+- Access Application ID：未配置
+- AUD claim：未配置
 
 这一阶段不做：
 
