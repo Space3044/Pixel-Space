@@ -5,4 +5,7 @@ import './api-shape.test.mjs';
 import './access-ui.test.mjs';
 import './exif.test.mjs';
 import './map-style.test.mjs';
+import './upload-form.test.mjs';
+import './upload-api.test.mjs';
+import './image-object.test.mjs';
 import './upload-view.test.mjs';

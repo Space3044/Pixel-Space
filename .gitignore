@@ -9,3 +9,4 @@ dist/
 .claude/
 .playwright-mcp/
 .tmp-vite*.log
+docs/superpowers/

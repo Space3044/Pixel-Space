@@ -13,6 +13,12 @@ database_name = "imgbed"
 database_id = "local-dev-placeholder"  # 本地任意非空字符串即可；部署前在 Dashboard 建库后回填真实 ID
 migrations_dir = "db/migrations"
 
+# R2 压缩图 bucket binding：Pages Functions 里通过 env.BUCKET 访问。
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "imgbed"
+
 [vars]
-# 压缩图公开访问的基础 URL。部署时在 Pages 控制台覆盖为真实域名。
-PUBLIC_BASE_URL = "https://imgbed.local"
+# 压缩图公开访问的基础 URL。本地默认走 Pages Function 从 R2 回吐；
+# 部署时可在 Pages 控制台覆盖为真实 R2 公开域名。
+PUBLIC_BASE_URL = "/api/public"

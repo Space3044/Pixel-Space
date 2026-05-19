@@ -16,3 +16,8 @@ export interface UploadMeta {
   location_lat: number | null;
   location_lng: number | null;
 }
+
+export interface UploadDimensions {
+  width: number;
+  height: number;
+}

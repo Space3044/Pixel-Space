@@ -73,8 +73,32 @@ test('upload page defers progress UI to a later shared component', () => {
 });
 
 test('upload footer uses an upload action label instead of debug FormData copy', () => {
-  assert.match(view, />\s*上传图片\s*</);
+  assert.match(view, /上传图片/);
   assert.doesNotMatch(view, /打印 FormData|FormData 已打印到控制台/);
+});
+
+test('upload page calls the real upload API instead of console-only FormData logging', () => {
+  assert.match(view, /import\s+\{\s*uploadImage\s*\}\s+from\s+'\.\/upload\.api'/);
+  assert.match(view, /await\s+uploadImage\(formData\)/);
+  assert.doesNotMatch(view, /console\.group|console\.log|console\.groupEnd/);
+});
+
+test('upload page stays on the upload screen and shows share actions after success', () => {
+  assert.doesNotMatch(view, /useRouter|router\.push/);
+  assert.match(view, /uploadResult\s*=\s*ref/);
+  assert.match(view, /uploadResult\.value\s*=\s*record/);
+  assert.match(view, /class="upload-result/);
+  assert.match(view, /查看公开页/);
+  assert.match(view, /继续上传/);
+  assert.match(view, /复制/);
+  assert.match(view, /buildMarkdown|buildHtml|buildPublicPageUrl/);
+});
+
+test('upload page submits compressed image dimensions with the form data', () => {
+  assert.match(view, /compressedDimensions\s*=\s*ref/);
+  assert.match(view, /readImageDimensions\(nextCompressed\)/);
+  assert.match(view, /const\s+dimensions\s*=\s*compressedDimensions\.value/);
+  assert.match(view, /\bdimensions,/);
 });
 
 test('upload exif date and camera each span a full row', () => {

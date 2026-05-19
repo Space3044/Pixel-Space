@@ -67,7 +67,7 @@ tests/
 
 **图片 key 策略**。key 使用 `crypto.randomUUID()` 生成，对外不可枚举。`hash` 列存 SHA-256，用于上传时前端展示"可能重复"提示，不强制阻塞。R2 对象 key 与 D1 主键一致。
 
-**EXIF 处理路径**。在前端压缩之前用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门以及 GPS 经纬度，单独作为 FormData 字段发到后端。GPS 解析出 WGS84 十进制坐标后只作为**地图标记与表单的默认值**，最终是否随 `location_lat` / `location_lng` 落库由管理员在上传页确认或调整（可清空、可拖动地图覆盖、可手动改数字）。压缩使用 `browser-image-compression` 输出 WebP，会自然清除所有 EXIF（包括 GPS），公开访问的压缩图不会泄露原始坐标。不依赖后端做 EXIF 解析。
+**EXIF 处理路径**。在前端压缩之前用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门、焦距以及 GPS 经纬度，单独作为 FormData 字段发到后端。GPS 解析出 WGS84 十进制坐标后只作为**地图标记与表单的默认值**，最终是否随 `location_lat` / `location_lng` 落库由管理员在上传页确认或调整（可清空、可拖动地图覆盖、可手动改数字）。压缩使用 `browser-image-compression` 输出 WebP，会自然清除所有 EXIF（包括 GPS），公开访问的压缩图不会泄露原始坐标。不依赖后端做 EXIF 解析。
 
 **AI 调用同步性**。上传接口返回时 `ai_status` 写 `pending`，AI 调用通过 `ctx.waitUntil` 在响应之后异步执行，不阻塞上传响应。失败重试上限 3 次，超过后 `ai_status` 写 `failed`，详情页展示原因，但不影响图片本身可用。当前阶段不引入 Cloudflare Queues，等流量真有压力再升级。
 
@@ -308,20 +308,22 @@ Access 配置记录（控制台配置完成后回填）：
 
 目标：一次性把上传链路接通，避免中间态。
 
+状态：已完成。
+
 任务：
 
-- [ ] 在 `wrangler.toml` 增加 R2 bucket binding `BUCKET`
-- [ ] `Env` 类型增加 `BUCKET: R2Bucket`
-- [ ] 新建迁移 `0002_add_r2_columns.sql`，确认 `r2_key` 列已可写（阶段 3 已建则跳过）
-- [ ] 实现 `POST /api/upload`
-- [ ] 接收 `multipart/form-data`，校验 MIME 是图片
-- [ ] 用 `crypto.randomUUID()` 生成 `key`
-- [ ] 计算 SHA-256 写入 `hash` 列
-- [ ] 压缩图写入 R2，对象 key 与图片 key 一致
-- [ ] D1 写入完整元数据，含 EXIF 拍摄信息以及管理员确认后的 `location_lat` / `location_lng` / `location_name`（未填则留空）
-- [ ] 接口响应返回新 `ImageRecord`
-- [ ] 前端调用上传接口，成功后跳转详情页
-- [ ] `GET /api/list` 和 `GET /api/image/:key` 返回 R2 公开 URL（基于 `PUBLIC_BASE_URL` 拼装）
+- [x] 在 `wrangler.toml` 增加 R2 bucket binding `BUCKET`
+- [x] `Env` 类型增加 `BUCKET: R2Bucket`
+- [x] 确认 `r2_key` 列已在 `0001_init.sql` 可写；新增 `0002_add_exif_focal_length.sql` 保存焦距
+- [x] 实现 `POST /api/upload`
+- [x] 接收 `multipart/form-data`，校验 MIME 是图片
+- [x] 用 `crypto.randomUUID()` 生成 `key`
+- [x] 计算 SHA-256 写入 `hash` 列
+- [x] 压缩图写入 R2，对象 key 与图片 key 一致
+- [x] D1 写入完整元数据，含 EXIF 拍摄信息以及管理员确认后的 `location_lat` / `location_lng` / `location_name`（未填则留空）
+- [x] 接口响应返回新 `ImageRecord`
+- [x] 前端调用上传接口，成功后跳转详情页
+- [x] `GET /api/list` 和 `GET /api/image/:key` 返回 R2 公开 URL（基于 `PUBLIC_BASE_URL` 拼装）；本地默认 `PUBLIC_BASE_URL=/api/public`，由 `GET /api/public/:key` 从 R2 回吐压缩图
 
 这一阶段不做：
 

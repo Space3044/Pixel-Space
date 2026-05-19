@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const test = (name, fn) => {
@@ -13,6 +13,8 @@ const test = (name, fn) => {
 };
 
 const sql = readFileSync(join(process.cwd(), 'db/migrations/0001_init.sql'), 'utf8');
+const migration2Path = join(process.cwd(), 'db/migrations/0002_add_exif_focal_length.sql');
+const migration2Sql = existsSync(migration2Path) ? readFileSync(migration2Path, 'utf8') : '';
 
 const stripComments = (s) =>
   s
@@ -24,6 +26,7 @@ const stripComments = (s) =>
     .join('\n');
 
 const sqlBody = stripComments(sql).toLowerCase();
+const allSqlBody = stripComments(`${sql}\n${migration2Sql}`).toLowerCase();
 
 test('migration creates the images table', () => {
   assert.match(sqlBody, /create\s+table\s+images/);
@@ -79,4 +82,8 @@ test('migration defers AI and Telegram columns to later stages', () => {
   ]) {
     assert.doesNotMatch(sqlBody, new RegExp(`\\b${keyword}\\b`), `${keyword} should not be in init migration`);
   }
+});
+
+test('migration stores parsed EXIF focal length for upload metadata', () => {
+  assert.match(allSqlBody, /\bexif_focal_length\b/);
 });

@@ -6,10 +6,13 @@ import type { Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import AppShell from '@/shared/ui/AppShell.vue';
+import type { ImageRecord } from '@/features/images/image.types';
+import { buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from './map-style';
+import { uploadImage } from './upload.api';
 import { buildUploadFormData } from './upload-form';
-import type { UploadExif, UploadMeta } from './upload.types';
+import type { UploadDimensions, UploadExif, UploadMeta } from './upload.types';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 const MAX_EDGE = 2048;
@@ -33,11 +36,15 @@ const mapRef = ref<HTMLDivElement | null>(null);
 
 const selectedFile = ref<File | null>(null);
 const compressedFile = ref<File | null>(null);
+const compressedDimensions = ref<UploadDimensions | null>(null);
 const previewUrl = ref<string | null>(null);
 const exif = ref<UploadExif>(emptyExif());
 const processing = ref(false);
+const uploading = ref(false);
 const errorMessage = ref<string | null>(null);
-const formLogged = ref(false);
+const uploadFinished = ref(false);
+const uploadResult = ref<ImageRecord | null>(null);
+const copiedLinkLabel = ref<string | null>(null);
 const mapLoadState = ref<MapLoadState>('loading');
 
 const meta = reactive<UploadMeta>({
@@ -53,12 +60,20 @@ let marker: Marker | null = null;
 let previewObjectUrl: string | null = null;
 let maplibre: typeof import('maplibre-gl') | null = null;
 let usingFallbackStyle = false;
+let copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
 const hasFile = computed(() => selectedFile.value !== null);
 const canBuildFormData = computed(
-  () => selectedFile.value !== null && compressedFile.value !== null && !processing.value,
+  () =>
+    selectedFile.value !== null &&
+    compressedFile.value !== null &&
+    compressedDimensions.value !== null &&
+    !processing.value &&
+    !uploading.value &&
+    uploadResult.value === null,
 );
 const queueCountLabel = computed(() => (hasFile.value ? '1 张' : '空'));
+const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
 const formatBytes = (bytes: number): string => {
   if (bytes <= 0) return '--';
@@ -83,11 +98,29 @@ const compressRatio = computed(() => {
 
 const statusLabel = computed(() => {
   if (errorMessage.value) return '处理失败';
+  if (uploading.value) return '正在上传';
   if (processing.value) return '正在解析 EXIF 与压缩';
-  if (formLogged.value) return '上传数据已准备';
+  if (uploadFinished.value) return '上传完成，可复制链接';
   if (canBuildFormData.value) return '准备就绪';
   if (hasFile.value) return '等待压缩';
   return '等待选择图片';
+});
+
+const absoluteUrl = (url: string): string => {
+  if (!origin) return url;
+  return new URL(url, origin).toString();
+};
+
+const uploadResultLinks = computed(() => {
+  if (!uploadResult.value) return [];
+  const imageUrl = absoluteUrl(uploadResult.value.public_url);
+  const imageForCopy = { ...uploadResult.value, public_url: imageUrl };
+  return [
+    { label: '图片直链', value: imageUrl },
+    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
+    { label: 'HTML', value: buildHtml(imageForCopy) },
+    { label: '公开页', value: buildPublicPageUrl(uploadResult.value, origin) },
+  ];
 });
 
 const display = (value: string | number | null): string => {
@@ -198,9 +231,12 @@ const initMap = async () => {
 const resetStateForFile = (file: File) => {
   selectedFile.value = file;
   compressedFile.value = null;
+  compressedDimensions.value = null;
   exif.value = emptyExif();
   errorMessage.value = null;
-  formLogged.value = false;
+  uploadFinished.value = false;
+  uploadResult.value = null;
+  copiedLinkLabel.value = null;
   meta.title = file.name.replace(/\.[^.]+$/, '');
   meta.caption = '';
   meta.location_name = '';
@@ -211,10 +247,14 @@ const resetStateForFile = (file: File) => {
 const clearSelection = () => {
   selectedFile.value = null;
   compressedFile.value = null;
+  compressedDimensions.value = null;
   exif.value = emptyExif();
   errorMessage.value = null;
-  formLogged.value = false;
+  uploadFinished.value = false;
+  uploadResult.value = null;
+  copiedLinkLabel.value = null;
   processing.value = false;
+  uploading.value = false;
   meta.title = '';
   meta.caption = '';
   meta.location_name = '';
@@ -254,6 +294,31 @@ const compressToWebp = async (file: File): Promise<File> => {
   return new File([compressed], outputName, { type: 'image/webp', lastModified: Date.now() });
 };
 
+const readImageDimensions = (file: File): Promise<UploadDimensions> =>
+  new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+        reject(new Error('无法读取压缩后图片尺寸。'));
+        return;
+      }
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      });
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('无法读取压缩后图片尺寸。'));
+    };
+
+    image.src = objectUrl;
+  });
+
 const applyExifLocation = () => {
   if (exif.value.location_lat === null || exif.value.location_lng === null) return;
   setCoordinates(exif.value.location_lat, exif.value.location_lng);
@@ -274,8 +339,10 @@ const selectFile = async (file: File | null) => {
   processing.value = true;
   try {
     const [nextExif, nextCompressed] = await Promise.all([readExif(file), compressToWebp(file)]);
+    const nextDimensions = await readImageDimensions(nextCompressed);
     exif.value = nextExif;
     compressedFile.value = nextCompressed;
+    compressedDimensions.value = nextDimensions;
     applyExifLocation();
   } catch (error) {
     errorMessage.value = (error as Error).message || '图片处理失败。';
@@ -325,21 +392,49 @@ const clearLocation = () => {
   setCoordinates(null, null, false);
 };
 
-const prepareUploadPayload = () => {
-  if (!selectedFile.value || !compressedFile.value) return;
+const copyResultLink = async (label: string, value: string) => {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    return;
+  }
+  copiedLinkLabel.value = label;
+  if (copiedTimer) clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => {
+    copiedLinkLabel.value = null;
+  }, 1400);
+};
+
+const startNextUpload = async () => {
+  clearSelection();
+  await nextTick();
+  openFilePicker();
+};
+
+const submitUpload = async () => {
+  const dimensions = compressedDimensions.value;
+  if (!selectedFile.value || !compressedFile.value || !dimensions) return;
+
   const formData = buildUploadFormData({
     original: selectedFile.value,
     compressed: compressedFile.value,
     exif: exif.value,
     meta: { ...meta },
+    dimensions,
   });
 
-  console.group('Pixel Space upload payload');
-  for (const [key, value] of formData.entries()) {
-    console.log(key, value);
+  uploading.value = true;
+  errorMessage.value = null;
+  uploadFinished.value = false;
+  try {
+    const record = await uploadImage(formData);
+    uploadFinished.value = true;
+    uploadResult.value = record;
+  } catch (error) {
+    errorMessage.value = (error as Error).message || '上传失败。';
+  } finally {
+    uploading.value = false;
   }
-  console.groupEnd();
-  formLogged.value = true;
 };
 
 onMounted(() => {
@@ -348,6 +443,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+  if (copiedTimer) clearTimeout(copiedTimer);
   marker?.remove();
   map?.remove();
   marker = null;
@@ -584,10 +680,38 @@ onBeforeUnmount(() => {
           </aside>
         </div>
 
+        <section v-if="uploadResult" class="upload-result cyber-panel" aria-live="polite">
+          <div class="upload-result-main">
+            <p class="section-eyebrow">Uploaded</p>
+            <h2>上传完成</h2>
+            <p>{{ uploadResult.title || selectedFile?.name }} 已写入图床，可以继续上传或复制链接。</p>
+          </div>
+          <div class="upload-result-actions">
+            <RouterLink
+              class="result-action result-action-primary"
+              :to="{ name: 'public-image', params: { key: uploadResult.key } }"
+            >
+              查看公开页
+            </RouterLink>
+            <button type="button" class="result-action" @click="startNextUpload">
+              继续上传
+            </button>
+          </div>
+          <ul class="result-links">
+            <li v-for="row in uploadResultLinks" :key="row.label" class="result-link-row">
+              <span>{{ row.label }}</span>
+              <code>{{ row.value }}</code>
+              <button type="button" @click="copyResultLink(row.label, row.value)">
+                {{ copiedLinkLabel === row.label ? '已复制' : '复制' }}
+              </button>
+            </li>
+          </ul>
+        </section>
+
         <footer class="page-footer">
           <span class="footer-status">{{ statusLabel }}</span>
-          <button type="button" class="cyber-button" :disabled="!canBuildFormData" @click="prepareUploadPayload">
-            上传图片
+          <button type="button" class="cyber-button" :disabled="!canBuildFormData" @click="submitUpload">
+            {{ uploading ? '上传中' : '上传图片' }}
           </button>
         </footer>
       </div>
@@ -1131,6 +1255,133 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+}
+
+.upload-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 0.6rem;
+  border-color: rgba(132, 247, 153, 0.28);
+  background:
+    linear-gradient(135deg, rgba(132, 247, 153, 0.08), rgba(53, 243, 255, 0.04)),
+    rgba(7, 7, 19, 0.72);
+}
+
+@media (min-width: 900px) {
+  .upload-result {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+}
+
+.upload-result-main h2 {
+  margin-top: 0.25rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: rgb(255, 255, 255);
+}
+
+.upload-result-main p:last-child {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  color: rgb(148, 163, 184);
+}
+
+.upload-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.result-action {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgb(226, 232, 240);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.result-action:hover {
+  border-color: rgba(53, 243, 255, 0.55);
+  background: rgba(53, 243, 255, 0.08);
+  color: rgb(255, 255, 255);
+}
+
+.result-action-primary {
+  border-color: rgba(132, 247, 153, 0.45);
+  background: rgba(132, 247, 153, 0.12);
+  color: rgb(220, 252, 231);
+}
+
+.result-links {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.result-link-row {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 7, 19, 0.5);
+}
+
+.result-link-row span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgb(53, 243, 255);
+}
+
+.result-link-row code {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(203, 213, 225);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-link-row button {
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(53, 243, 255, 0.22);
+  background: transparent;
+  color: rgb(148, 163, 184);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.result-link-row button:hover {
+  border-color: rgba(53, 243, 255, 0.55);
+  color: rgb(53, 243, 255);
+}
+
+@media (max-width: 640px) {
+  .result-link-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .result-link-row code {
+    grid-column: 1 / 3;
+    grid-row: 2 / 3;
+  }
 }
 
 .page-footer {

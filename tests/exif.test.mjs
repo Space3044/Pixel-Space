@@ -55,7 +55,7 @@ test('formatExifTakenAt turns ISO UTC timestamp into readable local time', () =>
   assert.equal(formatExifTakenAt(null, 'Asia/Shanghai'), '--');
 });
 
-test('buildUploadFormData appends original, compressed, exif and meta fields', () => {
+test('buildUploadFormData appends original, compressed, exif, meta and dimensions fields', () => {
   const original = new File(['original'], 'cat.jpg', { type: 'image/jpeg' });
   const compressed = new File(['compressed'], 'cat.webp', { type: 'image/webp' });
   const exif = normalizeExif({ ISO: 100 });
@@ -67,7 +67,9 @@ test('buildUploadFormData appends original, compressed, exif and meta fields', (
     location_lng: 121.47,
   };
 
-  const formData = buildUploadFormData({ original, compressed, exif, meta });
+  const dimensions = { width: 1200, height: 800 };
+
+  const formData = buildUploadFormData({ original, compressed, exif, meta, dimensions });
 
   assert.equal(formData.get('original').name, original.name);
   assert.equal(formData.get('compressed').name, compressed.name);
@@ -75,4 +77,5 @@ test('buildUploadFormData appends original, compressed, exif and meta fields', (
   assert.equal(formData.get('compressed').type, compressed.type);
   assert.deepEqual(JSON.parse(String(formData.get('exif'))), exif);
   assert.deepEqual(JSON.parse(String(formData.get('meta'))), meta);
+  assert.deepEqual(JSON.parse(String(formData.get('dimensions'))), dimensions);
 });

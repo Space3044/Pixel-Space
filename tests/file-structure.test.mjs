@@ -33,6 +33,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/hive/HiveView.vue',
     'src/features/upload/exif.ts',
     'src/features/upload/map-style.ts',
+    'src/features/upload/upload.api.ts',
     'src/features/upload/upload-form.ts',
     'src/features/upload/upload.types.ts',
     'src/shared/ui/AppShell.vue',
@@ -45,6 +46,8 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'functions/_shared/images.ts',
     'functions/api/list.ts',
     'functions/api/image/[key].ts',
+    'functions/api/upload.ts',
+    'functions/api/public/[key].ts',
     'tsconfig.functions.json',
     'wrangler.toml',
     'tests/image-links.test.mjs',
@@ -53,6 +56,9 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'tests/access-ui.test.mjs',
     'tests/exif.test.mjs',
     'tests/map-style.test.mjs',
+    'tests/upload-api.test.mjs',
+    'tests/upload-form.test.mjs',
+    'tests/image-object.test.mjs',
   ]) {
     assert.equal(exists(path), true, `${path} should exist`);
   }
@@ -101,6 +107,7 @@ test('keeps package scripts and dependencies minimal', () => {
     pkg.devDependencies['@cloudflare/workers-types'],
     '@cloudflare/workers-types must be installed from stage 4',
   );
+  assert.match(read('wrangler.toml'), /PUBLIC_BASE_URL\s*=\s*"\/api\/public"/);
   assert.doesNotMatch(tsconfigApp, /ignoreDeprecations/);
   assert.doesNotMatch(tsconfigApp, /"baseUrl"/);
   assert.match(tsconfigApp, /"@\/\*":\s*\["\.\/src\/\*"\]/);

@@ -1,10 +1,11 @@
-import type { UploadExif, UploadMeta } from './upload.types';
+import type { UploadDimensions, UploadExif, UploadMeta } from './upload.types';
 
 interface BuildUploadFormDataInput {
   original: File;
   compressed: File;
   exif: UploadExif;
   meta: UploadMeta;
+  dimensions: UploadDimensions;
 }
 
 export function buildUploadFormData(input: BuildUploadFormDataInput): FormData {
@@ -13,5 +14,6 @@ export function buildUploadFormData(input: BuildUploadFormDataInput): FormData {
   formData.append('compressed', input.compressed, input.compressed.name);
   formData.append('exif', JSON.stringify(input.exif));
   formData.append('meta', JSON.stringify(input.meta));
+  formData.append('dimensions', JSON.stringify(input.dimensions));
   return formData;
 }
