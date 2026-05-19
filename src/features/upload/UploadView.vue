@@ -1,178 +1,790 @@
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import imageCompression from 'browser-image-compression';
+import exifr from 'exifr';
+import type { Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
 import AppShell from '@/shared/ui/AppShell.vue';
-// 阶段 7：接入 exifr 解析非 GPS EXIF + browser-image-compression 压缩为 WebP
-// 阶段 8：组装 FormData 调用 POST /api/upload，逐张提交或并行批量
-// 多图上传：每张图独立标题、描述；切换缩略图时主预览、EXIF、表单一并切换
+import { formatExifTakenAt, normalizeExif } from './exif';
+import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from './map-style';
+import { buildUploadFormData } from './upload-form';
+import type { UploadExif, UploadMeta } from './upload.types';
+
+const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
+const MAX_EDGE = 2048;
+const DEFAULT_CENTER = { lat: 31.2304, lng: 121.4737 };
+
+const emptyExif = (): UploadExif => ({
+  taken_at: null,
+  camera: null,
+  iso: null,
+  aperture: null,
+  shutter: null,
+  focal_length: null,
+  location_lat: null,
+  location_lng: null,
+});
+
+type MapLoadState = 'loading' | 'ready' | 'fallback';
+
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const mapRef = ref<HTMLDivElement | null>(null);
+
+const selectedFile = ref<File | null>(null);
+const compressedFile = ref<File | null>(null);
+const previewUrl = ref<string | null>(null);
+const exif = ref<UploadExif>(emptyExif());
+const processing = ref(false);
+const errorMessage = ref<string | null>(null);
+const formLogged = ref(false);
+const mapLoadState = ref<MapLoadState>('loading');
+
+const meta = reactive<UploadMeta>({
+  title: '',
+  caption: '',
+  location_name: '',
+  location_lat: null,
+  location_lng: null,
+});
+
+let map: MapLibreMap | null = null;
+let marker: Marker | null = null;
+let previewObjectUrl: string | null = null;
+let maplibre: typeof import('maplibre-gl') | null = null;
+let usingFallbackStyle = false;
+
+const hasFile = computed(() => selectedFile.value !== null);
+const canBuildFormData = computed(
+  () => selectedFile.value !== null && compressedFile.value !== null && !processing.value,
+);
+const queueCountLabel = computed(() => (hasFile.value ? '1 张' : '空'));
+
+const formatBytes = (bytes: number): string => {
+  if (bytes <= 0) return '--';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 2)} ${units[unit]}`;
+};
+
+const originalSize = computed(() => formatBytes(selectedFile.value?.size ?? 0));
+const compressedSize = computed(() => formatBytes(compressedFile.value?.size ?? 0));
+const compressRatio = computed(() => {
+  const o = selectedFile.value?.size ?? 0;
+  const c = compressedFile.value?.size ?? 0;
+  if (o <= 0 || c <= 0) return null;
+  return Math.max(0, Math.round((1 - c / o) * 100));
+});
+
+const statusLabel = computed(() => {
+  if (errorMessage.value) return '处理失败';
+  if (processing.value) return '正在解析 EXIF 与压缩';
+  if (formLogged.value) return '上传数据已准备';
+  if (canBuildFormData.value) return '准备就绪';
+  if (hasFile.value) return '等待压缩';
+  return '等待选择图片';
+});
+
+const display = (value: string | number | null): string => {
+  if (value === null || value === '') return '--';
+  return String(value);
+};
+
+const formatFocalLength = (value: number | null): string => {
+  if (value === null) return '--';
+  return `${Number(value.toFixed(2))} mm`;
+};
+
+const setPreviewUrl = (file: File | null) => {
+  if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+  previewObjectUrl = file ? URL.createObjectURL(file) : null;
+  previewUrl.value = previewObjectUrl;
+};
+
+const setCoordinates = (lat: number | null, lng: number | null, centerMap = true) => {
+  meta.location_lat = lat;
+  meta.location_lng = lng;
+  updateMapMarker(centerMap);
+};
+
+const createMapMarkerElement = (): HTMLSpanElement => {
+  const element = document.createElement('span');
+  element.className = 'map-marker';
+  element.setAttribute('aria-hidden', 'true');
+  return element;
+};
+
+const loadMapLibre = async () => {
+  maplibre ??= await import('maplibre-gl');
+  return maplibre;
+};
+
+const updateMapMarker = (centerMap = false) => {
+  if (!map || !maplibre) return;
+  const lat = meta.location_lat;
+  const lng = meta.location_lng;
+
+  if (lat === null || lng === null) {
+    marker?.remove();
+    marker = null;
+    return;
+  }
+
+  const lngLat: [number, number] = [lng, lat];
+  if (!marker) {
+    marker = new maplibre.Marker({ element: createMapMarkerElement(), anchor: 'center' })
+      .setLngLat(lngLat)
+      .addTo(map);
+  } else {
+    marker.setLngLat(lngLat);
+  }
+
+  if (centerMap)
+    map.easeTo({ center: lngLat, zoom: Math.max(map.getZoom(), 12), duration: 350 });
+};
+
+const useRasterFallbackStyle = () => {
+  if (!map || usingFallbackStyle) return;
+  usingFallbackStyle = true;
+  mapLoadState.value = 'fallback';
+  map.setStyle(RASTER_FALLBACK_STYLE);
+};
+
+const initMap = async () => {
+  if (!mapRef.value || map) return;
+  const maplibreGl = await loadMapLibre();
+  if (!mapRef.value || map) return;
+
+  map = new maplibreGl.Map({
+    container: mapRef.value,
+    style: MAP_STYLE_URL,
+    center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
+    zoom: 9,
+    attributionControl: { compact: true },
+  });
+  map.addControl(
+    new maplibreGl.NavigationControl({ showCompass: true, showZoom: true }),
+    'top-right',
+  );
+
+  const fallbackTimer = window.setTimeout(() => {
+    if (mapLoadState.value === 'loading') useRasterFallbackStyle();
+  }, 5000);
+
+  map.once('idle', () => {
+    window.clearTimeout(fallbackTimer);
+    if (!usingFallbackStyle) mapLoadState.value = 'ready';
+  });
+
+  map.on('error', () => {
+    useRasterFallbackStyle();
+  });
+
+  map.on('click', (event: MapMouseEvent) => {
+    setCoordinates(
+      Number(event.lngLat.lat.toFixed(6)),
+      Number(event.lngLat.lng.toFixed(6)),
+      false,
+    );
+  });
+  updateMapMarker(false);
+};
+
+const resetStateForFile = (file: File) => {
+  selectedFile.value = file;
+  compressedFile.value = null;
+  exif.value = emptyExif();
+  errorMessage.value = null;
+  formLogged.value = false;
+  meta.title = file.name.replace(/\.[^.]+$/, '');
+  meta.caption = '';
+  meta.location_name = '';
+  setCoordinates(null, null, false);
+  setPreviewUrl(file);
+};
+
+const clearSelection = () => {
+  selectedFile.value = null;
+  compressedFile.value = null;
+  exif.value = emptyExif();
+  errorMessage.value = null;
+  formLogged.value = false;
+  processing.value = false;
+  meta.title = '';
+  meta.caption = '';
+  meta.location_name = '';
+  setCoordinates(null, null, false);
+  setPreviewUrl(null);
+};
+
+const readExif = async (file: File): Promise<UploadExif> => {
+  const tags = [
+    'Make',
+    'Model',
+    'DateTimeOriginal',
+    'CreateDate',
+    'ModifyDate',
+    'ISO',
+    'FNumber',
+    'ExposureTime',
+    'FocalLength',
+    'GPSLatitude',
+    'GPSLongitude',
+  ];
+  const raw = await exifr.parse(file, tags).catch(() => null);
+  const gps = await exifr.gps(file).catch(() => null);
+  return normalizeExif({ ...(raw ?? {}), ...(gps ?? {}) });
+};
+
+const compressToWebp = async (file: File): Promise<File> => {
+  const compressed = await imageCompression(file, {
+    maxWidthOrHeight: MAX_EDGE,
+    useWebWorker: false,
+    fileType: 'image/webp',
+    initialQuality: 0.86,
+    preserveExif: false,
+  });
+
+  const outputName = file.name.replace(/\.[^.]+$/, '.webp');
+  return new File([compressed], outputName, { type: 'image/webp', lastModified: Date.now() });
+};
+
+const applyExifLocation = () => {
+  if (exif.value.location_lat === null || exif.value.location_lng === null) return;
+  setCoordinates(exif.value.location_lat, exif.value.location_lng);
+};
+
+const selectFile = async (file: File | null) => {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    errorMessage.value = '请选择图片文件。';
+    return;
+  }
+  if (file.size > MAX_ORIGINAL_BYTES) {
+    errorMessage.value = '单张图片超过 50 MB，当前阶段不支持。';
+    return;
+  }
+
+  resetStateForFile(file);
+  processing.value = true;
+  try {
+    const [nextExif, nextCompressed] = await Promise.all([readExif(file), compressToWebp(file)]);
+    exif.value = nextExif;
+    compressedFile.value = nextCompressed;
+    applyExifLocation();
+  } catch (error) {
+    errorMessage.value = (error as Error).message || '图片处理失败。';
+  } finally {
+    processing.value = false;
+    await nextTick();
+    map?.resize();
+  }
+};
+
+const handleInputChange = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  void selectFile(input.files?.[0] ?? null);
+  input.value = '';
+};
+
+const handleDrop = (event: DragEvent) => {
+  void selectFile(event.dataTransfer?.files[0] ?? null);
+};
+
+const openFilePicker = () => {
+  fileInputRef.value?.click();
+};
+
+const updateLat = (event: Event) => {
+  const value = (event.target as HTMLInputElement).value;
+  const lat = Number(value);
+  setCoordinates(
+    value === '' || !Number.isFinite(lat) ? null : lat,
+    meta.location_lng,
+    false,
+  );
+};
+
+const updateLng = (event: Event) => {
+  const value = (event.target as HTMLInputElement).value;
+  const lng = Number(value);
+  setCoordinates(
+    meta.location_lat,
+    value === '' || !Number.isFinite(lng) ? null : lng,
+    false,
+  );
+};
+
+const clearLocation = () => {
+  meta.location_name = '';
+  setCoordinates(null, null, false);
+};
+
+const prepareUploadPayload = () => {
+  if (!selectedFile.value || !compressedFile.value) return;
+  const formData = buildUploadFormData({
+    original: selectedFile.value,
+    compressed: compressedFile.value,
+    exif: exif.value,
+    meta: { ...meta },
+  });
+
+  console.group('Pixel Space upload payload');
+  for (const [key, value] of formData.entries()) {
+    console.log(key, value);
+  }
+  console.groupEnd();
+  formLogged.value = true;
+};
+
+onMounted(() => {
+  void initMap();
+});
+
+onBeforeUnmount(() => {
+  if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+  marker?.remove();
+  map?.remove();
+  marker = null;
+  map = null;
+  maplibre = null;
+});
 </script>
 
 <template>
   <AppShell fluid>
-    <div class="-mx-3 -mt-16 sm:-mx-4">
-      <section class="upload-stage">
-        <div aria-hidden="true" class="orbs">
-          <div class="orb orb-cyan" />
-          <div class="orb orb-pink" />
+    <section class="upload-page">
+      <div aria-hidden="true" class="orbs">
+        <div class="orb orb-cyan" />
+        <div class="orb orb-pink" />
+      </div>
+
+      <div class="page-inner">
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/*"
+          class="sr-only"
+          @change="handleInputChange"
+        />
+
+        <button
+          type="button"
+          class="drop-zone"
+          :class="{ 'is-compact': hasFile }"
+          @click="openFilePicker"
+          @dragover.prevent
+          @drop.prevent="handleDrop"
+        >
+          <span class="drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 512 512" fill="currentColor"><path d="M288 109.3V352c0 17.7-14.3 32-32 32s-32-14.3-32-32V109.3l-73.4 73.4c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l128-128c12.5-12.5 32.8-12.5 45.3 0l128 128c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L288 109.3zM64 352H192c0 35.3 28.7 64 64 64s64-28.7 64-64H448c35.3 0 64 28.7 64 64v32c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V416c0-35.3 28.7-64 64-64z" /></svg>
+          </span>
+          <div class="drop-text">
+            <p class="drop-title">{{ hasFile ? '点击或拖拽切换其他图片' : '拖拽图片到此或点击选择' }}</p>
+            <p class="drop-hint">单张上限 50 MB，自动压缩为 WebP</p>
+          </div>
+        </button>
+
+        <div
+          v-if="errorMessage"
+          class="error-banner"
+          role="alert"
+        >
+          <span aria-hidden="true" class="error-icon">!</span>
+          <span>{{ errorMessage }}</span>
         </div>
 
-        <div class="upload-canvas">
-          <div class="cyber-panel flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 p-8 text-center sm:flex-row sm:gap-4">
-            <p class="text-base font-bold text-white">拖拽图片到此或点击选择</p>
-            <span class="hidden text-xs text-slate-400 sm:inline">·</span>
-            <p class="text-xs text-slate-400">阶段 7 接入 exifr + browser-image-compression</p>
-          </div>
-
-          <div class="workbench">
-            <aside class="queue-rail cyber-panel rounded-2xl p-3">
-              <header class="mb-3 flex items-center justify-between px-1">
-                <p class="text-[10px] font-bold uppercase tracking-[0.25em] text-neon-cyan">Queue</p>
-                <span class="text-[10px] text-slate-500">0 张</span>
-              </header>
-              <div class="queue-list">
-                <button type="button" class="thumb is-active" disabled>
-                  <span class="sr-only">当前选中缩略图占位</span>
+        <div class="workbench">
+          <aside class="queue-rail cyber-panel">
+            <header class="queue-header">
+              <p class="section-eyebrow">Queue</p>
+              <span class="section-count">{{ queueCountLabel }}</span>
+            </header>
+            <div class="queue-list">
+              <div v-if="hasFile" class="thumb-cell">
+                <button
+                  type="button"
+                  class="thumb is-active"
+                  :aria-label="`重新选择，当前：${selectedFile?.name ?? ''}`"
+                  @click="openFilePicker"
+                >
+                  <img
+                    v-if="previewUrl"
+                    :src="previewUrl"
+                    alt="当前选中图片缩略图"
+                    class="h-full w-full object-cover"
+                  />
                 </button>
-                <button type="button" class="thumb" disabled>
-                  <span class="sr-only">缩略图占位</span>
-                </button>
-                <button type="button" class="thumb" disabled>
-                  <span class="sr-only">缩略图占位</span>
-                </button>
-                <button type="button" class="thumb" disabled>
-                  <span class="sr-only">缩略图占位</span>
+                <button
+                  type="button"
+                  class="thumb-remove"
+                  aria-label="从队列中移除"
+                  @click.stop="clearSelection"
+                >
+                  <svg viewBox="0 0 384 512" fill="currentColor" aria-hidden="true">
+                    <path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z" />
+                  </svg>
                 </button>
               </div>
-            </aside>
+              <button v-else type="button" class="thumb-empty" @click="openFilePicker" aria-label="选择图片">
+                <svg viewBox="0 0 448 512" fill="currentColor" aria-hidden="true">
+                  <path d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z" />
+                </svg>
+              </button>
+            </div>
+          </aside>
 
-            <figure class="preview-stage cyber-panel overflow-hidden rounded-[2rem]">
+          <figure class="preview-stage cyber-panel">
+            <template v-if="previewUrl">
+              <img
+                :src="previewUrl"
+                :alt="selectedFile?.name ?? '图片预览'"
+                class="preview-image"
+              />
+              <figcaption class="preview-caption">
+                <span class="preview-name">{{ selectedFile?.name }}</span>
+                <span v-if="processing" class="preview-busy">处理中</span>
+                <span v-else-if="compressedFile" class="preview-ok">已压缩</span>
+              </figcaption>
+            </template>
+            <template v-else>
               <div class="absolute inset-0 bg-panel/40" />
               <div class="absolute inset-0 bg-gradient-to-br from-neon-cyan/10 via-transparent to-neon-pink/10" />
               <div class="absolute inset-0 bg-grid bg-[length:64px_64px] opacity-25" />
-              <figcaption class="sr-only">当前选中图片预览占位</figcaption>
-            </figure>
+              <figcaption class="preview-placeholder">
+                <span>未选中图片</span>
+                <span class="text-xs text-slate-500">从上方拖拽或点击选择</span>
+              </figcaption>
+            </template>
+          </figure>
 
-            <aside class="meta-sidebar cyber-panel space-y-5 rounded-[2rem] p-6">
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">EXIF</p>
-                <dl class="mt-3 space-y-2 text-sm">
-                  <div class="flex justify-between text-slate-300">
-                    <dt>ISO</dt>
-                    <dd class="font-mono text-slate-500">--</dd>
-                  </div>
-                  <div class="flex justify-between text-slate-300">
-                    <dt>快门</dt>
-                    <dd class="font-mono text-slate-500">--</dd>
-                  </div>
-                  <div class="flex justify-between text-slate-300">
-                    <dt>光圈</dt>
-                    <dd class="font-mono text-slate-500">--</dd>
-                  </div>
-                </dl>
+          <aside class="meta-sidebar cyber-panel">
+            <section class="meta-section">
+              <header class="meta-section-title">
+                <svg viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M0 64C0 28.7 28.7 0 64 0H224V128c0 17.7 14.3 32 32 32H384V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm384 64H256V0L384 128z" /></svg>
+                <span>文件</span>
+              </header>
+              <dl class="meta-list">
+                <div class="meta-row">
+                  <dt>文件名</dt>
+                  <dd class="truncate font-mono">{{ selectedFile?.name ?? '--' }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>原始大小</dt>
+                  <dd class="font-mono">{{ originalSize }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>压缩后</dt>
+                  <dd class="font-mono">{{ compressedSize }}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="meta-section">
+              <header class="meta-section-title">
+                <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M149.1 64.8L138.7 96H64C28.7 96 0 124.7 0 160V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H373.3L362.9 64.8C356.4 45.2 338.1 32 317.4 32H194.6c-20.7 0-39 13.2-45.5 32.8zM256 192a96 96 0 1 1 0 192 96 96 0 1 1 0-192z" /></svg>
+                <span>EXIF</span>
+              </header>
+              <dl class="exif-grid">
+                <div class="meta-row exif-row-wide">
+                  <dt>拍摄时间</dt>
+                  <dd class="font-mono">{{ formatExifTakenAt(exif.taken_at) }}</dd>
+                </div>
+                <div class="meta-row exif-row-wide">
+                  <dt>相机</dt>
+                  <dd class="font-mono truncate">{{ display(exif.camera) }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>ISO</dt>
+                  <dd class="font-mono">{{ display(exif.iso) }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>快门</dt>
+                  <dd class="font-mono">{{ display(exif.shutter) }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>光圈</dt>
+                  <dd class="font-mono">{{ exif.aperture === null ? '--' : `f/${exif.aperture}` }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>焦距</dt>
+                  <dd class="font-mono">{{ formatFocalLength(exif.focal_length) }}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="meta-section meta-section-form">
+              <header class="meta-section-title meta-section-title-pink">
+                <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z" /></svg>
+                <span>当前图片信息</span>
+              </header>
+              <label class="field">
+                <span class="field-label">标题</span>
+                <input v-model="meta.title" type="text" class="cyber-input" :disabled="!hasFile" />
+              </label>
+              <label class="field">
+                <span class="field-label">描述</span>
+                <textarea v-model="meta.caption" rows="3" class="cyber-input" :disabled="!hasFile"></textarea>
+              </label>
+              <label class="field">
+                <span class="field-label">位置名称</span>
+                <input
+                  v-model="meta.location_name"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="例如：上海 外滩"
+                  :disabled="!hasFile"
+                />
+              </label>
+
+              <div class="map-block">
+                <div class="map-block-header">
+                  <span class="field-label">地图坐标</span>
+                  <button
+                    type="button"
+                    class="map-clear"
+                    @click="clearLocation"
+                  >
+                    清空
+                  </button>
+                </div>
+                <div ref="mapRef" class="map-pane" aria-label="点击地图选择图片位置"></div>
+                <p v-if="mapLoadState !== 'ready'" class="map-status">
+                  {{ mapLoadState === 'fallback' ? '矢量地图加载慢，已切到深色备用底图' : '正在加载地图' }}
+                </p>
+                <div class="map-coords">
+                  <label class="field">
+                    <span class="field-sublabel">纬度</span>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      class="cyber-input"
+                      :value="meta.location_lat ?? ''"
+                      @input="updateLat"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field-sublabel">经度</span>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      class="cyber-input"
+                      :value="meta.location_lng ?? ''"
+                      @input="updateLng"
+                    />
+                  </label>
+                </div>
               </div>
-
-              <div class="space-y-4 border-t border-white/10 pt-5">
-                <p class="text-xs font-bold uppercase tracking-[0.3em] text-neon-pink">当前图片信息</p>
-                <label class="block space-y-1">
-                  <span class="text-sm font-semibold text-slate-300">标题</span>
-                  <input type="text" class="cyber-input" disabled />
-                </label>
-                <label class="block space-y-1">
-                  <span class="text-sm font-semibold text-slate-300">描述</span>
-                  <textarea rows="3" class="cyber-input" disabled></textarea>
-                </label>
-                <label class="block space-y-1">
-                  <span class="text-sm font-semibold text-slate-300">位置</span>
-                  <input type="text" class="cyber-input" placeholder="例如：上海 外滩" disabled />
-                </label>
-              </div>
-            </aside>
-          </div>
-
-          <footer class="flex items-center justify-end gap-3 pt-2">
-            <span class="text-sm text-slate-500">等待选择图片</span>
-            <button type="button" class="cyber-button" disabled>开始上传</button>
-          </footer>
+            </section>
+          </aside>
         </div>
-      </section>
-    </div>
+
+        <footer class="page-footer">
+          <span class="footer-status">{{ statusLabel }}</span>
+          <button type="button" class="cyber-button" :disabled="!canBuildFormData" @click="prepareUploadPayload">
+            上传图片
+          </button>
+        </footer>
+      </div>
+    </section>
   </AppShell>
 </template>
 
 <style scoped>
-.upload-stage {
+.upload-page {
   position: relative;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #04040c 0%, #070713 50%, #0a0a1a 100%);
-  overflow: hidden;
+  isolation: isolate;
 }
 
 .orbs {
   position: absolute;
-  inset: 0;
+  inset: -4rem -1rem auto -1rem;
+  height: 28rem;
   pointer-events: none;
   z-index: 0;
 }
 
 .orb {
   position: absolute;
-  width: 24rem;
-  height: 24rem;
-  border-radius: 9999px;
+  width: 22rem;
+  height: 22rem;
+  border-radius: 0.5rem;
   filter: blur(80px);
   opacity: 0.18;
 }
 
 .orb-cyan {
-  top: -6rem;
-  left: -4rem;
+  top: -4rem;
+  left: -6rem;
   background: rgb(53, 243, 255);
 }
 
 .orb-pink {
-  bottom: -6rem;
-  right: -4rem;
+  top: -2rem;
+  right: -6rem;
   background: rgb(255, 79, 216);
 }
 
-.upload-canvas {
+.page-inner {
   position: relative;
   z-index: 1;
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 5rem 1.5rem 3rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
 }
 
-@media (min-width: 640px) {
-  .upload-canvas {
-    padding: 5rem 2rem 3rem;
-  }
+.drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1.75rem 1.5rem;
+  border-radius: 0.6rem;
+  border: 1.5px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(7, 7, 19, 0.45);
+  backdrop-filter: blur(12px);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.drop-zone:hover {
+  border-color: rgba(53, 243, 255, 0.55);
+  background: rgba(53, 243, 255, 0.05);
+  box-shadow: 0 0 28px rgba(53, 243, 255, 0.14);
+  transform: translateY(-1px);
+}
+.drop-zone.is-compact {
+  padding: 0.9rem 1.25rem;
+}
+
+.drop-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(53, 243, 255, 0.3);
+  background: rgba(53, 243, 255, 0.08);
+  color: rgb(53, 243, 255);
+}
+.drop-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.drop-zone.is-compact .drop-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.drop-zone.is-compact .drop-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.drop-text {
+  min-width: 0;
+}
+
+.drop-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgb(255, 255, 255);
+}
+.drop-hint {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: rgb(148, 163, 184);
+}
+
+.upload-page .cyber-input,
+.upload-page .cyber-button {
+  border-radius: 0.45rem;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(244, 63, 94, 0.08);
+  color: rgb(254, 205, 211);
+  font-size: 0.85rem;
+}
+.error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: rgba(248, 113, 113, 0.2);
+  color: rgb(254, 226, 226);
+  font-weight: 700;
 }
 
 .workbench {
   display: grid;
-  gap: 1.5rem;
   grid-template-columns: 1fr;
-  align-items: stretch;
+  gap: 1rem;
+  min-height: 0;
 }
 
 @media (min-width: 1024px) {
   .workbench {
-    grid-template-columns: 7rem minmax(0, 1fr) 22rem;
+    grid-template-columns: 8rem minmax(0, 1fr) 24rem;
+    align-items: stretch;
   }
 }
 
 .queue-rail {
+  border-radius: 0.6rem;
+  padding: 0.85rem;
+  min-width: 0;
+}
+
+.queue-header {
   display: flex;
-  flex-direction: column;
-  min-height: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.1rem 0.65rem;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(53, 243, 255, 0.12);
+}
+
+.section-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgb(53, 243, 255);
+}
+.section-count {
+  flex-shrink: 0;
+  padding: 0.12rem 0.45rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(53, 243, 255, 0.18);
+  background: rgba(53, 243, 255, 0.06);
+  font-size: 10.5px;
+  font-family: 'Menlo', 'Consolas', monospace;
+  line-height: 1.35;
+  color: rgb(203, 213, 225);
+  white-space: nowrap;
 }
 
 .queue-list {
   display: flex;
-  flex-direction: row;
-  gap: 0.5rem;
+  gap: 0.55rem;
   overflow-x: auto;
   padding-bottom: 0.25rem;
 }
@@ -180,46 +792,365 @@ import AppShell from '@/shared/ui/AppShell.vue';
 @media (min-width: 1024px) {
   .queue-list {
     flex-direction: column;
+    align-items: center;
     overflow-x: visible;
-    overflow-y: auto;
-    max-height: calc(100vh - 20rem);
-    padding-right: 0.25rem;
+    overflow-y: visible;
+    padding-right: 0;
   }
 }
 
+.thumb-cell {
+  position: relative;
+  flex: 0 0 5.25rem;
+  width: 5.25rem;
+}
+
 .thumb {
-  flex: 0 0 4.5rem;
+  position: relative;
+  display: block;
   aspect-ratio: 1 / 1;
-  width: 4.5rem;
-  border-radius: 0.75rem;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.45rem;
   background: rgba(7, 7, 19, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease;
   cursor: pointer;
 }
-
-.thumb:hover:not(:disabled) {
-  border-color: rgba(53, 243, 255, 0.3);
+.thumb:hover {
+  border-color: rgba(53, 243, 255, 0.4);
   transform: translateY(-1px);
 }
-
 .thumb.is-active {
   border-color: rgb(53, 243, 255);
-  box-shadow: 0 0 12px rgba(53, 243, 255, 0.4);
+  box-shadow: 0 0 14px rgba(53, 243, 255, 0.35);
 }
 
-.thumb:disabled {
-  cursor: not-allowed;
+.thumb-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: rgb(7, 7, 19);
+  border: 1px solid rgba(255, 79, 216, 0.55);
+  color: rgb(255, 79, 216);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  z-index: 2;
+}
+.thumb-cell:hover .thumb-remove,
+.thumb-remove:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+.thumb-remove:hover {
+  background: rgb(255, 79, 216);
+  color: rgb(7, 7, 19);
+  box-shadow: 0 0 12px rgba(255, 79, 216, 0.55);
+}
+.thumb-remove svg {
+  width: 0.55rem;
+  height: 0.55rem;
+}
+
+.thumb-empty {
+  flex: 0 0 5.25rem;
+  aspect-ratio: 1 / 1;
+  width: 5.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.45rem;
+  border: 1.5px dashed rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: rgba(148, 163, 184, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.thumb-empty:hover {
+  border-color: rgba(53, 243, 255, 0.5);
+  color: rgb(53, 243, 255);
+}
+.thumb-empty svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .preview-stage {
   position: relative;
-  min-height: 28rem;
+  min-height: 30rem;
+  overflow: hidden;
+  border-radius: 0.6rem;
+}
+
+.preview-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: rgba(7, 7, 19, 0.7);
+}
+
+.preview-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  font-size: 11px;
+  font-family: 'Menlo', 'Consolas', monospace;
+  background: linear-gradient(180deg, rgba(7, 7, 19, 0) 0%, rgba(7, 7, 19, 0.85) 100%);
+  color: rgb(148, 163, 184);
+  z-index: 1;
+}
+.preview-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(226, 232, 240);
+}
+.preview-busy {
+  color: rgb(53, 243, 255);
+}
+.preview-ok {
+  color: rgb(132, 247, 153);
+}
+
+.preview-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: rgb(148, 163, 184);
+  font-size: 0.85rem;
+  z-index: 1;
 }
 
 @media (min-width: 1024px) {
   .preview-stage {
-    min-height: 32rem;
+    min-height: 34rem;
   }
+}
+
+.meta-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-radius: 0.6rem;
+}
+
+.meta-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.meta-section + .meta-section {
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.meta-section-form {
+  gap: 0.7rem;
+}
+
+.meta-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgb(53, 243, 255);
+}
+.meta-section-title svg {
+  width: 12px;
+  height: 12px;
+  color: rgb(103, 232, 249);
+}
+.meta-section-title-pink {
+  color: rgb(255, 79, 216);
+}
+.meta-section-title-pink svg {
+  color: rgb(255, 79, 216);
+}
+
+.meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.exif-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem 0.6rem;
+}
+
+.exif-row-wide {
+  grid-column: 1 / -1;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.4rem;
+  background: rgba(7, 7, 19, 0.45);
+  border: 1px solid rgba(53, 243, 255, 0.08);
+  font-size: 11.5px;
+}
+.meta-row dt {
+  flex-shrink: 0;
+  color: rgba(103, 232, 249, 0.7);
+  font-weight: 600;
+}
+.meta-row dd {
+  min-width: 0;
+  text-align: right;
+  color: rgb(226, 232, 240);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(203, 213, 225);
+}
+.field-sublabel {
+  font-size: 11px;
+  color: rgb(148, 163, 184);
+}
+
+.map-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.map-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.map-clear {
+  font-size: 11px;
+  color: rgb(148, 163, 184);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.map-clear:hover:not(:disabled) {
+  color: rgb(53, 243, 255);
+}
+.map-clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.map-pane {
+  height: 11rem;
+  overflow: hidden;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(53, 243, 255, 0.2);
+  background: rgba(7, 7, 19, 0.72);
+}
+
+.map-pane :deep(.maplibregl-canvas) {
+  outline: none;
+}
+
+.map-pane :deep(.maplibregl-ctrl-group) {
+  overflow: hidden;
+  border: 1px solid rgba(53, 243, 255, 0.24);
+  border-radius: 0.4rem;
+  background: rgba(7, 7, 19, 0.72);
+  box-shadow: 0 0 18px rgba(53, 243, 255, 0.12);
+}
+
+.map-pane :deep(.maplibregl-ctrl button) {
+  background-color: transparent;
+}
+
+.map-pane :deep(.maplibregl-ctrl button:hover) {
+  background-color: rgba(53, 243, 255, 0.16);
+}
+
+.map-pane :deep(.maplibregl-ctrl-icon) {
+  filter: invert(1) drop-shadow(0 0 4px rgba(53, 243, 255, 0.45));
+}
+
+.map-pane :deep(.maplibregl-ctrl-attrib) {
+  background: rgba(7, 7, 19, 0.72);
+  color: rgb(148, 163, 184);
+}
+
+.map-pane :deep(.maplibregl-ctrl-attrib a) {
+  color: rgb(53, 243, 255);
+}
+
+.map-pane :deep(.map-marker) {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  border: 2px solid rgb(255, 255, 255);
+  background: rgb(53, 243, 255);
+  box-shadow: 0 0 0 0 rgba(53, 243, 255, 0.55), 0 0 18px rgba(53, 243, 255, 0.9);
+}
+
+.map-status {
+  font-size: 11px;
+  color: rgb(148, 163, 184);
+}
+
+.map-coords {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.page-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.5rem 0.25rem 0;
+}
+
+@media (min-width: 640px) {
+  .page-footer {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.footer-status {
+  font-size: 0.85rem;
+  color: rgb(148, 163, 184);
 }
 </style>

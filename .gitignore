@@ -7,3 +7,5 @@ dist/
 *.local
 *.tsbuildinfo
 .claude/
+.playwright-mcp/
+.tmp-vite*.log

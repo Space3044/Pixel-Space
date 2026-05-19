@@ -77,7 +77,7 @@ tests/
 
 **图库布局策略**。图库页用 Justified Rows 算法（Flickr/Unsplash 风格）：按行布局、每行图片高度统一、按原始宽高比横向拼接、行末等比缩放刚好填满容器宽度。不裁切原图、视觉密度高、阅读顺序自然。算法依赖每张图的 `width`/`height` 字段，因此到阶段 5 拿到真实数据后才能接入，候选实现是 [`justified-layout`](https://www.npmjs.com/package/justified-layout) 这个 Flickr 团队官方包，约 4 KB，框架无关。阶段 1 期间用 CSS columns 多列瀑布流 + 多种 aspect ratio 的骨架占位演示视觉密度，等阶段 5 替换为真算法。图库页通过 `AppShell` 的 `fluid` prop 跳出 `max-w-7xl` 限宽，撑满视口宽度。
 
-**地图与坐标拾取**。地图组件统一选 [Leaflet](https://leafletjs.com/)（约 40 KB gzip）+ OpenStreetMap 公共瓦片，免费、无 token、无注册、坐标原始 WGS84 不偏移、自用流量在 OSM ToS 内。阶段 7 上传页用交互式地图让管理员点击地图拾取 `location_lat` / `location_lng`，地名搜索接 OSM Nominatim 免费 geocoding；阶段 11 lightbox 详情面板与 `/p/:key` 公开页复用同一个 Leaflet 实例渲染只读小地图（关掉拖拽缩放、固定缩放级别、放标记点），不再加任何额外依赖。国内访问主瓦片偶尔慢，需要时换 `tile.openstreetmap.de` 等兼容 Slippy Map 格式的镜像即可。不选 Mapbox / MapLibre / Google Maps 的原因：需要 token 或绑卡、bundle 大、视觉提升对图床详情页这种小地图收益有限。
+**地图与坐标拾取**。地图组件选 [MapLibre GL JS](https://maplibre.org/maplibre-gl-js/docs/) + [OpenFreeMap](https://openfreemap.org/) 公共样式，免费、无 token、无注册，视觉效果比栅格瓦片更贴合当前赛博暗色界面。阶段 7 上传页用交互式地图让管理员点击地图拾取 `location_lat` / `location_lng`，地名先手动输入，不接外部搜索。阶段 11 lightbox 详情面板与 `/p/:key` 公开页复用同一套 MapLibre 只读小地图配置。
 
 ## 阶段 0：最小骨架
 
@@ -279,25 +279,28 @@ Access 配置记录（控制台配置完成后回填）：
 
 目标：在浏览器里完成选图、读 EXIF、压缩、组装 FormData。
 
+状态：已完成。
+
 任务：
 
-- [ ] 安装 `browser-image-compression` 和 `exifr`
-- [ ] 上传页支持选择单张图片
-- [ ] 显示本地预览、原始文件名、原始大小
-- [ ] 用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门，以及 GPS 经纬度（若存在，解析为 WGS84 十进制）
-- [ ] 用 `browser-image-compression` 压缩为 WebP，目标长边 2048
-- [ ] 显示压缩后大小
-- [ ] 单图大小超过 50MB 直接在前端阻断，提示当前不支持
-- [ ] 安装 `leaflet`，集成 OpenStreetMap 瓦片，上传表单内嵌交互式地图：EXIF 含 GPS 时自动落点作为默认值，否则等待管理员点击地图拾取 `location_lat` / `location_lng`，可选搜索框接 OSM Nominatim 按地名定位
-- [ ] 表单提供 `title`、`caption`、`location_name` 输入；`location_lat` / `location_lng` 由 EXIF / 地图拾取自动回填，可清空、可手动覆盖；提交时由管理员确认是否随图落库
-- [ ] 组装 `FormData`：`original`、`compressed`、`exif`(JSON)、`meta`(JSON)
-- [ ] 新建 `tests/exif.test.mjs`，覆盖典型 EXIF 数据解析
+- [x] 安装 `browser-image-compression` 和 `exifr`
+- [x] 上传页支持选择单张图片
+- [x] 显示本地预览、原始文件名、原始大小
+- [x] 用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门、焦距，以及 GPS 经纬度（若存在，解析为 WGS84 十进制）
+- [x] 用 `browser-image-compression` 压缩为 WebP，目标长边 2048
+- [x] 显示压缩后大小
+- [x] 单图大小超过 50MB 直接在前端阻断，提示当前不支持
+- [x] 安装 `maplibre-gl`，集成 OpenFreeMap 暗色矢量样式，上传表单内嵌交互式地图：EXIF 含 GPS 时自动落点作为默认值，否则等待管理员点击地图拾取 `location_lat` / `location_lng`
+- [x] 表单提供 `title`、`caption`、`location_name` 输入；`location_lat` / `location_lng` 由 EXIF / 地图拾取自动回填，可清空、可手动覆盖；提交时由管理员确认是否随图落库
+- [x] 组装 `FormData`：`original`、`compressed`、`exif`(JSON)、`meta`(JSON)
+- [x] 新建 `tests/exif.test.mjs`，覆盖典型 EXIF 数据解析
 
 这一阶段不做：
 
 - 不写多图批量上传
 - 不写队列、断点续传
 - 不调用后端
+- 不接 OSM Nominatim 地名搜索；当前阶段用手动位置名输入 + 地图点选坐标，避免把输入内容发给外部搜索服务
 
 验收：选择一张图后能看到预览、压缩结果，控制台能打印组装好的 FormData 字段。`npm test` 通过。
 
@@ -382,8 +385,8 @@ Access 配置记录（控制台配置完成后回填）：
 - [ ] 实现 `DELETE /api/admin/image/:key`
 - [ ] 删除流程：先删 R2 压缩图，再尝试删除 Telegram 频道消息（失败仅记录日志不阻塞），最后从 D1 物理删除
 - [ ] 图库页增加关键词搜索，命中 `title`、`caption`、`search_content`、`location_name` 任一即可
-- [ ] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`（坐标编辑复用上传页的 Leaflet 地图拾取组件）
-- [ ] lightbox 详情面板与 `/p/:key` 公开页用只读 Leaflet 渲染坐标小地图（无坐标则不显示）
+- [ ] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`（坐标编辑复用上传页的 MapLibre 地图拾取组件）
+- [ ] lightbox 详情面板与 `/p/:key` 公开页用只读 MapLibre 渲染坐标小地图（无坐标则不显示）
 - [ ] 详情页支持复制 Markdown、HTML、直链
 - [ ] 公开页路由层注入 `og:image`、`og:title`、`og:description`
 
@@ -405,3 +408,4 @@ Access 配置记录（控制台配置完成后回填）：
 - [ ] 历史图片 AI 批量回填
 - [ ] Cloudflare Queues 接管 AI 任务
 - [ ] 原图二级归档（例如另一个 Telegram 频道或 R2 冷存储）
+- [ ] 抽一个统一进度条组件，后续上传、AI 处理、批量回填等遇到进度展示时统一套用

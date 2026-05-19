@@ -31,6 +31,10 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/images/images.api.ts',
     'src/features/random/RandomView.vue',
     'src/features/hive/HiveView.vue',
+    'src/features/upload/exif.ts',
+    'src/features/upload/map-style.ts',
+    'src/features/upload/upload-form.ts',
+    'src/features/upload/upload.types.ts',
     'src/shared/ui/AppShell.vue',
     'src/shared/ui/SearchModal.vue',
     'src/styles/main.css',
@@ -47,6 +51,8 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'tests/migration.test.mjs',
     'tests/api-shape.test.mjs',
     'tests/access-ui.test.mjs',
+    'tests/exif.test.mjs',
+    'tests/map-style.test.mjs',
   ]) {
     assert.equal(exists(path), true, `${path} should exist`);
   }
@@ -80,7 +86,16 @@ test('keeps package scripts and dependencies minimal', () => {
     'test',
     'typecheck',
   ]);
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['justified-layout', 'vue', 'vue-router']);
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), [
+    'browser-image-compression',
+    'exifr',
+    'justified-layout',
+    'maplibre-gl',
+    'vue',
+    'vue-router',
+  ]);
+  assert.equal(pkg.dependencies.leaflet, undefined, 'Leaflet is replaced by MapLibre GL JS');
+  assert.equal(pkg.devDependencies['@types/leaflet'], undefined, '@types/leaflet is not needed after MapLibre GL JS');
   assert.ok(pkg.devDependencies.wrangler, 'wrangler must be installed from stage 4');
   assert.ok(
     pkg.devDependencies['@cloudflare/workers-types'],
