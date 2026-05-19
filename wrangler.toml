@@ -10,7 +10,7 @@ pages_build_output_dir = "dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "imgbed"
-database_id = "local-dev-placeholder"  # 本地任意非空字符串即可；部署前在 Dashboard 建库后回填真实 ID
+database_id = "e3fb8320-6da4-4889-a3d0-c67adb3e0ab0"  # 本地任意非空字符串即可；部署前在 Dashboard 建库后回填真实 ID
 migrations_dir = "db/migrations"
 
 # R2 压缩图 bucket binding：Pages Functions 里通过 env.BUCKET 访问。
