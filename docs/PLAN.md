@@ -322,7 +322,7 @@ Access 配置记录（控制台配置完成后回填）：
 - [x] 压缩图写入 R2，对象 key 与图片 key 一致
 - [x] D1 写入完整元数据，含 EXIF 拍摄信息以及管理员确认后的 `location_lat` / `location_lng` / `location_name`（未填则留空）
 - [x] 接口响应返回新 `ImageRecord`
-- [x] 前端调用上传接口，成功后跳转详情页
+- [x] 前端调用上传接口，成功后在上传页展示图片直链、Markdown、HTML 和公开页链接
 - [x] `GET /api/list` 和 `GET /api/image/:key` 返回 R2 公开 URL（基于 `PUBLIC_BASE_URL` 拼装）；本地默认 `PUBLIC_BASE_URL=/api/public`，由 `GET /api/public/:key` 从 R2 回吐压缩图
 
 这一阶段不做：
@@ -337,15 +337,17 @@ Access 配置记录（控制台配置完成后回填）：
 
 目标：管理员上传时保留原图，访客不能直接拿到原图。
 
+状态：代码已完成；真实 Telegram 频道归档待配置 `TG_BOT_TOKEN` / `TG_CHAT_ID` 后验证。
+
 任务：
 
 - [ ] 创建 Telegram Bot，创建私有频道，把 Bot 加入频道并设管理员
 - [ ] 配置 `TG_BOT_TOKEN`、`TG_CHAT_ID`（通过 `wrangler secret` 写入）
-- [ ] 新建迁移 `0003_add_tg_columns.sql`，增加 `tg_file_id`、`tg_message_id`、`tg_chat_id`
-- [ ] 上传接口在写完 R2 和 D1 之后，把原图发送到 Telegram
-- [ ] 发送失败时回滚或标记 `tg_status`，本期选择标记不阻塞上传（图片仍可用，只是没有归档）
-- [ ] 实现 `GET /api/original/:key`，通过 Bot getFile 流式回吐原图
-- [ ] 在 README 写明 50MB 上限和单副本风险
+- [x] 新建迁移 `0003_add_tg_columns.sql`，增加 `tg_file_id`、`tg_message_id`、`tg_chat_id`、`tg_status`、`tg_error`
+- [x] 上传接口在写完 R2 和 D1 之后，把原图发送到 Telegram
+- [x] 发送失败时标记 `tg_status='failed'`，不阻塞上传（图片仍可用，只是没有归档）
+- [x] 实现 `GET /api/original/:key`，通过 Bot getFile 流式回吐原图
+- [x] 在 README 写明 50MB 上限和单副本风险
 
 这一阶段不做：
 

@@ -1,11 +1,17 @@
-import './file-structure.test.mjs';
-import './image-links.test.mjs';
-import './migration.test.mjs';
-import './api-shape.test.mjs';
-import './access-ui.test.mjs';
-import './exif.test.mjs';
-import './map-style.test.mjs';
-import './upload-form.test.mjs';
-import './upload-api.test.mjs';
-import './image-object.test.mjs';
-import './upload-view.test.mjs';
+for (const path of [
+  './file-structure.test.mjs',
+  './image-links.test.mjs',
+  './migration.test.mjs',
+  './access-ui.test.mjs',
+  './exif.test.mjs',
+  './upload-form.test.mjs',
+  './map-style.test.mjs',
+  './upload-view.test.mjs',
+  './api-shape.test.mjs',
+  './telegram.test.mjs',
+  './upload-api.test.mjs',
+  './original-api.test.mjs',
+  './image-object.test.mjs',
+]) {
+  await import(path);
+}

@@ -41,17 +41,23 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/styles/main.css',
     'docs/PLAN.md',
     'db/migrations/0001_init.sql',
+    'db/migrations/0003_add_tg_columns.sql',
+    'README.md',
     'functions/types.ts',
     'functions/_shared/http.ts',
     'functions/_shared/images.ts',
+    'functions/_shared/telegram.ts',
     'functions/api/list.ts',
     'functions/api/image/[key].ts',
     'functions/api/upload.ts',
     'functions/api/public/[key].ts',
+    'functions/api/original/[key].ts',
     'tsconfig.functions.json',
     'wrangler.toml',
     'tests/image-links.test.mjs',
     'tests/migration.test.mjs',
+    'tests/telegram.test.mjs',
+    'tests/original-api.test.mjs',
     'tests/api-shape.test.mjs',
     'tests/access-ui.test.mjs',
     'tests/exif.test.mjs',
@@ -108,6 +114,10 @@ test('keeps package scripts and dependencies minimal', () => {
     '@cloudflare/workers-types must be installed from stage 4',
   );
   assert.match(read('wrangler.toml'), /PUBLIC_BASE_URL\s*=\s*"\/api\/public"/);
+  assert.match(read('.gitignore'), /^\.dev\.vars$/m);
+  assert.match(read('README.md'), /TG_BOT_TOKEN/);
+  assert.match(read('README.md'), /50MB/);
+  assert.match(read('README.md'), /单副本/);
   assert.doesNotMatch(tsconfigApp, /ignoreDeprecations/);
   assert.doesNotMatch(tsconfigApp, /"baseUrl"/);
   assert.match(tsconfigApp, /"@\/\*":\s*\["\.\/src\/\*"\]/);

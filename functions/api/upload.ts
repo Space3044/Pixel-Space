@@ -2,6 +2,7 @@ import type { Env } from '../types';
 import { badRequest, json, serverError } from '../_shared/http';
 import type { ImageRow } from '../_shared/images';
 import { rowToRecord } from '../_shared/images';
+import { archiveOriginalToTelegram } from '../_shared/telegram';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -25,12 +26,32 @@ INSERT INTO images (
   exif_iso,
   exif_aperture,
   exif_shutter,
-  exif_focal_length
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  exif_focal_length,
+  tg_status
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
   'SELECT key, title, caption, r2_key, width, height, format, location_name FROM images WHERE key = ?';
+
+const UPDATE_TG_DONE_SQL = `
+UPDATE images
+SET tg_file_id = ?,
+    tg_message_id = ?,
+    tg_chat_id = ?,
+    tg_status = 'done',
+    tg_error = NULL,
+    updated_at = datetime('now')
+WHERE key = ?
+`;
+
+const UPDATE_TG_FAILED_SQL = `
+UPDATE images
+SET tg_status = 'failed',
+    tg_error = ?,
+    updated_at = datetime('now')
+WHERE key = ?
+`;
 
 interface UploadMeta {
   title: string;
@@ -124,6 +145,11 @@ const sha256Hex = async (file: File): Promise<string> => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
+const errorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim()) return error.message.slice(0, 300);
+  return 'telegram_archive_failed';
+};
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   let formData: FormData;
   try {
@@ -182,8 +208,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         exif.aperture,
         exif.shutter,
         exif.focal_length,
+        'pending',
       )
       .run();
+
+    try {
+      const archive = await archiveOriginalToTelegram({
+        token: env.TG_BOT_TOKEN,
+        chatId: env.TG_CHAT_ID,
+        file: original,
+        key,
+      });
+      await env.DB.prepare(UPDATE_TG_DONE_SQL)
+        .bind(archive.file_id, archive.message_id, archive.chat_id, key)
+        .run();
+    } catch (archiveError) {
+      console.error('Telegram original archive failed', archiveError);
+      await env.DB.prepare(UPDATE_TG_FAILED_SQL).bind(errorMessage(archiveError), key).run();
+    }
 
     const row = await env.DB.prepare(SELECT_SQL).bind(key).first<ImageRow>();
     if (!row) return serverError('upload_row_missing');

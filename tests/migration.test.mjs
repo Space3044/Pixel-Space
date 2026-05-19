@@ -15,6 +15,8 @@ const test = (name, fn) => {
 const sql = readFileSync(join(process.cwd(), 'db/migrations/0001_init.sql'), 'utf8');
 const migration2Path = join(process.cwd(), 'db/migrations/0002_add_exif_focal_length.sql');
 const migration2Sql = existsSync(migration2Path) ? readFileSync(migration2Path, 'utf8') : '';
+const migration3Path = join(process.cwd(), 'db/migrations/0003_add_tg_columns.sql');
+const migration3Sql = existsSync(migration3Path) ? readFileSync(migration3Path, 'utf8') : '';
 
 const stripComments = (s) =>
   s
@@ -26,7 +28,7 @@ const stripComments = (s) =>
     .join('\n');
 
 const sqlBody = stripComments(sql).toLowerCase();
-const allSqlBody = stripComments(`${sql}\n${migration2Sql}`).toLowerCase();
+const allSqlBody = stripComments(`${sql}\n${migration2Sql}\n${migration3Sql}`).toLowerCase();
 
 test('migration creates the images table', () => {
   assert.match(sqlBody, /create\s+table\s+images/);
@@ -86,4 +88,14 @@ test('migration defers AI and Telegram columns to later stages', () => {
 
 test('migration stores parsed EXIF focal length for upload metadata', () => {
   assert.match(allSqlBody, /\bexif_focal_length\b/);
+});
+
+test('migration adds Telegram archive fields after the init migration', () => {
+  const migration3Body = stripComments(migration3Sql).toLowerCase();
+
+  for (const col of ['tg_file_id', 'tg_message_id', 'tg_chat_id', 'tg_status', 'tg_error']) {
+    assert.match(migration3Body, new RegExp(`\\b${col}\\b`), `column ${col} missing`);
+  }
+  assert.match(migration3Body, /alter\s+table\s+images\s+add\s+column\s+tg_status/);
+  assert.match(migration3Body, /default\s+'pending'/);
 });
