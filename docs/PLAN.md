@@ -77,7 +77,7 @@ tests/
 
 **图库布局策略**。图库页用 Justified Rows 算法（Flickr/Unsplash 风格）：按行布局、每行图片高度统一、按原始宽高比横向拼接、行末等比缩放刚好填满容器宽度。不裁切原图、视觉密度高、阅读顺序自然。算法依赖每张图的 `width`/`height` 字段，因此到阶段 5 拿到真实数据后才能接入，候选实现是 [`justified-layout`](https://www.npmjs.com/package/justified-layout) 这个 Flickr 团队官方包，约 4 KB，框架无关。阶段 1 期间用 CSS columns 多列瀑布流 + 多种 aspect ratio 的骨架占位演示视觉密度，等阶段 5 替换为真算法。图库页通过 `AppShell` 的 `fluid` prop 跳出 `max-w-7xl` 限宽，撑满视口宽度。
 
-**地图与坐标拾取**。地图组件选 [MapLibre GL JS](https://maplibre.org/maplibre-gl-js/docs/) + [OpenFreeMap](https://openfreemap.org/) 公共样式，免费、无 token、无注册，视觉效果比栅格瓦片更贴合当前赛博暗色界面。阶段 7 上传页用交互式地图让管理员点击地图拾取 `location_lat` / `location_lng`，地名先手动输入，不接外部搜索。阶段 11 lightbox 详情面板与 `/p/:key` 公开页复用同一套 MapLibre 只读小地图配置。
+**地图与坐标拾取**。地图组件选 [MapLibre GL JS](https://maplibre.org/maplibre-gl-js/docs/) + [OpenFreeMap](https://openfreemap.org/) 公共样式，免费、无 token、无注册，视觉效果比栅格瓦片更贴合当前赛博暗色界面。阶段 7 上传页用交互式地图让管理员点击地图拾取 `location_lat` / `location_lng`，地名先手动输入，不接外部搜索。阶段 10 lightbox 详情面板与 `/p/:key` 公开页复用同一套 MapLibre 只读小地图配置。
 
 ## 阶段 0：最小骨架
 
@@ -119,7 +119,7 @@ npm run build
 - [x] 公开图片页写出单图展示结构
 - [x] 随机页：参考 PixelPunk 沉浸式设计——首屏占满一张随机大图、向下滚动展开详情卡（作者、AI、文件信息）、右下浮动刷新按钮（loading 时 spin）、左下键盘提示（Space 换一张）；阶段 5 接 `GET /api/random` 真实数据
 - [x] 蜂巢页：参考 PixelPunk 蜂窝马赛克设计——pointy-top 六边形 clip-path 密铺、奇偶行错位、深色渐变背景、浮动六边形装饰、左上角浮动提示卡（含收起按钮）；阶段 12 接入拖动浏览、全屏、滚动加载更多
-- [x] 全局搜索弹窗骨架（`SearchModal.vue`）已写好，阶段 11 搜索接入时再挂载入口
+- [x] 全局搜索弹窗骨架（`SearchModal.vue`）已写好，阶段 10 搜索接入时再挂载入口
 - [x] 在 `index.html` 写入基础 SEO 元信息（`description`、`og:title`、`og:type` 等）
 - [x] 公开图片页路由层面预留 `og:image` 注入位置，当前阶段先留空
 - [x] 样式只写当前页面用到的 class，不做主题系统
@@ -169,7 +169,7 @@ npm run build
 - [x] 新建 `db/migrations/0001_init.sql`
 - [x] 创建 `images` 表，字段：`key TEXT PK`、`title`、`caption`、`r2_key`、`width`、`height`、`format`、`bytes_compressed`、`bytes_original`、`hash`、`location_name`、`location_lat`、`location_lng`、`exif_taken_at`、`exif_camera`、`exif_iso`、`exif_aperture`、`exif_shutter`、`created_at`、`updated_at`
 - [x] schema 不放 EXIF GPS 专属列：`location_lat` / `location_lng` 是通用坐标列，由阶段 7 上传链路提供值（EXIF 默认值经管理员确认，或地图手动拾取）
-- [x] 不创建 AI 字段，不创建 Telegram 字段，等阶段 9、10 加列
+- [x] 不创建 AI 字段，不创建 Telegram 字段，等阶段 9、11 加列
 - [x] 添加公开列表查询所需索引（按 `created_at DESC`）
 - [x] 新建 `tests/migration.test.mjs`，校验迁移文件不含 `gps`、`latitude_exif`、`longitude_exif` 等关键字
 
@@ -351,13 +351,35 @@ Access 配置记录（控制台配置完成后回填）：
 
 这一阶段不做：
 
-- 不做删除同步（阶段 11 一起做）
+- 不做删除同步（阶段 10 一起做）
 - 不做批量下载
 - 不公开原图链接（路径走 Access 保护）
 
 验收：上传后 Telegram 频道里能看到原图，管理员通过 `/api/original/:key` 能下载，公开页面没有原图入口。
 
-## 阶段 10：AI 标注异步流程
+## 阶段 10：删除、搜索、手动位置编辑
+
+目标：补齐个人管理需要的基础能力。
+
+状态：已完成。
+
+任务：
+
+- [x] 实现 `DELETE /api/admin/image/:key`
+- [x] 删除流程：先删 R2 压缩图，再尝试删除 Telegram 频道消息（失败仅记录日志不阻塞），最后从 D1 物理删除
+- [x] 图库页增加关键词搜索，命中 `title`、`caption`、`location_name` 任一即可；AI 接入后再扩展到 `search_content`
+- [x] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`（坐标编辑复用上传页的 MapLibre 地图拾取组件）
+- [x] lightbox 详情面板与 `/p/:key` 公开页用只读 MapLibre 渲染坐标小地图（无坐标则不显示）
+- [x] 详情页支持复制 Markdown、HTML、直链
+- [x] 公开页路由层注入 `og:image`、`og:title`、`og:description`
+
+这一阶段不做：
+
+- 不做标签表、不做相册、不做向量搜索
+
+验收：管理员能删除图片、搜索图片、维护位置和描述。删除后 R2 和 D1 都已清理。
+
+## 阶段 11：AI 标注异步流程
 
 目标：上传后异步生成描述、标签、OCR 和搜索文本，不阻塞上传响应。
 
@@ -379,26 +401,6 @@ Access 配置记录（控制台配置完成后回填）：
 - 不做向量化
 
 验收：上传后详情页很快返回，AI 完成后刷新能看到描述和标签。AI 失败时图片仍然存在，详情页显示错误状态。
-
-## 阶段 11：删除、搜索、手动位置编辑
-
-目标：补齐个人管理需要的基础能力。
-
-任务：
-
-- [ ] 实现 `DELETE /api/admin/image/:key`
-- [ ] 删除流程：先删 R2 压缩图，再尝试删除 Telegram 频道消息（失败仅记录日志不阻塞），最后从 D1 物理删除
-- [ ] 图库页增加关键词搜索，命中 `title`、`caption`、`search_content`、`location_name` 任一即可
-- [ ] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`（坐标编辑复用上传页的 MapLibre 地图拾取组件）
-- [ ] lightbox 详情面板与 `/p/:key` 公开页用只读 MapLibre 渲染坐标小地图（无坐标则不显示）
-- [ ] 详情页支持复制 Markdown、HTML、直链
-- [ ] 公开页路由层注入 `og:image`、`og:title`、`og:description`
-
-这一阶段不做：
-
-- 不做标签表、不做相册、不做向量搜索
-
-验收：管理员能删除图片、搜索图片、维护位置和描述。删除后 R2 和 D1 都已清理。
 
 ## 阶段 12：后续增强
 
