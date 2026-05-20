@@ -4,11 +4,27 @@ import type { ImageRow } from '../_shared/images';
 import { rowToRecord } from '../_shared/images';
 
 const LIST_SQL =
-  'SELECT key, title, caption, r2_key, width, height, format, location_name FROM images ORDER BY created_at DESC';
+  'SELECT key, title, caption, r2_key, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length FROM images ORDER BY created_at DESC';
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+const SEARCH_SQL = `
+SELECT key, title, caption, r2_key, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length
+FROM images
+WHERE title LIKE ? OR caption LIKE ? OR location_name LIKE ?
+ORDER BY created_at DESC
+`;
+
+const normalizeSearch = (request: Request): string => {
+  const value = new URL(request.url).searchParams.get('q') ?? '';
+  return value.trim().slice(0, 100);
+};
+
+export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
-    const result = await env.DB.prepare(LIST_SQL).all<ImageRow>();
+    const query = normalizeSearch(request);
+    const statement = env.DB.prepare(query ? SEARCH_SQL : LIST_SQL);
+    const result = query
+      ? await statement.bind(`%${query}%`, `%${query}%`, `%${query}%`).all<ImageRow>()
+      : await statement.all<ImageRow>();
     const records = (result.results ?? []).map((row) => rowToRecord(row, env.PUBLIC_BASE_URL));
     return json(records);
   } catch (error) {

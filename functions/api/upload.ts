@@ -32,7 +32,7 @@ INSERT INTO images (
 `;
 
 const SELECT_SQL =
-  'SELECT key, title, caption, r2_key, width, height, format, location_name FROM images WHERE key = ?';
+  'SELECT key, title, caption, r2_key, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length FROM images WHERE key = ?';
 
 const UPDATE_TG_DONE_SQL = `
 UPDATE images

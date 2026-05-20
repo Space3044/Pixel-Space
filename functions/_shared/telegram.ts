@@ -95,3 +95,27 @@ export async function getTelegramFileUrl(token: string, fileId: string): Promise
 
   return `${API_BASE}/file/bot${token}/${filePath.replace(/^\/+/, '')}`;
 }
+
+export async function deleteTelegramMessage(input: {
+  token: string;
+  chatId: string;
+  messageId: number;
+}): Promise<void> {
+  if (!input.token || !input.chatId || !input.messageId) {
+    throw new Error('telegram_delete_failed: missing_config');
+  }
+
+  const formData = new FormData();
+  formData.set('chat_id', input.chatId);
+  formData.set('message_id', String(input.messageId));
+
+  const response = await fetch(`${API_BASE}/bot${input.token}/deleteMessage`, {
+    method: 'POST',
+    body: formData,
+  });
+  const data = (await response.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+
+  if (!response.ok || !data?.ok) {
+    throw new Error(`telegram_delete_failed: ${sanitizeTelegramError(data?.description, input.token)}`);
+  }
+}

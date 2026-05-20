@@ -10,7 +10,16 @@ export interface ImageRecord {
   width: number;
   height: number;
   format: string;
+  bytes_compressed: number;
   location_name: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  exif_taken_at: string | null;
+  exif_camera: string | null;
+  exif_iso: number | null;
+  exif_aperture: number | null;
+  exif_shutter: string | null;
+  exif_focal_length: number | null;
 }
 
 // D1 表里的原始行形状（只声明 list / detail 接口会用到的列）。
@@ -22,7 +31,16 @@ export interface ImageRow {
   width: number;
   height: number;
   format: string;
+  bytes_compressed: number;
   location_name: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  exif_taken_at: string | null;
+  exif_camera: string | null;
+  exif_iso: number | null;
+  exif_aperture: number | null;
+  exif_shutter: string | null;
+  exif_focal_length: number | null;
 }
 
 export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
@@ -34,6 +52,15 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     width: row.width,
     height: row.height,
     format: row.format,
+    bytes_compressed: row.bytes_compressed,
     location_name: row.location_name,
+    location_lat: row.location_lat,
+    location_lng: row.location_lng,
+    exif_taken_at: row.exif_taken_at,
+    exif_camera: row.exif_camera,
+    exif_iso: row.exif_iso,
+    exif_aperture: row.exif_aperture,
+    exif_shutter: row.exif_shutter,
+    exif_focal_length: row.exif_focal_length,
   };
 }

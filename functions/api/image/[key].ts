@@ -4,7 +4,7 @@ import type { ImageRow } from '../../_shared/images';
 import { rowToRecord } from '../../_shared/images';
 
 const DETAIL_SQL =
-  'SELECT key, title, caption, r2_key, width, height, format, location_name FROM images WHERE key = ?';
+  'SELECT key, title, caption, r2_key, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length FROM images WHERE key = ?';
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
   const key = String(params.key ?? '');
