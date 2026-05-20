@@ -16,7 +16,6 @@ type IconName =
   | 'expand'
   | 'share'
   | 'check'
-  | 'panelClose'
   | 'fileAlt'
   | 'robot'
   | 'link'
@@ -32,7 +31,6 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
   expand: { vb: '0 0 512 512', d: 'M344 0H488c13.3 0 24 10.7 24 24V168c0 9.7-5.8 18.5-14.8 22.2s-19.3 1.7-26.2-5.2l-39-39-87 87c-9.4 9.4-24.6 9.4-33.9 0l-32-32c-9.4-9.4-9.4-24.6 0-33.9l87-87L327 41c-6.9-6.9-8.9-17.2-5.2-26.2S334.3 0 344 0zM168 512H24c-13.3 0-24-10.7-24-24V344c0-9.7 5.8-18.5 14.8-22.2s19.3-1.7 26.2 5.2l39 39 87-87c9.4-9.4 24.6-9.4 33.9 0l32 32c9.4 9.4 9.4 24.6 0 33.9l-87 87 39 39c6.9 6.9 8.9 17.2 5.2 26.2s-12.5 14.8-22.2 14.8z' },
   share: { vb: '0 0 448 512', d: 'M352 224c53 0 96-43 96-96s-43-96-96-96s-96 43-96 96c0 4 .2 8 .7 11.9l-94.1 47C145.4 170.2 121.9 160 96 160c-53 0-96 43-96 96s43 96 96 96c25.9 0 49.4-10.2 66.6-26.9l94.1 47c-.5 3.9-.7 7.8-.7 11.9c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-25.9 0-49.4 10.2-66.6 26.9l-94.1-47c.5-3.9 .7-7.8 .7-11.9s-.2-8-.7-11.9l94.1-47C302.6 213.8 326.1 224 352 224z' },
   check: { vb: '0 0 448 512', d: 'M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z' },
-  panelClose: { vb: '0 0 320 512', d: 'M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z' },
   fileAlt: { vb: '0 0 384 512', d: 'M0 64C0 28.7 28.7 0 64 0H224V128c0 17.7 14.3 32 32 32H384V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm384 64H256V0L384 128z' },
   robot: { vb: '0 0 640 512', d: 'M320 0c17.7 0 32 14.3 32 32V64H472c39.8 0 72 32.2 72 72V392c0 39.8-32.2 72-72 72H168c-39.8 0-72-32.2-72-72V136c0-39.8 32.2-72 72-72H288V32c0-17.7 14.3-32 32-32zM208 384c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16H208zm96 0c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16H304zm96 0c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16H400zM264 256a40 40 0 1 0 -80 0 40 40 0 1 0 80 0zm152 40a40 40 0 1 0 0-80 40 40 0 1 0 0 80zM48 224H64V416H48c-26.5 0-48-21.5-48-48V272c0-26.5 21.5-48 48-48zm544 0c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48H576V224h16z' },
   link: { vb: '0 0 640 512', d: 'M579.8 267.7c56.5-56.5 56.5-148 0-204.5c-50-50-128.8-56.5-186.3-15.4l-1.6 1.1c-14.4 10.3-17.7 30.3-7.4 44.6s30.3 17.7 44.6 7.4l1.6-1.1c32.1-22.9 76-19.3 103.8 8.6c31.5 31.5 31.5 82.5 0 114L422.3 334.8c-31.5 31.5-82.5 31.5-114 0c-27.9-27.9-31.5-71.8-8.6-103.8l1.1-1.6c10.3-14.4 6.9-34.4-7.4-44.6s-34.4-6.9-44.6 7.4l-1.1 1.6C206.5 251.2 213 330 263 380c56.5 56.5 148 56.5 204.5 0L579.8 267.7zM60.2 244.3c-56.5 56.5-56.5 148 0 204.5c50 50 128.8 56.5 186.3 15.4l1.6-1.1c14.4-10.3 17.7-30.3 7.4-44.6s-30.3-17.7-44.6-7.4l-1.6 1.1c-32.1 22.9-76 19.3-103.8-8.6C74 372 74 321 105.5 289.5L217.7 177.2c31.5-31.5 82.5-31.5 114 0c27.9 27.9 31.5 71.8 8.6 103.9l-1.1 1.6c-10.3 14.4-6.9 34.4 7.4 44.6s34.4 6.9 44.6-7.4l1.1-1.6C433.5 260.8 427 182 377 132c-56.5-56.5-148-56.5-204.5 0L60.2 244.3z' },
@@ -276,6 +274,14 @@ const toggleDetails = () => {
   detailsOpen.value = !detailsOpen.value;
 };
 
+const handleViewerSurfaceClick = () => {
+  if (detailsOpen.value) {
+    detailsOpen.value = false;
+    return;
+  }
+  emit('close');
+};
+
 const handleKey = (e: KeyboardEvent) => {
   if (!props.open) return;
   if (e.key === 'Escape') {
@@ -328,7 +334,7 @@ onBeforeUnmount(() => {
     <Transition name="lightbox">
       <div v-if="open" class="image-viewer-wrapper">
         <div class="cyber-image-viewer">
-          <div class="viewer-backdrop" @click="emit('close')" aria-hidden="true" />
+          <div class="viewer-backdrop" @click="handleViewerSurfaceClick" aria-hidden="true" />
 
           <div class="viewer-container">
             <header class="navigation-bar">
@@ -405,7 +411,7 @@ onBeforeUnmount(() => {
             </header>
 
             <div class="viewer-content">
-              <figure class="image-canvas" :class="{ 'has-drawer': detailsOpen }" @click="emit('close')">
+              <figure class="image-canvas" :class="{ 'has-drawer': detailsOpen }" @click="handleViewerSurfaceClick">
                 <img
                   v-if="image"
                   :src="image.public_url"
@@ -434,14 +440,6 @@ onBeforeUnmount(() => {
             >
               <header class="drawer-header">
                 <span class="drawer-title">详情</span>
-                <button
-                  type="button"
-                  class="viewer-action-btn"
-                  aria-label="收起详情面板"
-                  @click="toggleDetails"
-                >
-                  <svg :viewBox="ICONS.panelClose.vb" fill="currentColor" class="h-3.5 w-3.5" aria-hidden="true"><path :d="ICONS.panelClose.d" /></svg>
-                </button>
               </header>
 
               <div v-if="image" class="drawer-content">
@@ -932,7 +930,7 @@ onBeforeUnmount(() => {
 .drawer-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(53, 243, 255, 0.12);
   flex-shrink: 0;
