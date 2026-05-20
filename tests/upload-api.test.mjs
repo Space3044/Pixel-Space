@@ -121,7 +121,16 @@ const makeEnv = () => {
                   width: inserted?.[4] ?? 0,
                   height: inserted?.[5] ?? 0,
                   format: inserted?.[6] ?? 'webp',
+                  bytes_compressed: inserted?.[7] ?? 0,
                   location_name: inserted?.[10] ?? null,
+                  location_lat: inserted?.[11] ?? null,
+                  location_lng: inserted?.[12] ?? null,
+                  exif_taken_at: inserted?.[13] ?? null,
+                  exif_camera: inserted?.[14] ?? null,
+                  exif_iso: inserted?.[15] ?? null,
+                  exif_aperture: inserted?.[16] ?? null,
+                  exif_shutter: inserted?.[17] ?? null,
+                  exif_focal_length: inserted?.[18] ?? null,
                 };
               },
             };
@@ -160,10 +169,19 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(response.status, 201);
   const data = await response.json();
   assert.deepEqual(Object.keys(data).sort(), [
+    'bytes_compressed',
     'caption',
+    'exif_aperture',
+    'exif_camera',
+    'exif_focal_length',
+    'exif_iso',
+    'exif_shutter',
+    'exif_taken_at',
     'format',
     'height',
     'key',
+    'location_lat',
+    'location_lng',
     'location_name',
     'public_url',
     'title',
@@ -173,7 +191,10 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.width, 1280);
   assert.equal(data.height, 853);
   assert.equal(data.format, 'webp');
+  assert.equal(data.bytes_compressed, 10);
   assert.equal(data.public_url, `https://cdn.test/${data.key}`);
+  assert.equal(data.exif_camera, 'Nikon Zf');
+  assert.equal(data.exif_focal_length, 40);
 
   assert.equal(calls.puts.length, 1);
   assert.equal(calls.puts[0].key, data.key);

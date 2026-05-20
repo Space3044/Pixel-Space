@@ -1,0 +1,118 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const gallery = readFileSync('src/features/images/GalleryView.vue', 'utf8');
+const lightbox = readFileSync('src/features/images/ImageLightbox.vue', 'utf8');
+const readOnlyMap = readFileSync('src/features/images/ReadOnlyMap.vue', 'utf8');
+const imagesApi = readFileSync('src/features/images/images.api.ts', 'utf8');
+
+const test = (name, fn) => {
+  try {
+    fn();
+    console.log(`ok - ${name}`);
+  } catch (error) {
+    console.error(`not ok - ${name}`);
+    throw error;
+  }
+};
+
+test('GalleryView wires the search box to listImages(query)', () => {
+  assert.match(gallery, /const searchQuery = ref/);
+  assert.match(gallery, /listImages\(searchQuery\.value\)/);
+  assert.match(gallery, /@submit\.prevent="loadImages"/);
+  assert.match(gallery, /placeholder="搜索标题、描述或位置"/);
+  assert.match(gallery, /class="explore-header"/);
+  assert.match(gallery, />探索</);
+  assert.match(gallery, /发现公开图片/);
+  assert.doesNotMatch(gallery, /to="\/upload"/);
+  assert.doesNotMatch(gallery, /上传图片/);
+  assert.match(gallery, /resultLabel/);
+  assert.match(gallery, /清空/);
+});
+
+test('images.api exposes admin update and delete helpers', () => {
+  assert.match(imagesApi, /export function listImages\(query = ''\)/);
+  assert.match(imagesApi, /URLSearchParams/);
+  assert.match(imagesApi, /export function updateImage/);
+  assert.match(imagesApi, /method: 'PATCH'/);
+  assert.match(imagesApi, /export function deleteImage/);
+  assert.match(imagesApi, /method: 'DELETE'/);
+});
+
+test('ImageLightbox provides edit, delete, original download, copy links and map management UI', () => {
+  assert.match(lightbox, /import ReadOnlyMap from '\.\/ReadOnlyMap\.vue'/);
+  assert.match(lightbox, /updateImage/);
+  assert.match(lightbox, /deleteImage/);
+  assert.match(lightbox, /defineEmits<\{ close: \[\]; prev: \[\]; next: \[\]; updated:/);
+  assert.match(lightbox, /formatBytes\(image\.bytes_compressed\)/);
+  assert.doesNotMatch(lightbox, /存储时长/);
+  assert.match(lightbox, /class="viewer-action-btn danger"/);
+  assert.match(lightbox, /ICONS\.trash/);
+  assert.match(lightbox, /class="viewer-esc-button"/);
+  assert.match(lightbox, />ESC<\/button>/);
+  assert.doesNotMatch(lightbox, /class="viewer-action-btn" title="关闭"/);
+  assert.doesNotMatch(lightbox, /text-danger-button/);
+  assert.match(lightbox, /aiEditOpen/);
+  assert.match(lightbox, /class="ai-edit-button"/);
+  assert.match(lightbox, /<form v-if="aiEditOpen" class="ai-edit-form" @submit\.prevent="saveAiMetadata">/);
+  assert.match(lightbox, /v-model="editForm\.title"/);
+  assert.match(lightbox, /v-model="editForm\.caption"/);
+  assert.match(lightbox, /class="location-edit-button"/);
+  assert.match(lightbox, /<form v-if="locationEditOpen" class="location-edit-form" @submit\.prevent="saveLocation">/);
+  assert.match(lightbox, /v-model="editForm\.location_lat"/);
+  assert.match(lightbox, /v-model="editForm\.location_lng"/);
+  assert.match(lightbox, /class="detail-items location-display"/);
+  assert.match(lightbox, /经纬度/);
+  assert.doesNotMatch(lightbox, /location-summary|已标记位置/);
+  assert.match(lightbox, /ReadOnlyMap/);
+  assert.doesNotMatch(lightbox, /empty-map-note|添加经纬度后会在这里显示地图标记/);
+  assert.doesNotMatch(lightbox, /v-if="image\.location_lat !== null && image\.location_lng !== null"/);
+  assert.match(lightbox, /:interactive="locationEditOpen"/);
+  assert.match(lightbox, /@pick="updateLocationFromMap"/);
+  assert.match(lightbox, /const updateLocationFromMap/);
+  assert.match(lightbox, /editForm\.location_lat = coords\.lat/);
+  assert.match(lightbox, /editForm\.location_lng = coords\.lng/);
+  assert.match(lightbox, /class="exif-grid"/);
+  assert.match(lightbox, /class="detail-item exif-item"/);
+  assert.match(lightbox, /row\.span === 'full'/);
+  assert.match(lightbox, /exifRows/);
+  assert.match(lightbox, />EXIF</);
+  assert.match(lightbox, /拍摄时间/);
+  assert.match(lightbox, /相机/);
+  assert.match(lightbox, /焦距/);
+  assert.match(lightbox, /\/api\/original\/\$\{encodeURIComponent\(image\.key\)\}/);
+  assert.match(lightbox, /buildMarkdown/);
+  assert.match(lightbox, /buildHtml/);
+  assert.match(lightbox, /confirm\('确认删除这张图片？'\)/);
+  assert.doesNotMatch(lightbox, /内容安全/);
+  assert.match(lightbox, /class="image-canvas"\s+:class="\{ 'has-drawer': detailsOpen \}"/);
+  assert.match(lightbox, /\.image-canvas\.has-drawer\s*\{[^}]*right:\s*420px;/s);
+});
+
+test('ImageLightbox uses the PixelPunk-style viewer scale and icon controls', () => {
+  assert.match(lightbox, /class="cyber-image-viewer"/);
+  assert.match(lightbox, /class="navigation-bar"/);
+  assert.match(lightbox, /class="image-canvas"/);
+  assert.match(lightbox, /class="main-image"/);
+  assert.match(lightbox, /\.main-image\s*\{[^}]*max-width:\s*100%;[^}]*max-height:\s*100%;[^}]*object-fit:\s*contain;/s);
+  assert.match(lightbox, /class="viewer-action-btn"/);
+  assert.match(lightbox, /class="nav-arrow nav-arrow-left"/);
+  assert.match(lightbox, /class="nav-arrow nav-arrow-right"/);
+  assert.doesNotMatch(lightbox, /class="control-bar"/);
+  assert.doesNotMatch(lightbox, /class="control-btn"/);
+  assert.doesNotMatch(lightbox, /I 详情|e\.key === 'i'|e\.key === 'I'/);
+  assert.doesNotMatch(lightbox, /bg-grid/);
+});
+
+test('ReadOnlyMap supports empty coordinates and interactive coordinate picking', () => {
+  assert.match(readOnlyMap, /const DEFAULT_CENTER/);
+  assert.match(readOnlyMap, /lat\?: number \| null/);
+  assert.match(readOnlyMap, /lng\?: number \| null/);
+  assert.match(readOnlyMap, /interactive\?: boolean/);
+  assert.match(readOnlyMap, /defineEmits<\{ pick:/);
+  assert.match(readOnlyMap, /emit\('pick'/);
+  assert.match(readOnlyMap, /map\.on\('click'/);
+  assert.match(readOnlyMap, /marker\?\.remove\(\);\s*marker = null;/s);
+  assert.match(readOnlyMap, /center: mapCenter/);
+  assert.match(readOnlyMap, /interactive: props\.interactive/);
+});

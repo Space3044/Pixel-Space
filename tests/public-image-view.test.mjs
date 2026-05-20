@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const view = readFileSync('src/features/images/PublicImageView.vue', 'utf8');
+
+const test = (name, fn) => {
+  try {
+    fn();
+    console.log(`ok - ${name}`);
+  } catch (error) {
+    console.error(`not ok - ${name}`);
+    throw error;
+  }
+};
+
+test('PublicImageView updates Open Graph metadata after loading the image', () => {
+  assert.match(view, /ensureMeta\('og:image', image\.public_url\)/);
+  assert.match(view, /ensureMeta\('og:title', image\.title/);
+  assert.match(view, /ensureMeta\('og:description', image\.caption/);
+});
+
+test('PublicImageView renders a read-only map when coordinates exist', () => {
+  assert.match(view, /import ReadOnlyMap from '\.\/ReadOnlyMap\.vue'/);
+  assert.match(view, /v-if="image\.location_lat !== null && image\.location_lng !== null"/);
+  assert.match(view, /:lat="image\.location_lat"/);
+  assert.match(view, /:lng="image\.location_lng"/);
+});
+
+test('PublicImageView lays out the image and information side by side on desktop', () => {
+  assert.match(view, /class="public-image-layout"/);
+  assert.match(view, /class="public-image-preview/);
+  assert.match(view, /class="public-image-info/);
+  assert.match(view, /\.public-image-layout\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*24rem;/s);
+  assert.match(view, /@media \(max-width:\s*900px\)\s*\{[^}]*\.public-image-layout\s*\{[^}]*grid-template-columns:\s*1fr;/s);
+});
+
+test('PublicImageView shows exposure metadata in the information column', () => {
+  assert.match(view, /const exifRows = computed/);
+  assert.match(view, /exif_shutter/);
+  assert.match(view, /exif_iso/);
+  assert.match(view, /exif_aperture/);
+  assert.match(view, /exif_focal_length/);
+  assert.match(view, /class="public-exif-grid"/);
+  assert.match(view, /快门/);
+  assert.match(view, /ISO/);
+  assert.match(view, /光圈/);
+  assert.match(view, /焦距/);
+});
+
+test('PublicImageView stretches the image preview to match the info column height', () => {
+  assert.match(view, /\.public-image-layout\s*\{[^}]*align-items:\s*stretch;/s);
+  assert.match(view, /\.public-image-preview\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s);
+  assert.match(view, /\.public-image-img\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/s);
+});

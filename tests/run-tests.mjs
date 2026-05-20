@@ -11,6 +11,9 @@ for (const path of [
   './telegram.test.mjs',
   './upload-api.test.mjs',
   './original-api.test.mjs',
+  './admin-image-api.test.mjs',
+  './image-management-ui.test.mjs',
+  './public-image-view.test.mjs',
   './image-object.test.mjs',
 ]) {
   await import(path);
