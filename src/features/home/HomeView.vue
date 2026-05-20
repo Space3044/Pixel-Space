@@ -69,7 +69,7 @@ import AppShell from '@/shared/ui/AppShell.vue';
               </svg>
             </div>
             <h3 class="mt-4 text-base font-bold text-white">AI 智能标注</h3>
-            <p class="mt-2 text-sm text-slate-400">自动生成描述、标签、OCR，搜索更精准</p>
+            <p class="mt-2 text-sm text-slate-400">自动生成描述、标签和搜索关键词，搜索更精准</p>
           </article>
 
           <article class="cyber-panel rounded-2xl p-6">

@@ -16,4 +16,9 @@ export interface ImageRecord {
   exif_aperture: number | null;
   exif_shutter: string | null;
   exif_focal_length: number | null;
+  tags_json: string | null;
+  ai_status: string;
+  ai_error: string | null;
+  ai_attempts: number;
+  ai_finished_at: string | null;
 }

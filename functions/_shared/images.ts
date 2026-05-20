@@ -20,6 +20,11 @@ export interface ImageRecord {
   exif_aperture: number | null;
   exif_shutter: string | null;
   exif_focal_length: number | null;
+  tags_json: string | null;
+  ai_status: string;
+  ai_error: string | null;
+  ai_attempts: number;
+  ai_finished_at: string | null;
 }
 
 // D1 表里的原始行形状（只声明 list / detail 接口会用到的列）。
@@ -41,7 +46,28 @@ export interface ImageRow {
   exif_aperture: number | null;
   exif_shutter: string | null;
   exif_focal_length: number | null;
+  tags_json: string | null;
+  ai_status: string;
+  ai_error: string | null;
+  ai_attempts: number;
+  ai_finished_at: string | null;
 }
+
+export const normalizeTagsJson = (value: unknown): string | null => {
+  const tags = Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : typeof value === 'string'
+      ? value
+          .split(/[,，\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+
+  return tags.length > 0 ? JSON.stringify([...new Set(tags)]) : null;
+};
 
 export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
   return {
@@ -62,5 +88,10 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     exif_aperture: row.exif_aperture,
     exif_shutter: row.exif_shutter,
     exif_focal_length: row.exif_focal_length,
+    tags_json: row.tags_json,
+    ai_status: row.ai_status,
+    ai_error: row.ai_error,
+    ai_attempts: row.ai_attempts,
+    ai_finished_at: row.ai_finished_at,
   };
 }

@@ -101,6 +101,18 @@ test('upload page submits compressed image dimensions with the form data', () =>
   assert.match(view, /\bdimensions,/);
 });
 
+test('upload page runs AI preview after compression and keeps fields editable', () => {
+  assert.match(view, /import\s+\{\s*previewAiAnnotation\s*\}\s+from\s+'\.\/ai-preview\.api'/);
+  assert.match(view, /const\s+aiProcessing\s*=\s*ref\(false\)/);
+  assert.match(view, /runAiPreview\(nextCompressed\)/);
+  assert.match(view, /重新 AI 分析/);
+  assert.match(view, /v-model="meta\.tags"/);
+  assert.match(view, /v-model="meta\.search_content"/);
+  assert.doesNotMatch(view, /v-model="meta\.ocr_text"/);
+  assert.doesNotMatch(view, /<span class="field-label">OCR<\/span>/);
+  assert.match(view, /meta\.ai_status\s*=\s*'done'/);
+});
+
 test('upload exif date and camera each span a full row', () => {
   assert.match(view, /<div class="meta-row exif-row-wide">\s*<dt>拍摄时间<\/dt>/);
   assert.match(view, /<div class="meta-row exif-row-wide">\s*<dt>相机<\/dt>/);

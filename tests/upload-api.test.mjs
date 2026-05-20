@@ -68,6 +68,9 @@ const makeUploadRequest = (overrides = {}) => {
       location_name: '上海',
       location_lat: 31.2304,
       location_lng: 121.4737,
+      tags: '猫, 夜景',
+      search_content: '猫 夜景 HELLO',
+      ai_status: 'done',
       ...(overrides.meta ?? {}),
     }),
   );
@@ -89,6 +92,7 @@ const makeEnv = () => {
     PUBLIC_BASE_URL: 'https://cdn.test',
     TG_BOT_TOKEN: 'token-test',
     TG_CHAT_ID: '-100123',
+    PROXY_KEY: 'proxy-key-test',
     BUCKET: {
       put: async (key, body, options) => {
         calls.events.push('r2');
@@ -131,6 +135,11 @@ const makeEnv = () => {
                   exif_aperture: inserted?.[16] ?? null,
                   exif_shutter: inserted?.[17] ?? null,
                   exif_focal_length: inserted?.[18] ?? null,
+                  tags_json: inserted?.[19] ?? null,
+                  ai_status: inserted?.[21] ?? 'pending',
+                  ai_error: null,
+                  ai_attempts: 0,
+                  ai_finished_at: null,
                 };
               },
             };
@@ -169,6 +178,10 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(response.status, 201);
   const data = await response.json();
   assert.deepEqual(Object.keys(data).sort(), [
+    'ai_attempts',
+    'ai_error',
+    'ai_finished_at',
+    'ai_status',
     'bytes_compressed',
     'caption',
     'exif_aperture',
@@ -184,6 +197,7 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
     'location_lng',
     'location_name',
     'public_url',
+    'tags_json',
     'title',
     'width',
   ]);
@@ -195,6 +209,11 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.public_url, `https://cdn.test/${data.key}`);
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
+  assert.equal(data.ai_status, 'done');
+  assert.equal('ai_proxy_url' in data, false);
+  assert.equal('ai_model' in data, false);
+  assert.equal('ocr_text' in data, false);
+  assert.equal(data.tags_json, '["猫","夜景"]');
 
   assert.equal(calls.puts.length, 1);
   assert.equal(calls.puts[0].key, data.key);
@@ -203,6 +222,11 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.match(calls.insert.sql, /INSERT INTO images/i);
   assert.match(calls.insert.sql, /\bexif_focal_length\b/i);
   assert.match(calls.insert.sql, /\btg_status\b/i);
+  assert.match(calls.insert.sql, /\bai_status\b/i);
+  assert.match(calls.insert.sql, /\btags_json\b/i);
+  assert.match(calls.insert.sql, /\bsearch_content\b/i);
+  assert.doesNotMatch(calls.insert.sql, /\bocr_text\b/i);
+  assert.doesNotMatch(calls.insert.sql, /\bai_proxy_url\b|\bai_model\b/i);
   assert.equal(calls.insert.values[0], data.key);
   assert.equal(calls.insert.values[3], data.key);
   assert.equal(calls.insert.values[4], 1280);
@@ -211,7 +235,10 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(calls.insert.values[8], 14);
   assert.equal(calls.insert.values[9], expectedHash);
   assert.equal(calls.insert.values[18], 40);
-  assert.equal(calls.insert.values[19], 'pending');
+  assert.equal(calls.insert.values[19], '["猫","夜景"]');
+  assert.equal(calls.insert.values[20], '猫 夜景 HELLO');
+  assert.equal(calls.insert.values[21], 'done');
+  assert.equal(calls.insert.values[22], 'pending');
   assert.equal(calls.selectedKey, data.key);
 });
 

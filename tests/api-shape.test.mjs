@@ -13,6 +13,10 @@ const test = async (name, fn) => {
 };
 
 const EXPECTED_RECORD_KEYS = [
+  'ai_attempts',
+  'ai_error',
+  'ai_finished_at',
+  'ai_status',
   'bytes_compressed',
   'caption',
   'exif_aperture',
@@ -28,6 +32,7 @@ const EXPECTED_RECORD_KEYS = [
   'location_lng',
   'location_name',
   'public_url',
+  'tags_json',
   'title',
   'width',
 ];
@@ -50,6 +55,12 @@ const sampleRow = {
   exif_aperture: 2.8,
   exif_shutter: '1/125',
   exif_focal_length: 40,
+  tags_json: null,
+  search_content: null,
+  ai_status: 'pending',
+  ai_error: null,
+  ai_attempts: 0,
+  ai_finished_at: null,
 };
 
 const makeEnv = (oneRow, manyRows) => {
@@ -96,6 +107,11 @@ await test('GET /api/list returns ImageRecord[] with expected field set', async 
   assert.equal(data[0].bytes_compressed, 123456);
   assert.equal(data[0].exif_camera, 'Nikon Zf');
   assert.equal(data[0].exif_focal_length, 40);
+  assert.equal(data[0].ai_status, 'pending');
+  assert.equal('ai_proxy_url' in data[0], false);
+  assert.equal('ai_model' in data[0], false);
+  assert.equal(data[0].tags_json, null);
+  assert.equal('ocr_text' in data[0], false);
 });
 
 await test('GET /api/list returns empty array when D1 has no rows', async () => {
@@ -119,7 +135,8 @@ await test('GET /api/list searches title caption and location by q parameter', a
   assert.match(calls.prepared[0], /\btitle\b/i);
   assert.match(calls.prepared[0], /\bcaption\b/i);
   assert.match(calls.prepared[0], /\blocation_name\b/i);
-  assert.deepEqual(calls.binds[0], ['%上海%', '%上海%', '%上海%']);
+  assert.match(calls.prepared[0], /\bsearch_content\b/i);
+  assert.deepEqual(calls.binds[0], ['%上海%', '%上海%', '%上海%', '%上海%']);
 });
 
 await test('GET /api/image/:key returns single ImageRecord', async () => {

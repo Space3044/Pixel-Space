@@ -1,0 +1,120 @@
+import assert from 'node:assert/strict';
+import { onRequestPost } from '../functions/api/ai/preview.ts';
+
+const test = async (name, fn) => {
+  try {
+    await fn();
+    console.log(`ok - ${name}`);
+  } catch (error) {
+    console.error(`not ok - ${name}`);
+    throw error;
+  }
+};
+
+const withMockedFetch = async (fetchImpl, fn) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchImpl;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+};
+
+const makeRequest = (file = new File(['webp-bytes'], 'cat.webp', { type: 'image/webp' })) => {
+  const formData = new FormData();
+  formData.append('image', file);
+  return new Request('http://x/api/ai/preview', { method: 'POST', body: formData });
+};
+
+const makeEnv = (settings = { proxy_url: 'https://cpa.test/v1/chat/completions', model: 'image-tagger' }) => {
+  const calls = {
+    prepared: [],
+  };
+  const env = {
+    PROXY_KEY: 'proxy-key-test',
+    DB: {
+      prepare(sql) {
+        calls.prepared.push(sql);
+        return {
+          first: async () => settings,
+        };
+      },
+    },
+  };
+  return { env, calls };
+};
+
+await test('POST /api/ai/preview calls CPA with configured URL and model and returns normalized JSON', async () => {
+  const { env, calls } = makeEnv();
+  const proxyRequests = [];
+
+  const response = await withMockedFetch(
+    async (url, init) => {
+      proxyRequests.push({ url: String(url), init });
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: '夜色猫猫',
+                caption: '一只猫站在夜色里。',
+                tags: ['猫', '夜景'],
+                search_content: '猫 夜景 HELLO',
+              }),
+            },
+          },
+        ],
+      });
+    },
+    () => onRequestPost({ env, params: {}, request: makeRequest() }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(calls.prepared[0], /FROM ai_settings/i);
+  assert.equal(proxyRequests.length, 1);
+  assert.equal(proxyRequests[0].url, 'https://cpa.test/v1/chat/completions');
+  assert.equal(proxyRequests[0].init.headers.Authorization, 'Bearer proxy-key-test');
+  const body = JSON.parse(proxyRequests[0].init.body);
+  assert.equal(body.model, 'image-tagger');
+  assert.equal(body.messages[0].role, 'system');
+  assert.match(body.messages[0].content, /# 图片结构化分析专家/);
+  assert.match(body.messages[0].content, /主体识别/);
+  assert.match(body.messages[0].content, /摄影作品标题/);
+  assert.match(body.messages[0].content, /画面感/);
+  assert.match(body.messages[0].content, /主体、环境、构图、光线、色彩和情绪/);
+  assert.match(body.messages[0].content, /主体、场景、色彩、风格、情绪、构图/);
+  assert.match(body.messages[0].content, /上位词/);
+  assert.match(body.messages[0].content, /去重/);
+  assert.match(body.messages[0].content, /只输出一个合法的 JSON 对象/);
+  assert.doesNotMatch(body.messages[0].content, /ocr_text/i);
+  assert.equal(body.messages[1].role, 'user');
+  assert.match(JSON.stringify(body.messages[1]), /直接输出符合上述 Schema 的 JSON 对象/);
+  assert.doesNotMatch(JSON.stringify(body.messages), /ocr_text/i);
+  assert.match(JSON.stringify(body.messages), /data:image\/webp;base64/);
+
+  const data = await response.json();
+  assert.deepEqual(data, {
+    title: '夜色猫猫',
+    caption: '一只猫站在夜色里。',
+    tags: ['猫', '夜景'],
+    search_content: '猫 夜景 HELLO',
+  });
+});
+
+await test('POST /api/ai/preview rejects missing AI settings before calling CPA', async () => {
+  const { env } = makeEnv({ proxy_url: '', model: '' });
+  let called = false;
+
+  const response = await withMockedFetch(
+    async () => {
+      called = true;
+      return Response.json({});
+    },
+    () => onRequestPost({ env, params: {}, request: makeRequest() }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+  assert.deepEqual(await response.json(), { error: 'missing_ai_settings' });
+});

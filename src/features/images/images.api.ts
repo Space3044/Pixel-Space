@@ -8,6 +8,7 @@ export interface ImageUpdatePayload {
   location_name: string;
   location_lat: number | null;
   location_lng: number | null;
+  tags: string;
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {

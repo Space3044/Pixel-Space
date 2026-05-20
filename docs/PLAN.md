@@ -69,7 +69,7 @@ tests/
 
 **EXIF 处理路径**。在前端压缩之前用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门、焦距以及 GPS 经纬度，单独作为 FormData 字段发到后端。GPS 解析出 WGS84 十进制坐标后只作为**地图标记与表单的默认值**，最终是否随 `location_lat` / `location_lng` 落库由管理员在上传页确认或调整（可清空、可拖动地图覆盖、可手动改数字）。压缩使用 `browser-image-compression` 输出 WebP，会自然清除所有 EXIF（包括 GPS），公开访问的压缩图不会泄露原始坐标。不依赖后端做 EXIF 解析。
 
-**AI 调用同步性**。上传接口返回时 `ai_status` 写 `pending`，AI 调用通过 `ctx.waitUntil` 在响应之后异步执行，不阻塞上传响应。失败重试上限 3 次，超过后 `ai_status` 写 `failed`，详情页展示原因，但不影响图片本身可用。当前阶段不引入 Cloudflare Queues，等流量真有压力再升级。
+**AI 预览标注路径**。浏览器选图后先在前端读取 EXIF 并压缩为 WebP，再调用 `POST /api/ai/preview` 分析压缩图。AI 返回严格 JSON 后填入上传页表单，管理员可多次重跑，也可手动修改标题、描述、标签和搜索文本。最终上传只保存当前表单值。`PROXY_KEY` 只走 Cloudflare Secret，`proxy_url` 和 `model` 存在 D1 全局配置表 `ai_settings`，方便后期修改模型或代理地址。当前阶段不做上传后后台异步队列。
 
 **Telegram 归档边界**。Bot API 单文件上传上限 50MB，当前阶段超过 50MB 直接拒绝上传，错误信息明确告诉用户。原图只存这一份，没有冗余备份，频道或 Bot 不可用就等于原图丢失，这一点写进 README。
 
@@ -379,28 +379,30 @@ Access 配置记录（控制台配置完成后回填）：
 
 验收：管理员能删除图片、搜索图片、维护位置和描述。删除后 R2 和 D1 都已清理。
 
-## 阶段 11：AI 标注异步流程
+## 阶段 11：AI 预览标注流程
 
-目标：上传后异步生成描述、标签、OCR 和搜索文本，不阻塞上传响应。
+目标：选图后生成描述、标签和搜索文本，先填充预览表单，再由管理员确认上传。
 
 任务：
 
-- [ ] 配置 `PROXY_URL`、`PROXY_KEY`（`wrangler secret`）
-- [ ] 新建迁移 `0004_add_ai_columns.sql`，增加 `caption`、`tags_json`、`search_content`、`ocr_text`、`ai_status`（`pending|done|failed`）、`ai_error`、`ai_attempts`、`ai_model`、`ai_finished_at`
-- [ ] 上传接口在响应前把 `ai_status` 写 `pending`
-- [ ] 用 `ctx.waitUntil` 触发异步任务，调用 CLIProxyAPI
-- [ ] 成功更新 AI 字段并把 `ai_status` 改为 `done`
-- [ ] 失败重试上限 3 次，超过后写 `failed`，记录 `ai_error`
-- [ ] 详情页展示 `ai_status` 和结果，`pending` 状态下提供刷新入口
-- [ ] 新增管理接口 `POST /api/admin/reprocess/:key`，允许手动重跑（Access 保护）
+- [x] 支持 `PROXY_KEY` 走 `wrangler secret`，代理 URL 和模型名写入 D1 的 `ai_settings`，方便后期修改
+- [x] 新建迁移 `0004_add_ai_columns.sql`，给 `images` 增加 `tags_json`、`search_content`、`ai_status`（`pending|done|failed`）、`ai_error`、`ai_attempts`、`ai_finished_at`，并创建全局配置表 `ai_settings(proxy_url, model)`
+- [x] 新增 `GET/PATCH /api/admin/ai-settings`，只读写 `proxy_url` 和 `model`，不返回、不保存 `PROXY_KEY`
+- [x] 新增 `POST /api/ai/preview`，从 `ai_settings` 读取 `proxy_url` / `model`，用 `PROXY_KEY` 调 CLIProxyAPI/OpenAI-compatible 接口
+- [x] 上传页在压缩完成后自动调用 AI 预览，把 JSON 结果填进表单
+- [x] 上传页支持“重新 AI 分析”，并保留手动修改标题、描述、标签、搜索文本
+- [x] 上传接口保存当前表单里的 `tags_json`、`search_content`、`ai_status`
+- [x] 详情页展示 AI 标签
 
 这一阶段不做：
 
 - 不做后台队列
 - 不做批量回填
 - 不做向量化
+- 不做上传后异步 `ctx.waitUntil` 重跑
+- 不做每张图片记录 `proxy_url` / `model`
 
-验收：上传后详情页很快返回，AI 完成后刷新能看到描述和标签。AI 失败时图片仍然存在，详情页显示错误状态。
+验收：选择图片后自动出现 AI 建议，管理员能重跑或手动修改；上传成功后 D1 保存最终表单里的标签、搜索文本和 AI 状态。
 
 ## 阶段 12：后续增强
 

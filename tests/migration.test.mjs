@@ -17,6 +17,8 @@ const migration2Path = join(process.cwd(), 'db/migrations/0002_add_exif_focal_le
 const migration2Sql = existsSync(migration2Path) ? readFileSync(migration2Path, 'utf8') : '';
 const migration3Path = join(process.cwd(), 'db/migrations/0003_add_tg_columns.sql');
 const migration3Sql = existsSync(migration3Path) ? readFileSync(migration3Path, 'utf8') : '';
+const migration4Path = join(process.cwd(), 'db/migrations/0004_add_ai_columns.sql');
+const migration4Sql = existsSync(migration4Path) ? readFileSync(migration4Path, 'utf8') : '';
 
 const stripComments = (s) =>
   s
@@ -28,7 +30,7 @@ const stripComments = (s) =>
     .join('\n');
 
 const sqlBody = stripComments(sql).toLowerCase();
-const allSqlBody = stripComments(`${sql}\n${migration2Sql}\n${migration3Sql}`).toLowerCase();
+const allSqlBody = stripComments(`${sql}\n${migration2Sql}\n${migration3Sql}\n${migration4Sql}\n${migration5Sql}`).toLowerCase();
 
 test('migration creates the images table', () => {
   assert.match(sqlBody, /create\s+table\s+images/);
@@ -77,7 +79,6 @@ test('migration defers AI and Telegram columns to later stages', () => {
     'ai_caption',
     'tags_json',
     'search_content',
-    'ocr_text',
     'tg_file_id',
     'tg_message_id',
     'tg_chat_id',
@@ -98,4 +99,27 @@ test('migration adds Telegram archive fields after the init migration', () => {
   }
   assert.match(migration3Body, /alter\s+table\s+images\s+add\s+column\s+tg_status/);
   assert.match(migration3Body, /default\s+'pending'/);
+});
+
+test('migration adds AI result fields after the init migration', () => {
+  const migration4Body = stripComments(migration4Sql).toLowerCase();
+
+  for (const col of [
+    'tags_json',
+    'search_content',
+    'ai_status',
+    'ai_error',
+    'ai_attempts',
+    'ai_finished_at',
+  ]) {
+    assert.match(migration4Body, new RegExp(`\\b${col}\\b`), `column ${col} missing`);
+  }
+  assert.match(migration4Body, /alter\s+table\s+images\s+add\s+column\s+ai_status/);
+  assert.match(migration4Body, /default\s+'pending'/);
+  assert.match(migration4Body, /create\s+table\s+ai_settings/);
+  assert.match(migration4Body, /\bproxy_url\b/);
+  assert.match(migration4Body, /\bmodel\b/);
+  assert.match(migration4Body, /insert\s+into\s+ai_settings/i);
+  assert.doesNotMatch(migration4Body, /\bocr_text\b/);
+  assert.doesNotMatch(migration4Body, /\bproxy_key\b/);
 });

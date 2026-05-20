@@ -58,10 +58,18 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /class="image-canvas"\s+:class="\{ 'has-drawer': detailsOpen \}"\s+@click="handleViewerSurfaceClick"/);
   assert.doesNotMatch(lightbox, /text-danger-button/);
   assert.match(lightbox, /aiEditOpen/);
+  assert.match(lightbox, /const aiTags = computed/);
+  assert.match(lightbox, /JSON\.parse\(image\.tags_json\)/);
+  assert.match(lightbox, /v-for="tag in aiTags"/);
+  assert.doesNotMatch(lightbox, /image\.ocr_text/);
+  assert.doesNotMatch(lightbox, />OCR</);
   assert.match(lightbox, /class="ai-edit-button"/);
   assert.match(lightbox, /<form v-if="aiEditOpen" class="ai-edit-form" @submit\.prevent="saveAiMetadata">/);
   assert.match(lightbox, /v-model="editForm\.title"/);
   assert.match(lightbox, /v-model="editForm\.caption"/);
+  assert.match(lightbox, /v-model="editForm\.tags"/);
+  assert.match(lightbox, /tags:\s*editForm\.tags/);
+  assert.match(lightbox, /const tagsTextFromImage/);
   assert.match(lightbox, /class="location-edit-button"/);
   assert.match(lightbox, /<form v-if="locationEditOpen" class="location-edit-form" @submit\.prevent="saveLocation">/);
   assert.match(lightbox, /v-model="editForm\.location_lat"/);

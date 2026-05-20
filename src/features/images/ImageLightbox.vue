@@ -53,6 +53,7 @@ const actionError = ref<string | null>(null);
 const editForm = reactive({
   title: '',
   caption: '',
+  tags: '',
   location_name: '',
   location_lat: '' as number | '',
   location_lng: '' as number | '',
@@ -136,6 +137,24 @@ const exifRows = computed(() => {
   ];
 });
 
+const tagsFromImage = (image: ImageRecord | null | undefined): string[] => {
+  if (!image?.tags_json) return [];
+  try {
+    const parsed = JSON.parse(image.tags_json) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((tag): tag is string => typeof tag === 'string')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
+const tagsTextFromImage = (image: ImageRecord | null | undefined): string => tagsFromImage(image).join(', ');
+
+const aiTags = computed(() => tagsFromImage(props.image));
+
 const hasCoordinates = computed(
   () => props.image?.location_lat != null && props.image?.location_lng != null,
 );
@@ -178,6 +197,7 @@ const resetForm = (image: ImageRecord | null | undefined) => {
   actionError.value = null;
   editForm.title = image?.title ?? '';
   editForm.caption = image?.caption ?? '';
+  editForm.tags = tagsTextFromImage(image);
   editForm.location_name = image?.location_name ?? '';
   editForm.location_lat = image?.location_lat ?? '';
   editForm.location_lng = image?.location_lng ?? '';
@@ -205,6 +225,7 @@ const saveAiMetadata = async () => {
       location_name: props.image.location_name ?? '',
       location_lat: props.image.location_lat,
       location_lng: props.image.location_lng,
+      tags: editForm.tags,
     });
     emit('updated', updated);
     resetForm(updated);
@@ -243,6 +264,7 @@ const saveLocation = async () => {
       location_name: editForm.location_name,
       location_lat: editForm.location_lat === '' ? null : Number(editForm.location_lat),
       location_lng: editForm.location_lng === '' ? null : Number(editForm.location_lng),
+      tags: tagsTextFromImage(props.image),
     });
     emit('updated', updated);
     resetForm(updated);
@@ -521,6 +543,13 @@ onBeforeUnmount(() => {
                       <p v-if="image.caption" class="item-description">{{ image.caption }}</p>
                       <p v-else class="item-description text-muted">阶段 11 接入 AI 描述</p>
                     </div>
+                    <div class="detail-item is-column">
+                      <span class="item-label">标签</span>
+                      <div v-if="aiTags.length" class="tag-list">
+                        <span v-for="tag in aiTags" :key="tag" class="tag-pill">{{ tag }}</span>
+                      </div>
+                      <p v-else class="item-description text-muted">暂无标签</p>
+                    </div>
                   </div>
                   <form v-if="aiEditOpen" class="ai-edit-form" @submit.prevent="saveAiMetadata">
                     <label class="edit-field">
@@ -530,6 +559,10 @@ onBeforeUnmount(() => {
                     <label class="edit-field">
                       <span>描述</span>
                       <textarea v-model="editForm.caption" rows="3" />
+                    </label>
+                    <label class="edit-field">
+                      <span>标签</span>
+                      <textarea v-model="editForm.tags" rows="2" placeholder="用逗号或换行分隔" />
                     </label>
                     <p v-if="actionError" class="action-error">{{ actionError }}</p>
                     <div class="edit-actions">
@@ -1139,6 +1172,23 @@ onBeforeUnmount(() => {
   line-height: 1.65;
   color: rgb(203, 213, 225);
   margin: 0;
+}
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(53, 243, 255, 0.24);
+  background: rgba(53, 243, 255, 0.08);
+  color: rgb(165, 243, 252);
+  font-size: 11px;
+  font-weight: 700;
 }
 .text-truncate {
   overflow: hidden;

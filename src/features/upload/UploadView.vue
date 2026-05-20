@@ -10,6 +10,7 @@ import type { ImageRecord } from '@/features/images/image.types';
 import { buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from './map-style';
+import { previewAiAnnotation } from './ai-preview.api';
 import { uploadImage } from './upload.api';
 import { buildUploadFormData } from './upload-form';
 import type { UploadDimensions, UploadExif, UploadMeta } from './upload.types';
@@ -40,6 +41,8 @@ const compressedDimensions = ref<UploadDimensions | null>(null);
 const previewUrl = ref<string | null>(null);
 const exif = ref<UploadExif>(emptyExif());
 const processing = ref(false);
+const aiProcessing = ref(false);
+const aiError = ref<string | null>(null);
 const uploading = ref(false);
 const errorMessage = ref<string | null>(null);
 const uploadFinished = ref(false);
@@ -53,6 +56,9 @@ const meta = reactive<UploadMeta>({
   location_name: '',
   location_lat: null,
   location_lng: null,
+  tags: '',
+  search_content: '',
+  ai_status: 'pending',
 });
 
 let map: MapLibreMap | null = null;
@@ -61,6 +67,7 @@ let previewObjectUrl: string | null = null;
 let maplibre: typeof import('maplibre-gl') | null = null;
 let usingFallbackStyle = false;
 let copiedTimer: ReturnType<typeof setTimeout> | null = null;
+let aiPreviewRequestId = 0;
 
 const hasFile = computed(() => selectedFile.value !== null);
 const canBuildFormData = computed(
@@ -100,6 +107,7 @@ const statusLabel = computed(() => {
   if (errorMessage.value) return '处理失败';
   if (uploading.value) return '正在上传';
   if (processing.value) return '正在解析 EXIF 与压缩';
+  if (aiProcessing.value) return 'AI 分析中';
   if (uploadFinished.value) return '上传完成，可复制链接';
   if (canBuildFormData.value) return '准备就绪';
   if (hasFile.value) return '等待压缩';
@@ -237,9 +245,14 @@ const resetStateForFile = (file: File) => {
   uploadFinished.value = false;
   uploadResult.value = null;
   copiedLinkLabel.value = null;
+  aiError.value = null;
+  aiPreviewRequestId += 1;
   meta.title = file.name.replace(/\.[^.]+$/, '');
   meta.caption = '';
   meta.location_name = '';
+  meta.tags = '';
+  meta.search_content = '';
+  meta.ai_status = 'pending';
   setCoordinates(null, null, false);
   setPreviewUrl(file);
 };
@@ -254,10 +267,16 @@ const clearSelection = () => {
   uploadResult.value = null;
   copiedLinkLabel.value = null;
   processing.value = false;
+  aiProcessing.value = false;
+  aiError.value = null;
+  aiPreviewRequestId += 1;
   uploading.value = false;
   meta.title = '';
   meta.caption = '';
   meta.location_name = '';
+  meta.tags = '';
+  meta.search_content = '';
+  meta.ai_status = 'pending';
   setCoordinates(null, null, false);
   setPreviewUrl(null);
 };
@@ -324,6 +343,31 @@ const applyExifLocation = () => {
   setCoordinates(exif.value.location_lat, exif.value.location_lng);
 };
 
+const runAiPreview = async (file = compressedFile.value) => {
+  if (!file) return;
+  const requestId = ++aiPreviewRequestId;
+  aiProcessing.value = true;
+  aiError.value = null;
+  meta.ai_status = 'pending';
+
+  try {
+    const result = await previewAiAnnotation(file);
+    if (requestId !== aiPreviewRequestId || compressedFile.value !== file) return;
+
+    meta.title = result.title || meta.title;
+    meta.caption = result.caption;
+    meta.tags = result.tags.join(', ');
+    meta.search_content = result.search_content;
+    meta.ai_status = 'done';
+  } catch (error) {
+    if (requestId !== aiPreviewRequestId) return;
+    aiError.value = (error as Error).message || 'AI 分析失败。';
+    meta.ai_status = 'failed';
+  } finally {
+    if (requestId === aiPreviewRequestId) aiProcessing.value = false;
+  }
+};
+
 const selectFile = async (file: File | null) => {
   if (!file) return;
   if (!file.type.startsWith('image/')) {
@@ -344,6 +388,7 @@ const selectFile = async (file: File | null) => {
     compressedFile.value = nextCompressed;
     compressedDimensions.value = nextDimensions;
     applyExifLocation();
+    void runAiPreview(nextCompressed);
   } catch (error) {
     errorMessage.value = (error as Error).message || '图片处理失败。';
   } finally {
@@ -615,10 +660,21 @@ onBeforeUnmount(() => {
             </section>
 
             <section class="meta-section meta-section-form">
-              <header class="meta-section-title meta-section-title-pink">
-                <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z" /></svg>
-                <span>当前图片信息</span>
+              <header class="meta-section-title meta-section-title-pink form-header">
+                <span class="form-title">
+                  <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z" /></svg>
+                  <span>当前图片信息</span>
+                </span>
+                <button
+                  type="button"
+                  class="ai-preview-button"
+                  :disabled="!compressedFile || aiProcessing"
+                  @click="runAiPreview()"
+                >
+                  {{ aiProcessing ? 'AI 分析中' : '重新 AI 分析' }}
+                </button>
               </header>
+              <p v-if="aiError" class="ai-error">{{ aiError }}</p>
               <label class="field">
                 <span class="field-label">标题</span>
                 <input v-model="meta.title" type="text" class="cyber-input" :disabled="!hasFile" />
@@ -626,6 +682,20 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span class="field-label">描述</span>
                 <textarea v-model="meta.caption" rows="3" class="cyber-input" :disabled="!hasFile"></textarea>
+              </label>
+              <label class="field">
+                <span class="field-label">标签</span>
+                <input
+                  v-model="meta.tags"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="用逗号分隔，例如：猫, 夜景"
+                  :disabled="!hasFile"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">搜索文本</span>
+                <textarea v-model="meta.search_content" rows="2" class="cyber-input" :disabled="!hasFile"></textarea>
               </label>
               <label class="field">
                 <span class="field-label">位置名称</span>
@@ -1113,6 +1183,53 @@ onBeforeUnmount(() => {
 }
 .meta-section-title-pink svg {
   color: rgb(255, 79, 216);
+}
+
+.form-header {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.form-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ai-preview-button {
+  flex-shrink: 0;
+  min-height: 1.8rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 79, 216, 0.26);
+  background: rgba(255, 79, 216, 0.08);
+  color: rgb(244, 194, 255);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.ai-preview-button:hover:not(:disabled) {
+  border-color: rgba(255, 79, 216, 0.58);
+  background: rgba(255, 79, 216, 0.14);
+  color: rgb(255, 255, 255);
+}
+
+.ai-preview-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ai-error {
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(248, 113, 113, 0.26);
+  background: rgba(248, 113, 113, 0.08);
+  color: rgb(254, 205, 211);
+  font-size: 11.5px;
 }
 
 .meta-list {

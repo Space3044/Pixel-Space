@@ -80,6 +80,11 @@ const imageRow = {
   exif_aperture: 2.8,
   exif_shutter: '1/125',
   exif_focal_length: 40,
+  tags_json: null,
+  ai_status: 'pending',
+  ai_error: null,
+  ai_attempts: 0,
+  ai_finished_at: null,
   tg_chat_id: '-100123',
   tg_message_id: 88,
 };
@@ -105,6 +110,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
         location_name: '上海',
         location_lat: 31.2304,
         location_lng: 121.4737,
+        tags: '猫, 城市, 夜景',
       }),
     }),
   });
@@ -119,10 +125,21 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.equal(data.bytes_compressed, 123456);
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
+  assert.equal('ai_proxy_url' in data, false);
+  assert.equal('ai_model' in data, false);
   assert.equal(calls.updates.length, 1);
   assert.match(calls.updates[0].sql, /\btitle\b/i);
   assert.match(calls.updates[0].sql, /\blocation_lat\b/i);
-  assert.deepEqual(calls.updates[0].values, ['新标题', null, '上海', 31.2304, 121.4737, 'img-key']);
+  assert.match(calls.updates[0].sql, /\btags_json\b/i);
+  assert.deepEqual(calls.updates[0].values, [
+    '新标题',
+    null,
+    '上海',
+    31.2304,
+    121.4737,
+    '["猫","城市","夜景"]',
+    'img-key',
+  ]);
 });
 
 await test('PATCH /api/admin/image/:key rejects invalid coordinates before updating', async () => {

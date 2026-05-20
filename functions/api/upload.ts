@@ -1,7 +1,7 @@
 import type { Env } from '../types';
 import { badRequest, json, serverError } from '../_shared/http';
 import type { ImageRow } from '../_shared/images';
-import { rowToRecord } from '../_shared/images';
+import { normalizeTagsJson, rowToRecord } from '../_shared/images';
 import { archiveOriginalToTelegram } from '../_shared/telegram';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
@@ -27,12 +27,15 @@ INSERT INTO images (
   exif_aperture,
   exif_shutter,
   exif_focal_length,
+  tags_json,
+  search_content,
+  ai_status,
   tg_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
-  'SELECT key, title, caption, r2_key, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length FROM images WHERE key = ?';
+  'SELECT key, title, caption, r2_key, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE key = ?';
 
 const UPDATE_TG_DONE_SQL = `
 UPDATE images
@@ -59,6 +62,9 @@ interface UploadMeta {
   location_name: string | null;
   location_lat: number | null;
   location_lng: number | null;
+  tags_json: string | null;
+  search_content: string | null;
+  ai_status: 'pending' | 'done' | 'failed';
 }
 
 interface UploadExif {
@@ -116,12 +122,20 @@ const normalizeCoordinate = (value: unknown, min: number, max: number): number |
   return number;
 };
 
+const normalizeAiStatus = (value: unknown): UploadMeta['ai_status'] => {
+  if (value === 'done' || value === 'failed' || value === 'pending') return value;
+  return 'pending';
+};
+
 const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => ({
   title: stringOrEmpty(raw.title),
   caption: stringOrNull(raw.caption),
   location_name: stringOrNull(raw.location_name),
   location_lat: normalizeCoordinate(raw.location_lat, -90, 90),
   location_lng: normalizeCoordinate(raw.location_lng, -180, 180),
+  tags_json: normalizeTagsJson(raw.tags),
+  search_content: stringOrNull(raw.search_content),
+  ai_status: normalizeAiStatus(raw.ai_status),
 });
 
 const normalizeExif = (raw: Record<string, unknown>): UploadExif => ({
@@ -208,6 +222,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         exif.aperture,
         exif.shutter,
         exif.focal_length,
+        meta.tags_json,
+        meta.search_content,
+        meta.ai_status,
         'pending',
       )
       .run();

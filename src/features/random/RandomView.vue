@@ -2,7 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 // 阶段 5/8 增强：调用 GET /api/random 拿一张图，填到 imageData
-// 阶段 10：详情卡片接 AI 描述、标签、OCR 等字段
+// 阶段 10：详情卡片接 AI 描述、标签等字段
 
 const loading = ref(false);
 
@@ -76,7 +76,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
               <span>AI Analysis</span>
             </div>
             <p class="mt-4 text-base font-bold text-white">AI 描述、标签待阶段 10 接入</p>
-            <p class="mt-2 text-sm text-slate-400">读取 D1 中 <code class="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs">caption</code> / <code class="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs">tags_json</code> / <code class="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs">ocr_text</code> 字段，未生成时显示 pending。</p>
+            <p class="mt-2 text-sm text-slate-400">读取 D1 中 <code class="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs">caption</code> / <code class="rounded bg-white/5 px-1.5 py-0.5 font-mono text-xs">tags_json</code> 字段，未生成时显示 pending。</p>
           </article>
 
           <article class="cyber-panel rounded-2xl p-6">

@@ -15,6 +15,9 @@ export interface UploadMeta {
   location_name: string;
   location_lat: number | null;
   location_lng: number | null;
+  tags: string;
+  search_content: string;
+  ai_status: 'pending' | 'done' | 'failed';
 }
 
 export interface UploadDimensions {
