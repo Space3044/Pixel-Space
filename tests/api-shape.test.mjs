@@ -31,6 +31,7 @@ const EXPECTED_RECORD_KEYS = [
   'location_lat',
   'location_lng',
   'location_name',
+  'original_filename',
   'public_url',
   'tags_json',
   'title',
@@ -42,6 +43,7 @@ const sampleRow = {
   title: 'Sample',
   caption: null,
   r2_key: 'abc.webp',
+  original_filename: 'DSC_7983.NEF',
   width: 1024,
   height: 768,
   format: 'webp',
@@ -105,6 +107,7 @@ await test('GET /api/list returns ImageRecord[] with expected field set', async 
   assert.equal(data[0].location_lat, 31.2304);
   assert.equal(data[0].location_lng, 121.4737);
   assert.equal(data[0].bytes_compressed, 123456);
+  assert.equal(data[0].original_filename, 'DSC_7983.NEF');
   assert.equal(data[0].exif_camera, 'Nikon Zf');
   assert.equal(data[0].exif_focal_length, 40);
   assert.equal(data[0].ai_status, 'pending');
@@ -153,6 +156,7 @@ await test('GET /api/image/:key returns single ImageRecord', async () => {
   assert.equal(data.location_lat, 31.2304);
   assert.equal(data.location_lng, 121.4737);
   assert.equal(data.bytes_compressed, 123456);
+  assert.equal(data.original_filename, 'DSC_7983.NEF');
   assert.equal(data.exif_taken_at, '2025-08-26T02:08:37.000Z');
   assert.equal(data.exif_iso, 400);
 });

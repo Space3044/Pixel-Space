@@ -45,6 +45,8 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /deleteImage/);
   assert.match(lightbox, /defineEmits<\{ close: \[\]; prev: \[\]; next: \[\]; updated:/);
   assert.match(lightbox, /formatBytes\(image\.bytes_compressed\)/);
+  assert.match(lightbox, /image\.original_filename \|\| image\.key/);
+  assert.doesNotMatch(lightbox, /<span class="item-label">文件名<\/span>\s*<span class="item-value text-truncate">\{\{ image\.title/s);
   assert.doesNotMatch(lightbox, /存储时长/);
   assert.match(lightbox, /class="viewer-action-btn danger"/);
   assert.match(lightbox, /ICONS\.trash/);

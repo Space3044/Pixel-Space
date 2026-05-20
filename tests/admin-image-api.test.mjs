@@ -67,6 +67,7 @@ const imageRow = {
   title: '旧标题',
   caption: '旧描述',
   r2_key: 'img-key',
+  original_filename: 'cat.jpg',
   width: 1200,
   height: 800,
   format: 'webp',
@@ -123,6 +124,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.equal(data.location_lat, 31.2304);
   assert.equal(data.location_lng, 121.4737);
   assert.equal(data.bytes_compressed, 123456);
+  assert.equal(data.original_filename, 'cat.jpg');
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
   assert.equal('ai_proxy_url' in data, false);

@@ -122,21 +122,22 @@ const makeEnv = () => {
                   title: inserted?.[1] ?? '',
                   caption: inserted?.[2] ?? null,
                   r2_key: inserted?.[3] ?? values[0],
-                  width: inserted?.[4] ?? 0,
-                  height: inserted?.[5] ?? 0,
-                  format: inserted?.[6] ?? 'webp',
-                  bytes_compressed: inserted?.[7] ?? 0,
-                  location_name: inserted?.[10] ?? null,
-                  location_lat: inserted?.[11] ?? null,
-                  location_lng: inserted?.[12] ?? null,
-                  exif_taken_at: inserted?.[13] ?? null,
-                  exif_camera: inserted?.[14] ?? null,
-                  exif_iso: inserted?.[15] ?? null,
-                  exif_aperture: inserted?.[16] ?? null,
-                  exif_shutter: inserted?.[17] ?? null,
-                  exif_focal_length: inserted?.[18] ?? null,
-                  tags_json: inserted?.[19] ?? null,
-                  ai_status: inserted?.[21] ?? 'pending',
+                  original_filename: inserted?.[4] ?? '',
+                  width: inserted?.[5] ?? 0,
+                  height: inserted?.[6] ?? 0,
+                  format: inserted?.[7] ?? 'webp',
+                  bytes_compressed: inserted?.[8] ?? 0,
+                  location_name: inserted?.[11] ?? null,
+                  location_lat: inserted?.[12] ?? null,
+                  location_lng: inserted?.[13] ?? null,
+                  exif_taken_at: inserted?.[14] ?? null,
+                  exif_camera: inserted?.[15] ?? null,
+                  exif_iso: inserted?.[16] ?? null,
+                  exif_aperture: inserted?.[17] ?? null,
+                  exif_shutter: inserted?.[18] ?? null,
+                  exif_focal_length: inserted?.[19] ?? null,
+                  tags_json: inserted?.[20] ?? null,
+                  ai_status: inserted?.[22] ?? 'pending',
                   ai_error: null,
                   ai_attempts: 0,
                   ai_finished_at: null,
@@ -196,6 +197,7 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
     'location_lat',
     'location_lng',
     'location_name',
+    'original_filename',
     'public_url',
     'tags_json',
     'title',
@@ -206,6 +208,7 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.height, 853);
   assert.equal(data.format, 'webp');
   assert.equal(data.bytes_compressed, 10);
+  assert.equal(data.original_filename, 'cat.jpg');
   assert.equal(data.public_url, `https://cdn.test/${data.key}`);
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
@@ -225,20 +228,22 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.match(calls.insert.sql, /\bai_status\b/i);
   assert.match(calls.insert.sql, /\btags_json\b/i);
   assert.match(calls.insert.sql, /\bsearch_content\b/i);
+  assert.match(calls.insert.sql, /\boriginal_filename\b/i);
   assert.doesNotMatch(calls.insert.sql, /\bocr_text\b/i);
   assert.doesNotMatch(calls.insert.sql, /\bai_proxy_url\b|\bai_model\b/i);
   assert.equal(calls.insert.values[0], data.key);
   assert.equal(calls.insert.values[3], data.key);
-  assert.equal(calls.insert.values[4], 1280);
-  assert.equal(calls.insert.values[5], 853);
-  assert.equal(calls.insert.values[6], 'webp');
-  assert.equal(calls.insert.values[8], 14);
-  assert.equal(calls.insert.values[9], expectedHash);
-  assert.equal(calls.insert.values[18], 40);
-  assert.equal(calls.insert.values[19], '["猫","夜景"]');
-  assert.equal(calls.insert.values[20], '猫 夜景 HELLO');
-  assert.equal(calls.insert.values[21], 'done');
-  assert.equal(calls.insert.values[22], 'pending');
+  assert.equal(calls.insert.values[4], 'cat.jpg');
+  assert.equal(calls.insert.values[5], 1280);
+  assert.equal(calls.insert.values[6], 853);
+  assert.equal(calls.insert.values[7], 'webp');
+  assert.equal(calls.insert.values[9], 14);
+  assert.equal(calls.insert.values[10], expectedHash);
+  assert.equal(calls.insert.values[19], 40);
+  assert.equal(calls.insert.values[20], '["猫","夜景"]');
+  assert.equal(calls.insert.values[21], '猫 夜景 HELLO');
+  assert.equal(calls.insert.values[22], 'done');
+  assert.equal(calls.insert.values[23], 'pending');
   assert.equal(calls.selectedKey, data.key);
 });
 

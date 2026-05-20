@@ -2,16 +2,17 @@ import type { Env } from '../../types';
 import { notFound, serverError } from '../../_shared/http';
 import { getTelegramFileUrl } from '../../_shared/telegram';
 
-const ORIGINAL_SQL = 'SELECT key, title, tg_file_id FROM images WHERE key = ?';
+const ORIGINAL_SQL = 'SELECT key, title, original_filename, tg_file_id FROM images WHERE key = ?';
 
 interface OriginalRow {
   key: string;
   title: string;
+  original_filename: string;
   tg_file_id: string | null;
 }
 
-function downloadName(key: string): string {
-  return key.replace(/[^a-zA-Z0-9._-]/g, '_') || 'original';
+function downloadName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'original';
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
@@ -29,7 +30,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
 
     const headers = new Headers();
     headers.set('content-type', fileResponse.headers.get('content-type') ?? 'application/octet-stream');
-    headers.set('content-disposition', `attachment; filename="${downloadName(key)}"`);
+    headers.set('content-disposition', `attachment; filename="${downloadName(row.original_filename || key)}"`);
     headers.set('cache-control', 'no-store');
 
     return new Response(fileResponse.body, { headers });

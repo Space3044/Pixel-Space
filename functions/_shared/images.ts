@@ -6,6 +6,7 @@ export interface ImageRecord {
   key: string;
   title: string;
   caption: string | null;
+  original_filename: string;
   public_url: string;
   width: number;
   height: number;
@@ -33,6 +34,7 @@ export interface ImageRow {
   title: string;
   caption: string | null;
   r2_key: string;
+  original_filename: string;
   width: number;
   height: number;
   format: string;
@@ -74,6 +76,7 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     key: row.key,
     title: row.title,
     caption: row.caption,
+    original_filename: row.original_filename,
     public_url: `${publicBaseUrl.replace(/\/$/, '')}/${row.r2_key}`,
     width: row.width,
     height: row.height,

@@ -19,6 +19,8 @@ const migration3Path = join(process.cwd(), 'db/migrations/0003_add_tg_columns.sq
 const migration3Sql = existsSync(migration3Path) ? readFileSync(migration3Path, 'utf8') : '';
 const migration4Path = join(process.cwd(), 'db/migrations/0004_add_ai_columns.sql');
 const migration4Sql = existsSync(migration4Path) ? readFileSync(migration4Path, 'utf8') : '';
+const migration5Path = join(process.cwd(), 'db/migrations/0005_add_original_filename.sql');
+const migration5Sql = existsSync(migration5Path) ? readFileSync(migration5Path, 'utf8') : '';
 
 const stripComments = (s) =>
   s
@@ -122,4 +124,9 @@ test('migration adds AI result fields after the init migration', () => {
   assert.match(migration4Body, /insert\s+into\s+ai_settings/i);
   assert.doesNotMatch(migration4Body, /\bocr_text\b/);
   assert.doesNotMatch(migration4Body, /\bproxy_key\b/);
+});
+
+test('migration preserves the original uploaded filename after the init migration', () => {
+  assert.match(allSqlBody, /\boriginal_filename\b/);
+  assert.doesNotMatch(sqlBody, /\boriginal_filename\b/);
 });

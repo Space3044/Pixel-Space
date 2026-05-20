@@ -2,6 +2,7 @@ export interface ImageRecord {
   key: string;
   title: string;
   caption: string | null;
+  original_filename: string;
   public_url: string;
   width: number;
   height: number;

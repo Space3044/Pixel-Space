@@ -36,6 +36,7 @@ const makeEnv = (row) => {
               first: async () => {
                 calls.selectedKey = values[0];
                 assert.match(sql, /SELECT/i);
+                assert.match(sql, /\boriginal_filename\b/i);
                 assert.match(sql, /\btg_file_id\b/i);
                 return row;
               },
@@ -50,7 +51,12 @@ const makeEnv = (row) => {
 };
 
 await test('GET /api/original/:key streams the Telegram original as an attachment', async () => {
-  const { env, calls } = makeEnv({ key: 'img-key', title: '猫猫', tg_file_id: 'telegram-file-id' });
+  const { env, calls } = makeEnv({
+    key: 'img-key',
+    title: '猫猫',
+    original_filename: 'cat.jpg',
+    tg_file_id: 'telegram-file-id',
+  });
   const requests = [];
 
   const response = await withMockedFetch(
@@ -85,7 +91,7 @@ await test('GET /api/original/:key streams the Telegram original as an attachmen
   assert.equal(await response.text(), 'original-bytes');
   assert.equal(response.headers.get('content-type'), 'image/jpeg');
   assert.equal(response.headers.get('cache-control'), 'no-store');
-  assert.equal(response.headers.get('content-disposition'), 'attachment; filename="img-key"');
+  assert.equal(response.headers.get('content-disposition'), 'attachment; filename="cat.jpg"');
 });
 
 await test('GET /api/original/:key returns 404 when the image is missing', async () => {
@@ -110,7 +116,7 @@ await test('GET /api/original/:key returns 404 when the image is missing', async
 });
 
 await test('GET /api/original/:key returns 404 when the original is not archived', async () => {
-  const { env } = makeEnv({ key: 'img-key', title: '猫猫', tg_file_id: null });
+  const { env } = makeEnv({ key: 'img-key', title: '猫猫', original_filename: 'cat.jpg', tg_file_id: null });
 
   const response = await originalGet({
     env,

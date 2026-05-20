@@ -12,6 +12,7 @@ INSERT INTO images (
   title,
   caption,
   r2_key,
+  original_filename,
   width,
   height,
   format,
@@ -31,11 +32,11 @@ INSERT INTO images (
   search_content,
   ai_status,
   tg_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
-  'SELECT key, title, caption, r2_key, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE key = ?';
+  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE key = ?';
 
 const UPDATE_TG_DONE_SQL = `
 UPDATE images
@@ -192,6 +193,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const exif = normalizeExif(rawExif);
   const key = crypto.randomUUID();
   const r2Key = key;
+  const originalFilename = original.name.trim() || key;
   const hash = await sha256Hex(compressed);
 
   try {
@@ -207,6 +209,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         meta.title,
         meta.caption,
         r2Key,
+        originalFilename,
         dimensions.width,
         dimensions.height,
         'webp',

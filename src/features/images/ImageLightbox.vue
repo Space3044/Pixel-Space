@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
                   <div class="detail-items">
                     <div class="detail-item">
                       <span class="item-label">文件名</span>
-                      <span class="item-value text-truncate">{{ image.title || image.key }}</span>
+                      <span class="item-value text-truncate">{{ image.original_filename || image.key }}</span>
                     </div>
                     <div class="detail-item">
                       <span class="item-label">文件大小</span>
