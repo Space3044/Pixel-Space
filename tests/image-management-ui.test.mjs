@@ -52,6 +52,10 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /ICONS\.trash/);
   assert.match(lightbox, /class="viewer-esc-button"/);
   assert.match(lightbox, />ESC<\/button>/);
+  assert.match(lightbox, /\.viewer-esc-button\s*\{[^}]*width:\s*36px;[^}]*height:\s*28px;/s);
+  assert.match(lightbox, /\.navigation-bar\s*\{[^}]*padding:\s*12px 16px;/s);
+  assert.doesNotMatch(lightbox, /class="nav-title"/);
+  assert.doesNotMatch(lightbox, /class="viewer-title"/);
   assert.doesNotMatch(lightbox, /class="viewer-action-btn" title="关闭"/);
   assert.doesNotMatch(lightbox, /panelClose|收起详情面板/);
   assert.match(lightbox, /const handleViewerSurfaceClick = \(\) => \{/);

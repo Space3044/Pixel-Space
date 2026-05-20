@@ -59,11 +59,6 @@ const editForm = reactive({
   location_lng: '' as number | '',
 });
 
-const meta = computed(() => {
-  if (!props.image) return '';
-  return `${props.image.width} × ${props.image.height} · ${props.image.format.toUpperCase()}`;
-});
-
 const publicPageUrl = computed(() => {
   if (!props.image) return '';
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -361,16 +356,6 @@ onBeforeUnmount(() => {
           <div class="viewer-container">
             <header class="navigation-bar">
               <button type="button" class="viewer-esc-button" aria-label="关闭（ESC）" @click="emit('close')">ESC</button>
-              <div class="nav-title">
-                <p class="viewer-title">
-                  {{ image?.title || '未选中图片' }}
-                </p>
-                <div class="image-info">
-                  <span v-if="meta" class="image-chip">{{ meta }}</span>
-                  <span v-else class="image-chip">未选中</span>
-                  <span v-if="copied" class="copy-state">{{ copiedText }}已复制</span>
-                </div>
-              </div>
 
               <div class="nav-actions">
                 <button
@@ -731,10 +716,11 @@ onBeforeUnmount(() => {
   z-index: 30;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px;
+  padding: 12px 16px;
   background: linear-gradient(180deg, rgba(15, 20, 25, 0.88), rgba(15, 20, 25, 0));
+  pointer-events: none;
 }
 
 .viewer-esc-button {
@@ -742,18 +728,19 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  min-width: 48px;
-  height: 36px;
+  width: 36px;
+  height: 28px;
   border: 1px solid rgba(96, 165, 250, 0.26);
   border-radius: 4px;
   background: rgba(15, 20, 25, 0.82);
   color: rgb(226, 232, 240);
   font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   cursor: pointer;
   transition: all 0.2s ease;
+  pointer-events: auto;
 }
 
 .viewer-esc-button:hover {
@@ -763,54 +750,13 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 
-.nav-title {
-  min-width: 0;
-}
-
-.viewer-title {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 15px;
-  font-weight: 700;
-  color: rgb(249, 250, 251);
-}
-
-.image-info {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-  min-height: 20px;
-}
-
-.image-chip,
-.copy-state {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  border: 1px solid rgba(96, 165, 250, 0.22);
-  border-radius: 4px;
-  background: rgba(15, 20, 25, 0.72);
-  padding: 0 8px;
-  font-size: 11px;
-  font-weight: 700;
-  color: rgb(203, 213, 225);
-}
-
-.copy-state {
-  border-color: rgba(132, 247, 153, 0.28);
-  color: rgb(132, 247, 153);
-}
-
 .nav-actions {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
   margin-left: auto;
+  pointer-events: auto;
 }
 
 .viewer-action-btn {
