@@ -1,6 +1,6 @@
 -- 0001_init.sql
 -- 阶段 3：MVP 列表 / 详情 / 上传链路所需的最小字段。
--- AI 字段（caption/tags_json/search_content/ocr_text/ai_*）等到阶段 11 再 ALTER TABLE ADD COLUMN。
+-- AI 字段（tags_json/search_content/ai_*）等到阶段 11 再 ALTER TABLE ADD COLUMN。
 -- Telegram 字段（tg_file_id/tg_message_id/tg_chat_id）等到阶段 9 再加。
 -- 位置只接受管理员手动填写的 location_lat / location_lng，不从 EXIF GPS 提取。
 
