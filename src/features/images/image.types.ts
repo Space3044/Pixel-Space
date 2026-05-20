@@ -6,5 +6,14 @@ export interface ImageRecord {
   width: number;
   height: number;
   format: string;
+  bytes_compressed: number;
   location_name: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  exif_taken_at: string | null;
+  exif_camera: string | null;
+  exif_iso: number | null;
+  exif_aperture: number | null;
+  exif_shutter: string | null;
+  exif_focal_length: number | null;
 }

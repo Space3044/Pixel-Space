@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import type { ImageRecord } from './image.types';
-import { buildPublicPageUrl } from './image-links';
+import { buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
+import ReadOnlyMap from './ReadOnlyMap.vue';
+import { deleteImage, updateImage } from './images.api';
 
 const props = defineProps<{ open: boolean; image?: ImageRecord | null }>();
-const emit = defineEmits<{ close: []; prev: []; next: [] }>();
+const emit = defineEmits<{ close: []; prev: []; next: []; updated: [image: ImageRecord]; deleted: [key: string] }>();
 
 type IconName =
-  | 'close'
   | 'chevronLeft'
   | 'chevronRight'
   | 'download'
@@ -20,10 +21,10 @@ type IconName =
   | 'robot'
   | 'link'
   | 'clock'
-  | 'mapPin';
+  | 'mapPin'
+  | 'trash';
 
 const ICONS: Record<IconName, { vb: string; d: string }> = {
-  close: { vb: '0 0 384 512', d: 'M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z' },
   chevronLeft: { vb: '0 0 320 512', d: 'M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l192 192c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 246.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-192 192z' },
   chevronRight: { vb: '0 0 320 512', d: 'M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z' },
   download: { vb: '0 0 512 512', d: 'M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z' },
@@ -37,12 +38,27 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
   link: { vb: '0 0 640 512', d: 'M579.8 267.7c56.5-56.5 56.5-148 0-204.5c-50-50-128.8-56.5-186.3-15.4l-1.6 1.1c-14.4 10.3-17.7 30.3-7.4 44.6s30.3 17.7 44.6 7.4l1.6-1.1c32.1-22.9 76-19.3 103.8 8.6c31.5 31.5 31.5 82.5 0 114L422.3 334.8c-31.5 31.5-82.5 31.5-114 0c-27.9-27.9-31.5-71.8-8.6-103.8l1.1-1.6c10.3-14.4 6.9-34.4-7.4-44.6s-34.4-6.9-44.6 7.4l-1.1 1.6C206.5 251.2 213 330 263 380c56.5 56.5 148 56.5 204.5 0L579.8 267.7zM60.2 244.3c-56.5 56.5-56.5 148 0 204.5c50 50 128.8 56.5 186.3 15.4l1.6-1.1c14.4-10.3 17.7-30.3 7.4-44.6s-30.3-17.7-44.6-7.4l-1.6 1.1c-32.1 22.9-76 19.3-103.8-8.6C74 372 74 321 105.5 289.5L217.7 177.2c31.5-31.5 82.5-31.5 114 0c27.9 27.9 31.5 71.8 8.6 103.9l-1.1 1.6c-10.3 14.4-6.9 34.4 7.4 44.6s34.4 6.9 44.6-7.4l1.1-1.6C433.5 260.8 427 182 377 132c-56.5-56.5-148-56.5-204.5 0L60.2 244.3z' },
   clock: { vb: '0 0 512 512', d: 'M256 0a256 256 0 1 1 0 512A256 256 0 1 1 256 0zM232 120V256c0 8 4 15.5 10.7 20l96 64c11 7.4 25.9 4.4 33.3-6.7s4.4-25.9-6.7-33.3L280 243.2V120c0-13.3-10.7-24-24-24s-24 10.7-24 24z' },
   mapPin: { vb: '0 0 384 512', d: 'M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z' },
+  trash: { vb: '0 0 24 24', d: 'M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h10l-1 12H8L7 9zm3 2v8h2v-8h-2zm4 0v8h2v-8h-2z' },
 };
 
 const copied = ref(false);
+const copiedText = ref('');
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
 const detailsOpen = ref(false);
+const aiEditOpen = ref(false);
+const locationEditOpen = ref(false);
+const saving = ref(false);
+const deleting = ref(false);
+const actionError = ref<string | null>(null);
+
+const editForm = reactive({
+  title: '',
+  caption: '',
+  location_name: '',
+  location_lat: '' as number | '',
+  location_lng: '' as number | '',
+});
 
 const meta = computed(() => {
   if (!props.image) return '';
@@ -55,18 +71,205 @@ const publicPageUrl = computed(() => {
   return buildPublicPageUrl(props.image, origin);
 });
 
-const sharePage = async () => {
-  if (!props.image) return;
+const originalImageUrl = (image: ImageRecord) => `/api/original/${encodeURIComponent(image.key)}`;
+
+const originalUrl = computed(() => {
+  if (!props.image) return '';
+  return originalImageUrl(props.image);
+});
+
+const linkRows = computed(() => {
+  if (!props.image) return [];
+  return [
+    { label: '图片直链', value: props.image.public_url },
+    { label: 'Markdown', value: buildMarkdown(props.image) },
+    { label: 'HTML', value: buildHtml(props.image) },
+    { label: '公开页', value: publicPageUrl.value },
+  ];
+});
+
+const formatBytes = (bytes: number): string => {
+  if (bytes <= 0) return '未记录';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 2)} ${units[unit]}`;
+};
+
+const formatExifTakenAt = (value: string | null): string => {
+  if (!value) return '未记录';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+};
+
+const exifRows = computed(() => {
+  const image = props.image;
+  if (!image) return [];
+  return [
+    { label: '拍摄时间', value: formatExifTakenAt(image.exif_taken_at), muted: !image.exif_taken_at, span: 'full' },
+    { label: '相机', value: image.exif_camera || '未记录', muted: !image.exif_camera, span: 'full' },
+    { label: 'ISO', value: image.exif_iso === null ? '未记录' : `ISO ${image.exif_iso}`, muted: image.exif_iso === null, span: 'half' },
+    {
+      label: '光圈',
+      value: image.exif_aperture === null ? '未记录' : `f/${image.exif_aperture}`,
+      muted: image.exif_aperture === null,
+      span: 'half',
+    },
+    { label: '快门', value: image.exif_shutter || '未记录', muted: !image.exif_shutter, span: 'half' },
+    {
+      label: '焦距',
+      value: image.exif_focal_length === null ? '未记录' : `${image.exif_focal_length} mm`,
+      muted: image.exif_focal_length === null,
+      span: 'half',
+    },
+  ];
+});
+
+const hasCoordinates = computed(
+  () => props.image?.location_lat != null && props.image?.location_lng != null,
+);
+
+const toMapCoordinate = (value: number | string | null | undefined): number | null => {
+  if (value === '' || value == null) return null;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) ? coordinate : null;
+};
+
+const mapLat = computed(() => toMapCoordinate(
+  locationEditOpen.value ? editForm.location_lat : props.image?.location_lat,
+));
+
+const mapLng = computed(() => toMapCoordinate(
+  locationEditOpen.value ? editForm.location_lng : props.image?.location_lng,
+));
+
+const copyValue = async (value: string, label = '链接') => {
   try {
-    await navigator.clipboard.writeText(publicPageUrl.value);
+    await navigator.clipboard.writeText(value);
   } catch {
     return;
   }
+  copiedText.value = label;
   copied.value = true;
   if (copyTimer) clearTimeout(copyTimer);
   copyTimer = setTimeout(() => {
     copied.value = false;
+    copiedText.value = '';
   }, 1400);
+};
+
+const sharePage = async () => {
+  if (!props.image) return;
+  await copyValue(publicPageUrl.value, '分享链接');
+};
+
+const resetForm = (image: ImageRecord | null | undefined) => {
+  actionError.value = null;
+  editForm.title = image?.title ?? '';
+  editForm.caption = image?.caption ?? '';
+  editForm.location_name = image?.location_name ?? '';
+  editForm.location_lat = image?.location_lat ?? '';
+  editForm.location_lng = image?.location_lng ?? '';
+};
+
+const openAiEditor = () => {
+  resetForm(props.image);
+  aiEditOpen.value = true;
+};
+
+const cancelAiEditor = () => {
+  resetForm(props.image);
+  actionError.value = null;
+  aiEditOpen.value = false;
+};
+
+const saveAiMetadata = async () => {
+  if (!props.image) return;
+  saving.value = true;
+  actionError.value = null;
+  try {
+    const updated = await updateImage(props.image.key, {
+      title: editForm.title,
+      caption: editForm.caption,
+      location_name: props.image.location_name ?? '',
+      location_lat: props.image.location_lat,
+      location_lng: props.image.location_lng,
+    });
+    emit('updated', updated);
+    resetForm(updated);
+    aiEditOpen.value = false;
+  } catch (error) {
+    actionError.value = (error as Error).message;
+  } finally {
+    saving.value = false;
+  }
+};
+
+const openLocationEditor = () => {
+  resetForm(props.image);
+  locationEditOpen.value = true;
+};
+
+const cancelLocationEditor = () => {
+  resetForm(props.image);
+  actionError.value = null;
+  locationEditOpen.value = false;
+};
+
+const updateLocationFromMap = (coords: { lat: number; lng: number }) => {
+  editForm.location_lat = coords.lat;
+  editForm.location_lng = coords.lng;
+};
+
+const saveLocation = async () => {
+  if (!props.image) return;
+  saving.value = true;
+  actionError.value = null;
+  try {
+    const updated = await updateImage(props.image.key, {
+      title: props.image.title,
+      caption: props.image.caption ?? '',
+      location_name: editForm.location_name,
+      location_lat: editForm.location_lat === '' ? null : Number(editForm.location_lat),
+      location_lng: editForm.location_lng === '' ? null : Number(editForm.location_lng),
+    });
+    emit('updated', updated);
+    resetForm(updated);
+    locationEditOpen.value = false;
+  } catch (error) {
+    actionError.value = (error as Error).message;
+  } finally {
+    saving.value = false;
+  }
+};
+
+const deleteCurrentImage = async () => {
+  if (!props.image) return;
+  if (!confirm('确认删除这张图片？')) return;
+  deleting.value = true;
+  actionError.value = null;
+  try {
+    const key = props.image.key;
+    await deleteImage(key);
+    emit('deleted', key);
+  } catch (error) {
+    actionError.value = (error as Error).message;
+  } finally {
+    deleting.value = false;
+  }
 };
 
 const toggleDetails = () => {
@@ -84,7 +287,6 @@ const handleKey = (e: KeyboardEvent) => {
   }
   if (e.key === 'ArrowLeft') emit('prev');
   if (e.key === 'ArrowRight') emit('next');
-  if (e.key === 'i' || e.key === 'I') toggleDetails();
 };
 
 watch(
@@ -98,12 +300,20 @@ watch(
       document.body.style.overflow = '';
       copied.value = false;
       detailsOpen.value = false;
+      aiEditOpen.value = false;
+      locationEditOpen.value = false;
       if (copyTimer) {
         clearTimeout(copyTimer);
         copyTimer = null;
       }
     }
   },
+  { immediate: true },
+);
+
+watch(
+  () => props.image,
+  (image) => resetForm(image),
   { immediate: true },
 );
 
@@ -116,85 +326,105 @@ onBeforeUnmount(() => {
 <template>
   <Teleport to="body">
     <Transition name="lightbox">
-      <div v-if="open" class="fixed inset-0 z-[9000]">
-        <div class="absolute inset-0 bg-void/95 backdrop-blur-xl" @click="emit('close')" aria-hidden="true" />
+      <div v-if="open" class="image-viewer-wrapper">
+        <div class="cyber-image-viewer">
+          <div class="viewer-backdrop" @click="emit('close')" aria-hidden="true" />
 
-        <div class="relative flex h-full w-full flex-col">
-          <header class="z-20 flex h-16 items-center justify-between px-4 sm:px-6">
-            <div class="min-w-0">
-              <p class="truncate text-sm font-semibold text-white">
-                {{ image?.title || '未选中图片' }}
-              </p>
-              <p class="mt-0.5 truncate text-xs text-slate-400">
-                <template v-if="meta">{{ meta }}</template>
-                <template v-else>选中图片后展示尺寸信息</template>
-                <span v-if="copied" class="ml-2 font-semibold text-neon-lime">分享链接已复制</span>
-              </p>
-            </div>
+          <div class="viewer-container">
+            <header class="navigation-bar">
+              <button type="button" class="viewer-esc-button" aria-label="关闭（ESC）" @click="emit('close')">ESC</button>
+              <div class="nav-title">
+                <p class="viewer-title">
+                  {{ image?.title || '未选中图片' }}
+                </p>
+                <div class="image-info">
+                  <span v-if="meta" class="image-chip">{{ meta }}</span>
+                  <span v-else class="image-chip">未选中</span>
+                  <span v-if="copied" class="copy-state">{{ copiedText }}已复制</span>
+                </div>
+              </div>
 
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                class="viewer-btn"
-                :class="{ 'is-success': copied }"
-                :aria-label="copied ? '分享链接已复制' : '复制分享链接'"
-                :disabled="!image"
-                @click="sharePage"
-              >
-                <svg
-                  :viewBox="copied ? ICONS.check.vb : ICONS.share.vb"
-                  fill="currentColor"
-                  class="h-4 w-4"
-                  aria-hidden="true"
+              <div class="nav-actions">
+                <button
+                  type="button"
+                  class="viewer-action-btn"
+                  :class="{ 'is-success': copied }"
+                  title="复制分享链接"
+                  :aria-label="copied ? '分享链接已复制' : '复制分享链接'"
+                  :disabled="!image"
+                  @click="sharePage"
                 >
-                  <path :d="copied ? ICONS.check.d : ICONS.share.d" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="viewer-btn"
-                :class="{ 'is-active': detailsOpen }"
-                :aria-label="detailsOpen ? '关闭详情面板' : '查看详情（i）'"
-                :disabled="!image"
-                @click="toggleDetails"
-              >
-                <svg :viewBox="ICONS.info.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.info.d" /></svg>
-              </button>
-              <button type="button" class="viewer-btn" aria-label="下载原图（阶段 9 接入）" disabled>
-                <svg :viewBox="ICONS.download.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.download.d" /></svg>
-              </button>
-              <button type="button" class="viewer-btn" aria-label="全屏（阶段 7 接入）" disabled>
-                <svg :viewBox="ICONS.expand.vb" fill="currentColor" class="h-3.5 w-3.5" aria-hidden="true"><path :d="ICONS.expand.d" /></svg>
-              </button>
-              <button type="button" class="viewer-btn" aria-label="关闭（ESC）" @click="emit('close')">
-                <svg :viewBox="ICONS.close.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.close.d" /></svg>
-              </button>
-            </div>
-          </header>
+                  <svg
+                    :viewBox="copied ? ICONS.check.vb : ICONS.share.vb"
+                    fill="currentColor"
+                    class="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <path :d="copied ? ICONS.check.d : ICONS.share.d" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="viewer-action-btn"
+                  :class="{ 'is-active': detailsOpen }"
+                  title="详情"
+                  :aria-label="detailsOpen ? '关闭详情面板' : '查看详情'"
+                  :disabled="!image"
+                  @click="toggleDetails"
+                >
+                  <svg :viewBox="ICONS.info.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.info.d" /></svg>
+                </button>
+                <a
+                  v-if="image"
+                  class="viewer-action-btn"
+                  :href="originalUrl"
+                  target="_blank"
+                  rel="noreferrer"
+                  title="下载原图"
+                  aria-label="下载原图"
+                >
+                  <svg :viewBox="ICONS.download.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.download.d" /></svg>
+                </a>
+                <button v-else type="button" class="viewer-action-btn" title="下载原图" aria-label="下载原图" disabled>
+                  <svg :viewBox="ICONS.download.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.download.d" /></svg>
+                </button>
+                <button type="button" class="viewer-action-btn" title="全屏" aria-label="全屏（阶段 7 接入）" disabled>
+                  <svg :viewBox="ICONS.expand.vb" fill="currentColor" class="h-3.5 w-3.5" aria-hidden="true"><path :d="ICONS.expand.d" /></svg>
+                </button>
+                <button
+                  type="button"
+                  class="viewer-action-btn danger"
+                  title="删除图片"
+                  aria-label="删除图片"
+                  :disabled="!image || saving || deleting"
+                  @click="deleteCurrentImage"
+                >
+                  <svg :viewBox="ICONS.trash.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.trash.d" /></svg>
+                </button>
+              </div>
+            </header>
 
-          <div class="relative flex flex-1 items-center justify-center overflow-hidden">
-            <figure class="absolute inset-0 z-0 flex items-center justify-center">
-              <div class="absolute inset-0 bg-panel/40" />
-              <div class="absolute inset-0 bg-gradient-to-br from-neon-cyan/10 via-transparent to-neon-pink/10" />
-              <div class="absolute inset-0 bg-grid bg-[length:64px_64px] opacity-30" />
-              <img
-                v-if="image"
-                :src="image.public_url"
-                :alt="image.title"
-                class="relative z-10 max-h-full max-w-full object-contain"
-              />
-              <figcaption class="sr-only">
-                {{ image ? `${image.title} 预览` : '未选中图片，请从图库点击进入' }}
-              </figcaption>
-            </figure>
+            <div class="viewer-content">
+              <figure class="image-canvas" :class="{ 'has-drawer': detailsOpen }" @click="emit('close')">
+                <img
+                  v-if="image"
+                  :src="image.public_url"
+                  :alt="image.title"
+                  class="main-image"
+                  @click.stop
+                />
+                <figcaption class="sr-only">
+                  {{ image ? `${image.title} 预览` : '未选中图片，请从图库点击进入' }}
+                </figcaption>
+              </figure>
 
-            <button type="button" class="nav-arrow left-4 sm:left-6" aria-label="上一张（←）" @click.stop="emit('prev')">
-              <svg :viewBox="ICONS.chevronLeft.vb" fill="currentColor" class="h-5 w-5" aria-hidden="true"><path :d="ICONS.chevronLeft.d" /></svg>
-            </button>
+              <button type="button" class="nav-arrow nav-arrow-left" aria-label="上一张（←）" @click.stop="emit('prev')">
+                <svg :viewBox="ICONS.chevronLeft.vb" fill="currentColor" class="h-5 w-5" aria-hidden="true"><path :d="ICONS.chevronLeft.d" /></svg>
+              </button>
 
-            <button type="button" class="nav-arrow right-4 sm:right-6" aria-label="下一张（→）" @click.stop="emit('next')">
-              <svg :viewBox="ICONS.chevronRight.vb" fill="currentColor" class="h-5 w-5" aria-hidden="true"><path :d="ICONS.chevronRight.d" /></svg>
-            </button>
+              <button type="button" class="nav-arrow nav-arrow-right" aria-label="下一张（→）" @click.stop="emit('next')">
+                <svg :viewBox="ICONS.chevronRight.vb" fill="currentColor" class="h-5 w-5" aria-hidden="true"><path :d="ICONS.chevronRight.d" /></svg>
+              </button>
 
             <aside
               class="drawer-panel"
@@ -206,7 +436,7 @@ onBeforeUnmount(() => {
                 <span class="drawer-title">详情</span>
                 <button
                   type="button"
-                  class="viewer-btn"
+                  class="viewer-action-btn"
                   aria-label="收起详情面板"
                   @click="toggleDetails"
                 >
@@ -227,7 +457,7 @@ onBeforeUnmount(() => {
                     </div>
                     <div class="detail-item">
                       <span class="item-label">文件大小</span>
-                      <span class="item-value text-muted">—</span>
+                      <span class="item-value">{{ formatBytes(image.bytes_compressed) }}</span>
                     </div>
                     <div class="detail-item">
                       <span class="item-label">分辨率</span>
@@ -247,48 +477,139 @@ onBeforeUnmount(() => {
                         <span class="badge badge-lime">公开</span>
                       </span>
                     </div>
-                    <div class="detail-item">
-                      <span class="item-label">存储时长</span>
-                      <span class="item-value text-muted">永久</span>
-                    </div>
-                  </div>
-                </section>
-
-                <section v-if="image.location_name" class="detail-section">
-                  <div class="section-title">
-                    <svg :viewBox="ICONS.mapPin.vb" fill="currentColor" class="section-icon" aria-hidden="true"><path :d="ICONS.mapPin.d" /></svg>
-                    <span>位置</span>
-                  </div>
-                  <div class="detail-items">
-                    <div class="detail-item">
-                      <span class="item-label">地名</span>
-                      <span class="item-value text-truncate">{{ image.location_name }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="item-label">坐标</span>
-                      <span class="item-value text-muted">阶段 11 接入</span>
-                    </div>
                   </div>
                 </section>
 
                 <section class="detail-section">
                   <div class="section-title">
-                    <svg :viewBox="ICONS.robot.vb" fill="currentColor" class="section-icon" aria-hidden="true"><path :d="ICONS.robot.d" /></svg>
-                    <span>AI 分析</span>
+                    <svg :viewBox="ICONS.clock.vb" fill="currentColor" class="section-icon" aria-hidden="true"><path :d="ICONS.clock.d" /></svg>
+                    <span>EXIF</span>
+                  </div>
+                  <div class="exif-grid">
+                    <div
+                      v-for="row in exifRows"
+                      :key="row.label"
+                      class="detail-item exif-item"
+                      :class="{ 'is-full': row.span === 'full' }"
+                    >
+                      <span class="item-label">{{ row.label }}</span>
+                      <span class="item-value" :class="{ 'text-muted': row.muted }">{{ row.value }}</span>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="detail-section">
+                  <div class="section-title section-title-with-action">
+                    <span class="section-title-label">
+                      <svg :viewBox="ICONS.robot.vb" fill="currentColor" class="section-icon" aria-hidden="true"><path :d="ICONS.robot.d" /></svg>
+                      <span>AI 分析</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="ai-edit-button"
+                      :disabled="saving || deleting"
+                      @click="aiEditOpen ? cancelAiEditor() : openAiEditor()"
+                    >
+                      {{ aiEditOpen ? '收起' : '编辑' }}
+                    </button>
                   </div>
                   <div class="detail-items">
+                    <div class="detail-item">
+                      <span class="item-label">标题</span>
+                      <span class="item-value text-truncate">{{ image.title || '未命名图片' }}</span>
+                    </div>
                     <div class="detail-item is-column">
                       <span class="item-label">描述</span>
                       <p v-if="image.caption" class="item-description">{{ image.caption }}</p>
-                      <p v-else class="item-description text-muted">阶段 10 接入 AI 描述</p>
-                    </div>
-                    <div class="detail-item">
-                      <span class="item-label">内容安全</span>
-                      <span class="item-value">
-                        <span class="badge badge-muted">未评估</span>
-                      </span>
+                      <p v-else class="item-description text-muted">阶段 11 接入 AI 描述</p>
                     </div>
                   </div>
+                  <form v-if="aiEditOpen" class="ai-edit-form" @submit.prevent="saveAiMetadata">
+                    <label class="edit-field">
+                      <span>标题</span>
+                      <input v-model="editForm.title" type="text" />
+                    </label>
+                    <label class="edit-field">
+                      <span>描述</span>
+                      <textarea v-model="editForm.caption" rows="3" />
+                    </label>
+                    <p v-if="actionError" class="action-error">{{ actionError }}</p>
+                    <div class="edit-actions">
+                      <button type="submit" class="action-btn" :disabled="saving || deleting">
+                        {{ saving ? '保存中…' : '保存' }}
+                      </button>
+                      <button type="button" class="action-btn muted" :disabled="saving || deleting" @click="cancelAiEditor">
+                        取消
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="detail-section">
+                  <div class="section-title section-title-with-action">
+                    <span class="section-title-label">
+                      <svg :viewBox="ICONS.mapPin.vb" fill="currentColor" class="section-icon" aria-hidden="true"><path :d="ICONS.mapPin.d" /></svg>
+                      <span>位置</span>
+                    </span>
+                    <button
+                      type="button"
+                      class="location-edit-button"
+                      :disabled="saving || deleting"
+                      @click="locationEditOpen ? cancelLocationEditor() : openLocationEditor()"
+                    >
+                      {{ locationEditOpen ? '收起' : '编辑位置' }}
+                    </button>
+                  </div>
+
+                  <div class="detail-items location-display">
+                    <div class="detail-item">
+                      <span class="item-label">位置</span>
+                      <span class="item-value text-truncate" :class="{ 'text-muted': !image.location_name }">
+                        {{ image.location_name || '未记录' }}
+                      </span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="item-label">经纬度</span>
+                      <span v-if="hasCoordinates" class="item-value font-mono">
+                        {{ image.location_lat }}, {{ image.location_lng }}
+                      </span>
+                      <span v-else class="item-value text-muted">未记录</span>
+                    </div>
+                  </div>
+                  <ReadOnlyMap
+                    class="mt-3"
+                    :lat="mapLat"
+                    :lng="mapLng"
+                    :label="image.location_name || image.title"
+                    :interactive="locationEditOpen"
+                    @pick="updateLocationFromMap"
+                  />
+
+                  <form v-if="locationEditOpen" class="location-edit-form" @submit.prevent="saveLocation">
+                    <label class="edit-field">
+                      <span>位置名</span>
+                      <input v-model="editForm.location_name" type="text" />
+                    </label>
+                    <div class="edit-grid">
+                      <label class="edit-field">
+                        <span>纬度</span>
+                        <input v-model="editForm.location_lat" type="number" step="any" min="-90" max="90" />
+                      </label>
+                      <label class="edit-field">
+                        <span>经度</span>
+                        <input v-model="editForm.location_lng" type="number" step="any" min="-180" max="180" />
+                      </label>
+                    </div>
+                    <p v-if="actionError" class="action-error">{{ actionError }}</p>
+                    <div class="edit-actions">
+                      <button type="submit" class="action-btn" :disabled="saving || deleting">
+                        {{ saving ? '保存中…' : '保存位置' }}
+                      </button>
+                      <button type="button" class="action-btn muted" :disabled="saving || deleting" @click="cancelLocationEditor">
+                        取消
+                      </button>
+                    </div>
+                  </form>
                 </section>
 
                 <section class="detail-section">
@@ -297,17 +618,12 @@ onBeforeUnmount(() => {
                     <span>链接</span>
                   </div>
                   <div class="detail-items">
-                    <div class="detail-item is-column">
-                      <span class="item-label">完整链接</span>
-                      <span class="item-value font-mono text-truncate">{{ image.public_url }}</span>
-                    </div>
-                    <div class="detail-item is-column">
-                      <span class="item-label">分享页</span>
-                      <span class="item-value font-mono text-truncate">{{ publicPageUrl }}</span>
-                    </div>
-                    <div class="detail-item is-column">
-                      <span class="item-label">缩略图链接</span>
-                      <span class="item-value text-muted">阶段 12 接入</span>
+                    <div v-for="row in linkRows" :key="row.label" class="detail-item is-column">
+                      <span class="item-label">{{ row.label }}</span>
+                      <span class="item-value font-mono text-truncate">{{ row.value }}</span>
+                      <button type="button" class="inline-copy" @click="copyValue(row.value, row.label)">
+                        复制{{ row.label }}
+                      </button>
                     </div>
                   </div>
                 </section>
@@ -320,11 +636,11 @@ onBeforeUnmount(() => {
                   <div class="detail-items">
                     <div class="detail-item">
                       <span class="item-label">创建时间</span>
-                      <span class="item-value text-muted">阶段 11 接入</span>
+                      <span class="item-value text-muted">后续接入</span>
                     </div>
                     <div class="detail-item">
                       <span class="item-label">更新时间</span>
-                      <span class="item-value text-muted">阶段 11 接入</span>
+                      <span class="item-value text-muted">后续接入</span>
                     </div>
                   </div>
                 </section>
@@ -332,13 +648,7 @@ onBeforeUnmount(() => {
             </aside>
           </div>
 
-          <footer class="z-10 flex h-12 items-center justify-center gap-3 px-4 font-mono text-[11px] text-slate-500 sm:px-6">
-            <span>I 切换详情</span>
-            <span class="text-slate-700">·</span>
-            <span>← → 翻页（阶段 7 索引接入）</span>
-            <span class="text-slate-700">·</span>
-            <span>ESC 关闭</span>
-          </footer>
+          </div>
         </div>
       </div>
     </Transition>
@@ -346,59 +656,251 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.viewer-btn {
+.image-viewer-wrapper {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+}
+
+.cyber-image-viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: rgba(15, 20, 25, 0.95);
+  color: rgb(229, 231, 235);
+}
+
+.viewer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(96, 165, 250, 0.14), transparent 30%),
+    radial-gradient(circle at 80% 90%, rgba(53, 243, 255, 0.1), transparent 30%),
+    rgba(15, 20, 25, 0.94);
+}
+
+.viewer-container,
+.viewer-content,
+.image-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.viewer-container {
+  z-index: 2;
+}
+
+.navigation-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 18px 24px;
+  background: linear-gradient(180deg, rgba(15, 20, 25, 0.88), rgba(15, 20, 25, 0));
+}
+
+.viewer-esc-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 36px;
+  border: 1px solid rgba(96, 165, 250, 0.26);
+  border-radius: 4px;
+  background: rgba(15, 20, 25, 0.82);
+  color: rgb(226, 232, 240);
+  font-family: 'Menlo', 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewer-esc-button:hover {
+  border-color: rgba(96, 165, 250, 0.58);
+  background: rgba(96, 165, 250, 0.2);
+  color: rgb(147, 197, 253);
+  transform: translateY(-1px);
+}
+
+.nav-title {
+  min-width: 0;
+}
+
+.viewer-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 700;
+  color: rgb(249, 250, 251);
+}
+
+.image-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  min-height: 20px;
+}
+
+.image-chip,
+.copy-state {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 4px;
+  background: rgba(15, 20, 25, 0.72);
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgb(203, 213, 225);
+}
+
+.copy-state {
+  border-color: rgba(132, 247, 153, 0.28);
+  color: rgb(132, 247, 153);
+}
+
+.nav-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.viewer-action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 0.5rem;
-  color: rgb(203, 213, 225);
-  background: transparent;
+  border-radius: 4px;
+  color: rgb(249, 250, 251);
+  background: rgba(96, 165, 250, 0.2);
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
 }
-.viewer-btn:hover:not(:disabled) {
-  background: rgba(53, 243, 255, 0.1);
-  color: rgb(53, 243, 255);
+
+.viewer-action-btn:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.32);
+  color: rgb(147, 197, 253);
+  transform: translateY(-1px);
 }
-.viewer-btn.is-success {
+
+.viewer-action-btn.is-success {
   color: rgb(132, 247, 153);
   background: rgba(132, 247, 153, 0.12);
 }
-.viewer-btn.is-active {
-  color: rgb(53, 243, 255);
-  background: rgba(53, 243, 255, 0.12);
+
+.viewer-action-btn.is-active {
+  color: rgb(147, 197, 253);
+  background: rgba(96, 165, 250, 0.34);
 }
-.viewer-btn:disabled {
+
+.viewer-action-btn.danger {
+  color: rgb(253, 164, 175);
+  background: rgba(251, 113, 133, 0.13);
+}
+
+.viewer-action-btn.danger:hover:not(:disabled) {
+  color: rgb(254, 205, 211);
+  background: rgba(251, 113, 133, 0.28);
+}
+
+.viewer-action-btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+.image-canvas {
+  z-index: 3;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  transition: right 0.3s ease;
+}
+
+.image-canvas.has-drawer {
+  right: 420px;
+}
+
+.main-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
 }
 
 .nav-arrow {
   position: absolute;
   top: 50%;
+  z-index: 12;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 9999px;
-  background: rgba(7, 7, 19, 0.85);
-  border: 1px solid rgba(53, 243, 255, 0.25);
-  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  border-radius: 4px;
+  background: rgba(15, 20, 25, 0.86);
+  color: rgb(249, 250, 251);
   cursor: pointer;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
   transition: all 0.2s ease;
-  z-index: 10;
 }
+
+.nav-arrow-left {
+  left: 24px;
+}
+
+.nav-arrow-right {
+  right: 24px;
+}
+
 .nav-arrow:hover {
-  border-color: rgba(53, 243, 255, 0.6);
-  color: rgb(53, 243, 255);
-  transform: translateY(-50%) scale(1.05);
-  box-shadow: 0 4px 20px rgba(53, 243, 255, 0.25);
+  border-color: rgba(96, 165, 250, 0.62);
+  color: rgb(147, 197, 253);
+  background: rgba(96, 165, 250, 0.2);
+}
+
+@media (max-width: 640px) {
+  .navigation-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px;
+  }
+  .nav-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .nav-arrow-left {
+    left: 14px;
+  }
+  .nav-arrow-right {
+    right: 14px;
+  }
+  .image-canvas.has-drawer {
+    right: 0;
+  }
 }
 
 .drawer-panel {
@@ -471,6 +973,15 @@ onBeforeUnmount(() => {
   font-weight: 700;
   color: rgb(165, 243, 252);
 }
+.section-title-with-action {
+  justify-content: space-between;
+}
+.section-title-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .section-icon {
   width: 14px;
   height: 14px;
@@ -498,6 +1009,116 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
+}
+
+.exif-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.exif-item.is-full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 420px) {
+  .exif-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ai-edit-button,
+.location-edit-button {
+  border: 1px solid rgba(53, 243, 255, 0.22);
+  border-radius: 4px;
+  background: rgba(53, 243, 255, 0.06);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgb(165, 243, 252);
+  cursor: pointer;
+}
+.ai-edit-button:hover:not(:disabled),
+.location-edit-button:hover:not(:disabled) {
+  border-color: rgba(53, 243, 255, 0.42);
+  background: rgba(53, 243, 255, 0.12);
+}
+.ai-edit-button:disabled,
+.location-edit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ai-edit-form,
+.location-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  border-top: 1px solid rgba(53, 243, 255, 0.12);
+  padding-top: 12px;
+}
+.edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(103, 232, 249, 0.75);
+}
+.edit-field input,
+.edit-field textarea {
+  width: 100%;
+  border: 1px solid rgba(53, 243, 255, 0.18);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.72);
+  padding: 8px 9px;
+  color: rgb(229, 231, 235);
+  outline: none;
+}
+.edit-field textarea {
+  resize: vertical;
+}
+.edit-field input:focus,
+.edit-field textarea:focus {
+  border-color: rgba(53, 243, 255, 0.65);
+}
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+.action-btn,
+.inline-copy {
+  border: 1px solid rgba(53, 243, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(53, 243, 255, 0.08);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgb(165, 243, 252);
+  cursor: pointer;
+}
+.action-btn.danger {
+  border-color: rgba(251, 113, 133, 0.35);
+  background: rgba(251, 113, 133, 0.09);
+  color: rgb(253, 164, 175);
+}
+.action-btn.muted {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.06);
+  color: rgba(203, 213, 225, 0.86);
+}
+.action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.action-error {
+  margin: 0;
+  font-size: 12px;
+  color: rgb(251, 113, 133);
 }
 
 .item-label {
