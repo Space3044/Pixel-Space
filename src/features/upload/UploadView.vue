@@ -6,6 +6,8 @@ import type { Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import AppShell from '@/shared/ui/AppShell.vue';
+import LocationSearch from '@/features/images/LocationSearch.vue';
+import type { GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
 import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
 import { formatExifTakenAt, normalizeExif } from './exif';
@@ -444,6 +446,11 @@ const clearLocation = () => {
   setCoordinates(null, null, false);
 };
 
+const applyLocationSearchResult = (result: GeocodeResult) => {
+  meta.location_name = result.name;
+  setCoordinates(result.lat, result.lng);
+};
+
 const copyResultLink = async (label: string, value: string) => {
   try {
     await navigator.clipboard.writeText(value);
@@ -750,6 +757,7 @@ onBeforeUnmount(() => {
                     清空
                   </button>
                 </div>
+                <LocationSearch class="location-search" @select="applyLocationSearchResult" />
                 <div ref="mapRef" class="map-pane" aria-label="点击地图选择图片位置"></div>
                 <p v-if="mapLoadState !== 'ready'" class="map-status">
                   {{ mapLoadState === 'fallback' ? '矢量地图加载慢，已切到深色备用底图' : '正在加载地图' }}
@@ -966,15 +974,19 @@ onBeforeUnmount(() => {
 
 @media (min-width: 1024px) {
   .workbench {
+    height: clamp(32rem, calc(100svh - 13rem), 43rem);
     grid-template-columns: 8rem minmax(0, 1fr) 24rem;
     align-items: stretch;
   }
 }
 
 .queue-rail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 0.6rem;
   padding: 0.85rem;
-  min-width: 0;
 }
 
 .queue-header {
@@ -1016,11 +1028,12 @@ onBeforeUnmount(() => {
 
 @media (min-width: 1024px) {
   .queue-list {
+    min-height: 0;
     flex-direction: column;
     align-items: center;
     overflow-x: visible;
-    overflow-y: visible;
-    padding-right: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
   }
 }
 
@@ -1169,16 +1182,50 @@ onBeforeUnmount(() => {
 
 @media (min-width: 1024px) {
   .preview-stage {
-    min-height: 34rem;
+    height: 100%;
+    min-height: 0;
   }
 }
 
 .meta-sidebar {
   display: flex;
+  min-height: 0;
   flex-direction: column;
   gap: 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.1rem;
   border-radius: 0.6rem;
+}
+
+.queue-list,
+.meta-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(53, 243, 255, 0.48) rgba(7, 7, 19, 0.24);
+}
+
+.queue-list::-webkit-scrollbar,
+.meta-sidebar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.queue-list::-webkit-scrollbar-track,
+.meta-sidebar::-webkit-scrollbar-track {
+  border-radius: 0.35rem;
+  background: rgba(7, 7, 19, 0.32);
+}
+
+.queue-list::-webkit-scrollbar-thumb,
+.meta-sidebar::-webkit-scrollbar-thumb {
+  border: 1px solid rgba(53, 243, 255, 0.2);
+  border-radius: 0.35rem;
+  background: linear-gradient(180deg, rgba(53, 243, 255, 0.62), rgba(255, 79, 216, 0.42));
+}
+
+.queue-list::-webkit-scrollbar-thumb:hover,
+.meta-sidebar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(53, 243, 255, 0.82), rgba(255, 79, 216, 0.58));
 }
 
 .meta-section {

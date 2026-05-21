@@ -32,12 +32,30 @@ test('upload queue count uses a compact status label instead of raw zero count',
   assert.doesNotMatch(view, /\{\{\s*hasFile\s*\?\s*'1'\s*:\s*'0'\s*\}\}\s*张/);
 });
 
-test('upload queue rail is wide enough and does not scroll on desktop', () => {
+test('upload queue rail is wide enough and scrolls inside the fixed workbench on desktop', () => {
   assert.match(view, /grid-template-columns:\s*8rem minmax\(0,\s*1fr\) 24rem/);
+  assert.match(view, /height:\s*clamp\(32rem,\s*calc\(100svh - 13rem\),\s*43rem\)/);
 
   const desktopQueueList = extract('@media (min-width: 1024px) {\n  .queue-list', '\n  }\n}\n\n.thumb-cell');
-  assert.doesNotMatch(desktopQueueList, /overflow-y:\s*auto/);
+  assert.match(desktopQueueList, /overflow-y:\s*auto/);
+  assert.match(desktopQueueList, /min-height:\s*0/);
   assert.doesNotMatch(desktopQueueList, /max-height:/);
+});
+
+test('upload workbench keeps the preview fixed while side panels scroll with styled scrollbars', () => {
+  const desktopWorkbench = extract('@media (min-width: 1024px) {\n  .workbench', '\n  }\n}\n\n.queue-rail');
+  assert.match(desktopWorkbench, /height:\s*clamp\(32rem,\s*calc\(100svh - 13rem\),\s*43rem\)/);
+
+  const desktopPreview = extract('@media (min-width: 1024px) {\n  .preview-stage', '\n  }\n}\n\n.meta-sidebar');
+  assert.match(desktopPreview, /height:\s*100%/);
+  assert.match(desktopPreview, /min-height:\s*0/);
+
+  const metaSidebar = extract('.meta-sidebar {', '\n}\n\n.meta-section');
+  assert.match(metaSidebar, /overflow-y:\s*auto/);
+  assert.match(metaSidebar, /min-height:\s*0/);
+
+  assert.match(view, /\.queue-list,\n\.meta-sidebar\s*\{\n[\s\S]*scrollbar-width:\s*thin/);
+  assert.match(view, /\.queue-list::-webkit-scrollbar-thumb,\n\.meta-sidebar::-webkit-scrollbar-thumb/);
 });
 
 test('upload map can place a marker before a file is selected', () => {
