@@ -17,6 +17,7 @@ for (const path of [
   './image-management-ui.test.mjs',
   './public-image-view.test.mjs',
   './image-object.test.mjs',
+  './random-view.test.mjs',
 ]) {
   await import(path);
 }
