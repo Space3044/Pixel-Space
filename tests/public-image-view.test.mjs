@@ -14,9 +14,17 @@ const test = (name, fn) => {
 };
 
 test('PublicImageView updates Open Graph metadata after loading the image', () => {
-  assert.match(view, /ensureMeta\('og:image', image\.public_url\)/);
+  assert.match(view, /ensureMeta\('og:image', buildAbsoluteImageUrl\(image\.public_url,\s*origin\)\)/);
   assert.match(view, /ensureMeta\('og:title', image\.title/);
   assert.match(view, /ensureMeta\('og:description', image\.caption/);
+});
+
+test('PublicImageView copies absolute image urls in Markdown and HTML snippets', () => {
+  assert.match(view, /import \{[^}]*buildAbsoluteImageUrl[^}]*\} from '\.\/image-links'/s);
+  assert.match(view, /const imageUrl = buildAbsoluteImageUrl\(image\.value\.public_url,\s*origin\)/);
+  assert.match(view, /const imageForCopy = \{ \.\.\.image\.value, public_url: imageUrl \}/);
+  assert.match(view, /buildMarkdown\(imageForCopy\)/);
+  assert.match(view, /buildHtml\(imageForCopy\)/);
 });
 
 test('PublicImageView renders a read-only map when coordinates exist', () => {

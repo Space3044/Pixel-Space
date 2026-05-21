@@ -40,6 +40,7 @@ test('images.api exposes admin update and delete helpers', () => {
 });
 
 test('ImageLightbox provides edit, delete, original download, copy links and map management UI', () => {
+  assert.match(lightbox, /import \{[^}]*buildAbsoluteImageUrl[^}]*\} from '\.\/image-links'/s);
   assert.match(lightbox, /import ReadOnlyMap from '\.\/ReadOnlyMap\.vue'/);
   assert.match(lightbox, /updateImage/);
   assert.match(lightbox, /deleteImage/);
@@ -120,6 +121,11 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /\/api\/original\/\$\{encodeURIComponent\(image\.key\)\}/);
   assert.match(lightbox, /buildMarkdown/);
   assert.match(lightbox, /buildHtml/);
+  assert.match(lightbox, /const imageUrl = buildAbsoluteImageUrl\(props\.image\.public_url,\s*origin\)/);
+  assert.match(lightbox, /const imageForCopy = \{ \.\.\.props\.image, public_url: imageUrl \}/);
+  assert.match(lightbox, /\{ label: '图片直链', value: imageUrl \}/);
+  assert.match(lightbox, /buildMarkdown\(imageForCopy\)/);
+  assert.match(lightbox, /buildHtml\(imageForCopy\)/);
   assert.match(lightbox, /confirm\('确认删除这张图片？'\)/);
   assert.doesNotMatch(lightbox, /内容安全/);
   assert.match(lightbox, /class="image-canvas"\s+:class="\{ 'has-drawer': detailsOpen \}"/);

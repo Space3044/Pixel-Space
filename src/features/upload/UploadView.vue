@@ -7,7 +7,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
-import { buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
+import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from './map-style';
 import { previewAiAnnotation } from './ai-preview.api';
@@ -117,14 +117,9 @@ const statusLabel = computed(() => {
   return '等待选择图片';
 });
 
-const absoluteUrl = (url: string): string => {
-  if (!origin) return url;
-  return new URL(url, origin).toString();
-};
-
 const uploadResultLinks = computed(() => {
   if (!uploadResult.value) return [];
-  const imageUrl = absoluteUrl(uploadResult.value.public_url);
+  const imageUrl = buildAbsoluteImageUrl(uploadResult.value.public_url, origin);
   const imageForCopy = { ...uploadResult.value, public_url: imageUrl };
   return [
     { label: '图片直链', value: imageUrl },

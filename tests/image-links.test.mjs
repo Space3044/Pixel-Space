@@ -4,6 +4,7 @@ import {
   buildHtml,
   buildPublicPageUrl,
 } from '../src/features/images/image-links.ts';
+import * as imageLinks from '../src/features/images/image-links.ts';
 
 const test = (name, fn) => {
   try {
@@ -53,6 +54,20 @@ test('buildHtml escapes quotes and angle brackets in title and url', () => {
       height: 100,
     }),
     '<img src="https://x/y?q=&quot;z&quot;" alt="A &quot;quote&quot; &lt;tag&gt;" width="100" height="100" />',
+  );
+});
+
+test('buildAbsoluteImageUrl adds origin to relative image urls', () => {
+  assert.equal(
+    imageLinks.buildAbsoluteImageUrl('/api/public/abc.webp', 'https://imgbed.example.com'),
+    'https://imgbed.example.com/api/public/abc.webp',
+  );
+});
+
+test('buildAbsoluteImageUrl keeps absolute image urls unchanged', () => {
+  assert.equal(
+    imageLinks.buildAbsoluteImageUrl('https://cdn.example.com/img/abc.webp', 'https://imgbed.example.com'),
+    'https://cdn.example.com/img/abc.webp',
   );
 });
 

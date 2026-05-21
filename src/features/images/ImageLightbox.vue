@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import type { ImageRecord } from './image.types';
-import { buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
+import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 import { deleteImage, updateImage } from './images.api';
 
@@ -42,6 +42,7 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
 const copied = ref(false);
 const copiedText = ref('');
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
+const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
 const detailsOpen = ref(false);
 const aiEditOpen = ref(false);
@@ -64,7 +65,6 @@ const editForm = reactive({
 
 const publicPageUrl = computed(() => {
   if (!props.image) return '';
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return buildPublicPageUrl(props.image, origin);
 });
 
@@ -77,10 +77,12 @@ const originalUrl = computed(() => {
 
 const linkRows = computed(() => {
   if (!props.image) return [];
+  const imageUrl = buildAbsoluteImageUrl(props.image.public_url, origin);
+  const imageForCopy = { ...props.image, public_url: imageUrl };
   return [
-    { label: '图片直链', value: props.image.public_url },
-    { label: 'Markdown', value: buildMarkdown(props.image) },
-    { label: 'HTML', value: buildHtml(props.image) },
+    { label: '图片直链', value: imageUrl },
+    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
+    { label: 'HTML', value: buildHtml(imageForCopy) },
     { label: '公开页', value: publicPageUrl.value },
   ];
 });

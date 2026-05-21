@@ -9,6 +9,12 @@ const escapeAttr = (s: string): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+export function buildAbsoluteImageUrl(url: string, origin: string): string {
+  const trimmed = url.trim();
+  if (!origin || !trimmed) return trimmed;
+  return new URL(trimmed, origin).toString();
+}
+
 export function buildMarkdown(image: Pick<ImageRecord, 'title' | 'public_url'>): string {
   return `![${stripBrackets(image.title ?? '')}](${image.public_url})`;
 }

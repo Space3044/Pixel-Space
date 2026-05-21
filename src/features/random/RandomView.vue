@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
-import { buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
+import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
 import { listImages } from '@/features/images/images.api';
 import ReadOnlyMap from '@/features/images/ReadOnlyMap.vue';
 
@@ -102,10 +102,12 @@ const locationName = computed(() => image.value?.location_name?.trim() || '未�
 const linkRows = computed(() => {
   const current = image.value;
   if (!current) return [];
+  const imageUrl = buildAbsoluteImageUrl(current.public_url, origin);
+  const imageForCopy = { ...current, public_url: imageUrl };
   return [
-    { label: '图片直链', value: current.public_url },
-    { label: 'Markdown', value: buildMarkdown(current) },
-    { label: 'HTML', value: buildHtml(current) },
+    { label: '图片直链', value: imageUrl },
+    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
+    { label: 'HTML', value: buildHtml(imageForCopy) },
     { label: '公开页', value: buildPublicPageUrl(current, origin) },
   ];
 });

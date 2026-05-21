@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { ImageRecord } from './image.types';
-import { buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
+import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
 import { fetchImage } from './images.api';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 
@@ -14,6 +14,7 @@ const route = useRoute();
 const image = ref<ImageRecord | null>(null);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
+const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
 const ensureMeta = (property: string, content: string) => {
   let meta = document.head.querySelector<HTMLMetaElement>(`meta[property="${property}"]`);
@@ -26,7 +27,7 @@ const ensureMeta = (property: string, content: string) => {
 };
 
 const updateOpenGraph = (image: ImageRecord) => {
-  ensureMeta('og:image', image.public_url);
+  ensureMeta('og:image', buildAbsoluteImageUrl(image.public_url, origin));
   ensureMeta('og:title', image.title || 'Pixel Space 图片');
   ensureMeta('og:description', image.caption || image.location_name || 'Pixel Space 公开图片');
 };
@@ -43,13 +44,13 @@ onMounted(async () => {
   }
 });
 
-const origin = typeof window !== 'undefined' ? window.location.origin : '';
-
 const linkRows = computed(() => {
   if (!image.value) return [];
+  const imageUrl = buildAbsoluteImageUrl(image.value.public_url, origin);
+  const imageForCopy = { ...image.value, public_url: imageUrl };
   return [
-    { label: 'Markdown', value: buildMarkdown(image.value) },
-    { label: 'HTML', value: buildHtml(image.value) },
+    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
+    { label: 'HTML', value: buildHtml(imageForCopy) },
     { label: '公开页直链', value: buildPublicPageUrl(image.value, origin) },
   ];
 });
