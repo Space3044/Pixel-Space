@@ -18,6 +18,8 @@ for (const path of [
   './public-image-view.test.mjs',
   './image-object.test.mjs',
   './random-view.test.mjs',
+  './geocode-api.test.mjs',
+  './location-search-ui.test.mjs',
 ]) {
   await import(path);
 }

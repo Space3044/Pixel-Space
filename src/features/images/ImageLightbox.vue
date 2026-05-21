@@ -2,7 +2,9 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import type { ImageRecord } from './image.types';
 import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
+import LocationSearch from './LocationSearch.vue';
 import ReadOnlyMap from './ReadOnlyMap.vue';
+import type { GeocodeResult } from './geocode.api';
 import { deleteImage, updateImage } from './images.api';
 
 const props = defineProps<{ open: boolean; image?: ImageRecord | null }>();
@@ -287,6 +289,12 @@ const cancelLocationEditor = () => {
 const updateLocationFromMap = (coords: { lat: number; lng: number }) => {
   editForm.location_lat = coords.lat;
   editForm.location_lng = coords.lng;
+};
+
+const applyLocationSearchResult = (result: GeocodeResult) => {
+  editForm.location_name = result.name;
+  editForm.location_lat = result.lat;
+  editForm.location_lng = result.lng;
 };
 
 const saveLocation = async () => {
@@ -693,6 +701,7 @@ onBeforeUnmount(() => {
                   />
 
                   <form v-if="locationEditOpen" class="location-edit-form" @submit.prevent="saveLocation">
+                    <LocationSearch @select="applyLocationSearchResult" />
                     <label class="edit-field">
                       <span>位置名</span>
                       <input v-model="editForm.location_name" type="text" />
