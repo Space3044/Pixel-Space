@@ -58,6 +58,9 @@ const meta = reactive<UploadMeta>({
   location_lng: null,
   tags: '',
   search_content: '',
+  dominant_color: '',
+  palette: '',
+  composition: '',
   ai_status: 'pending',
 });
 
@@ -252,6 +255,9 @@ const resetStateForFile = (file: File) => {
   meta.location_name = '';
   meta.tags = '';
   meta.search_content = '';
+  meta.dominant_color = '';
+  meta.palette = '';
+  meta.composition = '';
   meta.ai_status = 'pending';
   setCoordinates(null, null, false);
   setPreviewUrl(file);
@@ -276,6 +282,9 @@ const clearSelection = () => {
   meta.location_name = '';
   meta.tags = '';
   meta.search_content = '';
+  meta.dominant_color = '';
+  meta.palette = '';
+  meta.composition = '';
   meta.ai_status = 'pending';
   setCoordinates(null, null, false);
   setPreviewUrl(null);
@@ -358,6 +367,9 @@ const runAiPreview = async (file = compressedFile.value) => {
     meta.caption = result.caption;
     meta.tags = result.tags.join(', ');
     meta.search_content = result.search_content;
+    meta.dominant_color = result.dominant_color;
+    meta.palette = result.palette.join(', ');
+    meta.composition = result.composition;
     meta.ai_status = 'done';
   } catch (error) {
     if (requestId !== aiPreviewRequestId) return;
@@ -692,6 +704,30 @@ onBeforeUnmount(() => {
                   placeholder="用逗号分隔，例如：猫, 夜景"
                   :disabled="!hasFile"
                 />
+              </label>
+              <label class="field">
+                <span class="field-label">主色调</span>
+                <input
+                  v-model="meta.dominant_color"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="例如：暮光橙 #F59E0B"
+                  :disabled="!hasFile"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">色板</span>
+                <input
+                  v-model="meta.palette"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="用逗号分隔，例如：#F59E0B, #0F172A"
+                  :disabled="!hasFile"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">构图</span>
+                <textarea v-model="meta.composition" rows="2" class="cyber-input" :disabled="!hasFile"></textarea>
               </label>
               <label class="field">
                 <span class="field-label">搜索文本</span>

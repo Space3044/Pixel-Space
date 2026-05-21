@@ -3,6 +3,9 @@ export interface AiPreviewResult {
   caption: string;
   tags: string[];
   search_content: string;
+  dominant_color: string;
+  palette: string[];
+  composition: string;
 }
 
 export async function previewAiAnnotation(image: File): Promise<AiPreviewResult> {

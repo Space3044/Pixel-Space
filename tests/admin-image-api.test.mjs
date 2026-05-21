@@ -82,6 +82,9 @@ const imageRow = {
   exif_shutter: '1/125',
   exif_focal_length: 40,
   tags_json: null,
+  dominant_color: '深蓝色 #0F172A',
+  color_palette_json: '["#0F172A","#F59E0B"]',
+  composition: '中心构图',
   ai_status: 'pending',
   ai_error: null,
   ai_attempts: 0,
@@ -112,6 +115,9 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
         location_lat: 31.2304,
         location_lng: 121.4737,
         tags: '猫, 城市, 夜景',
+        dominant_color: '暖橙色 #F59E0B',
+        palette: '#F59E0B, #0F172A',
+        composition: '三分法构图',
       }),
     }),
   });
@@ -127,12 +133,18 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.equal(data.original_filename, 'cat.jpg');
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
+  assert.equal(data.dominant_color, '深蓝色 #0F172A');
+  assert.equal(data.color_palette_json, '["#0F172A","#F59E0B"]');
+  assert.equal(data.composition, '中心构图');
   assert.equal('ai_proxy_url' in data, false);
   assert.equal('ai_model' in data, false);
   assert.equal(calls.updates.length, 1);
   assert.match(calls.updates[0].sql, /\btitle\b/i);
   assert.match(calls.updates[0].sql, /\blocation_lat\b/i);
   assert.match(calls.updates[0].sql, /\btags_json\b/i);
+  assert.match(calls.updates[0].sql, /\bdominant_color\b/i);
+  assert.match(calls.updates[0].sql, /\bcolor_palette_json\b/i);
+  assert.match(calls.updates[0].sql, /\bcomposition\b/i);
   assert.deepEqual(calls.updates[0].values, [
     '新标题',
     null,
@@ -140,6 +152,9 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
     31.2304,
     121.4737,
     '["猫","城市","夜景"]',
+    '暖橙色 #F59E0B',
+    '["#F59E0B","#0F172A"]',
+    '三分法构图',
     'img-key',
   ]);
 });
@@ -158,6 +173,10 @@ await test('PATCH /api/admin/image/:key rejects invalid coordinates before updat
         location_name: '上海',
         location_lat: 120,
         location_lng: 121.4737,
+        tags: '猫',
+        dominant_color: '暖橙色 #F59E0B',
+        palette: '#F59E0B',
+        composition: '三分法构图',
       }),
     }),
   });

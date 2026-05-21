@@ -108,6 +108,12 @@ test('upload page runs AI preview after compression and keeps fields editable', 
   assert.match(view, /重新 AI 分析/);
   assert.match(view, /v-model="meta\.tags"/);
   assert.match(view, /v-model="meta\.search_content"/);
+  assert.match(view, /v-model="meta\.dominant_color"/);
+  assert.match(view, /v-model="meta\.palette"/);
+  assert.match(view, /v-model="meta\.composition"/);
+  assert.match(view, /meta\.dominant_color\s*=\s*result\.dominant_color/);
+  assert.match(view, /meta\.palette\s*=\s*result\.palette\.join\(', '\)/);
+  assert.match(view, /meta\.composition\s*=\s*result\.composition/);
   assert.doesNotMatch(view, /v-model="meta\.ocr_text"/);
   assert.doesNotMatch(view, /<span class="field-label">OCR<\/span>/);
   assert.match(view, /meta\.ai_status\s*=\s*'done'/);

@@ -1,11 +1,11 @@
 import type { Env } from '../../../types';
 import { badRequest, json, notFound, serverError } from '../../../_shared/http';
 import type { ImageRow } from '../../../_shared/images';
-import { normalizeTagsJson, rowToRecord } from '../../../_shared/images';
+import { normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../../../_shared/images';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 
 const DETAIL_SQL = `
-SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, ai_status, ai_error, ai_attempts, ai_finished_at
+SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at
 FROM images
 WHERE key = ?
 `;
@@ -24,6 +24,9 @@ SET title = ?,
     location_lat = ?,
     location_lng = ?,
     tags_json = ?,
+    dominant_color = ?,
+    color_palette_json = ?,
+    composition = ?,
     updated_at = datetime('now')
 WHERE key = ?
 `;
@@ -44,6 +47,9 @@ interface EditablePayload {
   location_lat: number | null;
   location_lng: number | null;
   tags_json: string | null;
+  dominant_color: string | null;
+  color_palette_json: string | null;
+  composition: string | null;
 }
 
 const stringOrNull = (value: unknown): string | null => {
@@ -81,6 +87,9 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
     location_lat: locationLat,
     location_lng: locationLng,
     tags_json: normalizeTagsJson(raw.tags),
+    dominant_color: stringOrNull(raw.dominant_color),
+    color_palette_json: normalizeColorPaletteJson(raw.palette),
+    composition: stringOrNull(raw.composition),
   };
 };
 
@@ -102,6 +111,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
         payload.location_lat,
         payload.location_lng,
         payload.tags_json,
+        payload.dominant_color,
+        payload.color_palette_json,
+        payload.composition,
         key,
       )
       .run();

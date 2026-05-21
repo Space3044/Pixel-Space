@@ -10,6 +10,9 @@ export interface AiPreviewResult {
   caption: string;
   tags: string[];
   search_content: string;
+  dominant_color: string;
+  palette: string[];
+  composition: string;
 }
 
 interface AnalyzeImageInput {
@@ -25,14 +28,15 @@ const AI_SYSTEM_PROMPT = `# 图片结构化分析专家
 
 ## 必须覆盖的分析维度（内部完成，不输出）
 
-在生成最终 JSON 之前，你必须在内部完成以下 6 个维度的分析：
+在生成最终 JSON 之前，你必须在内部完成以下 7 个维度的分析：
 
 1. **主体识别**：图片中最核心的视觉对象是什么（物、人、场景）？
 2. **场景与环境**：背景、空间逻辑、前景 / 中景 / 背景关系。
-3. **视觉风格与颜色**：整体色调、饱和度、冷暖、光影、构图和情绪氛围。
+3. **视觉风格与颜色**：整体色调、主色调、辅助色、饱和度、冷暖、光影、构图和情绪氛围。
 4. **标题与描述构思**：从画面可见信息里提炼一个有画面感的摄影作品标题，并写出自然、具体、不空泛的描述。
 5. **可检索特征**：适合作为标签和搜索词的关键词，覆盖主体、场景、色彩、风格、情绪、构图、材质等。
-6. **搜索用词**：将上述特征转化为空格分隔的关键词集合，包含必要同义词、上位词和相关风格词。
+6. **构图判断**：概括画面构图方式，例如三分法、中心构图、对称构图、引导线、前景框架、留白、俯拍或仰拍等。
+7. **搜索用词**：将上述特征转化为空格分隔的关键词集合，包含必要同义词、上位词和相关风格词。
 
 ## 输出 Schema（严格遵守）
 
@@ -41,7 +45,10 @@ const AI_SYSTEM_PROMPT = `# 图片结构化分析专家
   "title": "string",
   "caption": "string",
   "tags": ["string"],
-  "search_content": "string"
+  "search_content": "string",
+  "dominant_color": "string",
+  "palette": ["string"],
+  "composition": "string"
 }
 \`\`\`
 
@@ -51,6 +58,9 @@ const AI_SYSTEM_PROMPT = `# 图片结构化分析专家
 - **caption**：1 到 2 句，约 35 到 90 个中文。描述主体、环境、构图、光线、色彩和情绪，可以有轻微审美表达，但必须来自画面可见信息，不编造具体地点、人物身份、事件或未显示细节。
 - **tags**：6 到 10 个中文短标签，覆盖主体、场景、色彩、风格、情绪、构图 / 材质等维度。标签要具体、可搜索、少重复，避免只写“好看”“照片”“图片”这类泛词。示例：["蓝天", "山脉", "风景摄影", "冷色调", "宁静", "远景构图"]。
 - **search_content**：用于搜索引擎的关键词合集，空格分隔，不要写成句子。包含标题核心词、主体词、同义词（如“女孩”→“少女”）、上位词（如“橘猫”→“猫 动物 宠物”）、场景词、色彩词、风格词、情绪词和构图词。关键词去重，不要使用逗号、句号或换行。
+- **dominant_color**：主色调，使用“中文色名 + HEX”的形式，例如“暮光橙 #F59E0B”。HEX 必须是 6 位大写格式。
+- **palette**：3 到 6 个代表性色板 HEX，从画面主要颜色中提取，按视觉占比从高到低排列。每项必须是 6 位大写 HEX，例如 ["#0F172A", "#F59E0B", "#F8FAFC"]。
+- **composition**：一句中文概括构图，不超过 40 个中文。说明主体位置、空间关系或构图方式，不编造画面外信息。
 
 ## 输出要求（绝对禁止违反）
 
@@ -62,7 +72,7 @@ const AI_SYSTEM_PROMPT = `# 图片结构化分析专家
 
 ## 工作流程
 
-- 用户附上图片后，你在内部完成 6 个维度的分析（不输出）。
+- 用户附上图片后，你在内部完成 7 个维度的分析（不输出）。
 - 直接输出符合上述 Schema 的 JSON 对象。
 - 结束。
 
@@ -73,7 +83,10 @@ const AI_SYSTEM_PROMPT = `# 图片结构化分析专家
 - ❌ title 太直白、超过 10 字或使用文件名。
 - ❌ caption 只有几个词，或包含编造的细节。
 - ❌ tags 数量少于 6 或多于 10，或不覆盖要求维度。
-- ❌ search_content 写成完整句子、包含标点、重复堆词。`;
+- ❌ search_content 写成完整句子、包含标点、重复堆词。
+- ❌ dominant_color 缺少中文色名或 HEX。
+- ❌ palette 少于 3 个颜色，或输出非 HEX 颜色。
+- ❌ composition 写成泛泛评价，没有说明构图。`;
 
 const AI_USER_PROMPT = '请分析这张图片，直接输出符合上述 Schema 的 JSON 对象。';
 
@@ -129,6 +142,22 @@ const normalizeTags = (value: unknown): string[] => {
   return [...new Set(tags)];
 };
 
+const normalizePalette = (value: unknown): string[] => {
+  const colors = Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : typeof value === 'string'
+      ? value
+          .split(/[,，\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+
+  return [...new Set(colors)];
+};
+
 const normalizeAiResult = (value: unknown): AiPreviewResult => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('ai_response_invalid_json');
@@ -140,12 +169,18 @@ const normalizeAiResult = (value: unknown): AiPreviewResult => {
   const tags = normalizeTags(data.tags);
   const searchContent =
     stringValue(data.search_content) || [title, caption, ...tags].filter(Boolean).join(' ');
+  const dominantColor = stringValue(data.dominant_color);
+  const palette = normalizePalette(data.palette);
+  const composition = stringValue(data.composition);
 
   return {
     title,
     caption,
     tags,
     search_content: searchContent,
+    dominant_color: dominantColor,
+    palette,
+    composition,
   };
 };
 

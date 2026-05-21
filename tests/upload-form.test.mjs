@@ -34,6 +34,12 @@ test('buildUploadFormData includes files, metadata, EXIF, and compressed dimensi
       location_name: '上海',
       location_lat: 31.2304,
       location_lng: 121.4737,
+      tags: '猫, 夜景',
+      search_content: '猫 夜景 HELLO',
+      dominant_color: '暖橙色 #F59E0B',
+      palette: '#F59E0B, #0F172A',
+      composition: '三分法构图',
+      ai_status: 'done',
     },
     dimensions: {
       width: 1280,
@@ -51,5 +57,9 @@ test('buildUploadFormData includes files, metadata, EXIF, and compressed dimensi
   assert.equal(compressedField.size, compressed.size);
   assert.deepEqual(JSON.parse(String(formData.get('dimensions'))), { width: 1280, height: 853 });
   assert.equal(JSON.parse(String(formData.get('exif'))).focal_length, 40);
-  assert.equal(JSON.parse(String(formData.get('meta'))).location_name, '上海');
+  const meta = JSON.parse(String(formData.get('meta')));
+  assert.equal(meta.location_name, '上海');
+  assert.equal(meta.dominant_color, '暖橙色 #F59E0B');
+  assert.equal(meta.palette, '#F59E0B, #0F172A');
+  assert.equal(meta.composition, '三分法构图');
 });

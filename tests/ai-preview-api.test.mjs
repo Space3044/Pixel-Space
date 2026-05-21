@@ -61,6 +61,9 @@ await test('POST /api/ai/preview calls CPA with configured URL and model and ret
                 caption: '一只猫站在夜色里。',
                 tags: ['猫', '夜景'],
                 search_content: '猫 夜景 HELLO',
+                dominant_color: '深蓝色 #0F172A',
+                palette: ['#0F172A', '#F59E0B', '#F8FAFC'],
+                composition: '主体位于画面中央，背景以暗部留白突出夜色氛围。',
               }),
             },
           },
@@ -84,6 +87,11 @@ await test('POST /api/ai/preview calls CPA with configured URL and model and ret
   assert.match(body.messages[0].content, /画面感/);
   assert.match(body.messages[0].content, /主体、环境、构图、光线、色彩和情绪/);
   assert.match(body.messages[0].content, /主体、场景、色彩、风格、情绪、构图/);
+  assert.match(body.messages[0].content, /dominant_color/);
+  assert.match(body.messages[0].content, /palette/);
+  assert.match(body.messages[0].content, /composition/);
+  assert.match(body.messages[0].content, /主色调/);
+  assert.match(body.messages[0].content, /色板/);
   assert.match(body.messages[0].content, /上位词/);
   assert.match(body.messages[0].content, /去重/);
   assert.match(body.messages[0].content, /只输出一个合法的 JSON 对象/);
@@ -99,6 +107,9 @@ await test('POST /api/ai/preview calls CPA with configured URL and model and ret
     caption: '一只猫站在夜色里。',
     tags: ['猫', '夜景'],
     search_content: '猫 夜景 HELLO',
+    dominant_color: '深蓝色 #0F172A',
+    palette: ['#0F172A', '#F59E0B', '#F8FAFC'],
+    composition: '主体位于画面中央，背景以暗部留白突出夜色氛围。',
   });
 });
 

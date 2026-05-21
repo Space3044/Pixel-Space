@@ -19,6 +19,9 @@ const EXPECTED_RECORD_KEYS = [
   'ai_status',
   'bytes_compressed',
   'caption',
+  'color_palette_json',
+  'composition',
+  'dominant_color',
   'exif_aperture',
   'exif_camera',
   'exif_focal_length',
@@ -58,6 +61,9 @@ const sampleRow = {
   exif_shutter: '1/125',
   exif_focal_length: 40,
   tags_json: null,
+  dominant_color: '暖橙色 #F59E0B',
+  color_palette_json: '["#F59E0B","#0F172A"]',
+  composition: '中心构图',
   search_content: null,
   ai_status: 'pending',
   ai_error: null,
@@ -114,6 +120,9 @@ await test('GET /api/list returns ImageRecord[] with expected field set', async 
   assert.equal('ai_proxy_url' in data[0], false);
   assert.equal('ai_model' in data[0], false);
   assert.equal(data[0].tags_json, null);
+  assert.equal(data[0].dominant_color, '暖橙色 #F59E0B');
+  assert.equal(data[0].color_palette_json, '["#F59E0B","#0F172A"]');
+  assert.equal(data[0].composition, '中心构图');
   assert.equal('ocr_text' in data[0], false);
 });
 
@@ -139,7 +148,9 @@ await test('GET /api/list searches title caption and location by q parameter', a
   assert.match(calls.prepared[0], /\bcaption\b/i);
   assert.match(calls.prepared[0], /\blocation_name\b/i);
   assert.match(calls.prepared[0], /\bsearch_content\b/i);
-  assert.deepEqual(calls.binds[0], ['%上海%', '%上海%', '%上海%', '%上海%']);
+  assert.match(calls.prepared[0], /\bdominant_color\b/i);
+  assert.match(calls.prepared[0], /\bcomposition\b/i);
+  assert.deepEqual(calls.binds[0], ['%上海%', '%上海%', '%上海%', '%上海%', '%上海%', '%上海%']);
 });
 
 await test('GET /api/image/:key returns single ImageRecord', async () => {

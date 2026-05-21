@@ -21,6 +21,8 @@ const migration4Path = join(process.cwd(), 'db/migrations/0004_add_ai_columns.sq
 const migration4Sql = existsSync(migration4Path) ? readFileSync(migration4Path, 'utf8') : '';
 const migration5Path = join(process.cwd(), 'db/migrations/0005_add_original_filename.sql');
 const migration5Sql = existsSync(migration5Path) ? readFileSync(migration5Path, 'utf8') : '';
+const migration6Path = join(process.cwd(), 'db/migrations/0006_add_ai_visual_fields.sql');
+const migration6Sql = existsSync(migration6Path) ? readFileSync(migration6Path, 'utf8') : '';
 
 const stripComments = (s) =>
   s
@@ -32,7 +34,7 @@ const stripComments = (s) =>
     .join('\n');
 
 const sqlBody = stripComments(sql).toLowerCase();
-const allSqlBody = stripComments(`${sql}\n${migration2Sql}\n${migration3Sql}\n${migration4Sql}\n${migration5Sql}`).toLowerCase();
+const allSqlBody = stripComments(`${sql}\n${migration2Sql}\n${migration3Sql}\n${migration4Sql}\n${migration5Sql}\n${migration6Sql}`).toLowerCase();
 
 test('migration creates the images table', () => {
   assert.match(sqlBody, /create\s+table\s+images/);
@@ -129,4 +131,13 @@ test('migration adds AI result fields after the init migration', () => {
 test('migration preserves the original uploaded filename after the init migration', () => {
   assert.match(allSqlBody, /\boriginal_filename\b/);
   assert.doesNotMatch(sqlBody, /\boriginal_filename\b/);
+});
+
+test('migration adds AI visual analysis fields after the init migration', () => {
+  const migration6Body = stripComments(migration6Sql).toLowerCase();
+
+  for (const col of ['dominant_color', 'color_palette_json', 'composition']) {
+    assert.match(migration6Body, new RegExp(`\\b${col}\\b`), `column ${col} missing`);
+    assert.doesNotMatch(sqlBody, new RegExp(`\\b${col}\\b`), `${col} should not be in init migration`);
+  }
 });

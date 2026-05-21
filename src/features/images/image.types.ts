@@ -18,6 +18,9 @@ export interface ImageRecord {
   exif_shutter: string | null;
   exif_focal_length: number | null;
   tags_json: string | null;
+  dominant_color: string | null;
+  color_palette_json: string | null;
+  composition: string | null;
   ai_status: string;
   ai_error: string | null;
   ai_attempts: number;

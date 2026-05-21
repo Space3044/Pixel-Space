@@ -1,7 +1,7 @@
 import type { Env } from '../types';
 import { badRequest, json, serverError } from '../_shared/http';
 import type { ImageRow } from '../_shared/images';
-import { normalizeTagsJson, rowToRecord } from '../_shared/images';
+import { normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../_shared/images';
 import { archiveOriginalToTelegram } from '../_shared/telegram';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
@@ -30,13 +30,16 @@ INSERT INTO images (
   exif_focal_length,
   tags_json,
   search_content,
+  dominant_color,
+  color_palette_json,
+  composition,
   ai_status,
   tg_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
-  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE key = ?';
+  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE key = ?';
 
 const UPDATE_TG_DONE_SQL = `
 UPDATE images
@@ -65,6 +68,9 @@ interface UploadMeta {
   location_lng: number | null;
   tags_json: string | null;
   search_content: string | null;
+  dominant_color: string | null;
+  color_palette_json: string | null;
+  composition: string | null;
   ai_status: 'pending' | 'done' | 'failed';
 }
 
@@ -136,6 +142,9 @@ const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => ({
   location_lng: normalizeCoordinate(raw.location_lng, -180, 180),
   tags_json: normalizeTagsJson(raw.tags),
   search_content: stringOrNull(raw.search_content),
+  dominant_color: stringOrNull(raw.dominant_color),
+  color_palette_json: normalizeColorPaletteJson(raw.palette),
+  composition: stringOrNull(raw.composition),
   ai_status: normalizeAiStatus(raw.ai_status),
 });
 
@@ -227,6 +236,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         exif.focal_length,
         meta.tags_json,
         meta.search_content,
+        meta.dominant_color,
+        meta.color_palette_json,
+        meta.composition,
         meta.ai_status,
         'pending',
       )

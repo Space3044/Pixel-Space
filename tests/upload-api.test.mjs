@@ -70,6 +70,9 @@ const makeUploadRequest = (overrides = {}) => {
       location_lng: 121.4737,
       tags: '猫, 夜景',
       search_content: '猫 夜景 HELLO',
+      dominant_color: '深蓝色 #0F172A',
+      palette: '#0F172A, #F59E0B',
+      composition: '主体居中，暗色背景突出轮廓。',
       ai_status: 'done',
       ...(overrides.meta ?? {}),
     }),
@@ -137,7 +140,10 @@ const makeEnv = () => {
                   exif_shutter: inserted?.[18] ?? null,
                   exif_focal_length: inserted?.[19] ?? null,
                   tags_json: inserted?.[20] ?? null,
-                  ai_status: inserted?.[22] ?? 'pending',
+                  dominant_color: inserted?.[22] ?? null,
+                  color_palette_json: inserted?.[23] ?? null,
+                  composition: inserted?.[24] ?? null,
+                  ai_status: inserted?.[25] ?? 'pending',
                   ai_error: null,
                   ai_attempts: 0,
                   ai_finished_at: null,
@@ -185,6 +191,9 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
     'ai_status',
     'bytes_compressed',
     'caption',
+    'color_palette_json',
+    'composition',
+    'dominant_color',
     'exif_aperture',
     'exif_camera',
     'exif_focal_length',
@@ -213,6 +222,9 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
   assert.equal(data.ai_status, 'done');
+  assert.equal(data.dominant_color, '深蓝色 #0F172A');
+  assert.equal(data.color_palette_json, '["#0F172A","#F59E0B"]');
+  assert.equal(data.composition, '主体居中，暗色背景突出轮廓。');
   assert.equal('ai_proxy_url' in data, false);
   assert.equal('ai_model' in data, false);
   assert.equal('ocr_text' in data, false);
@@ -228,6 +240,9 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.match(calls.insert.sql, /\bai_status\b/i);
   assert.match(calls.insert.sql, /\btags_json\b/i);
   assert.match(calls.insert.sql, /\bsearch_content\b/i);
+  assert.match(calls.insert.sql, /\bdominant_color\b/i);
+  assert.match(calls.insert.sql, /\bcolor_palette_json\b/i);
+  assert.match(calls.insert.sql, /\bcomposition\b/i);
   assert.match(calls.insert.sql, /\boriginal_filename\b/i);
   assert.doesNotMatch(calls.insert.sql, /\bocr_text\b/i);
   assert.doesNotMatch(calls.insert.sql, /\bai_proxy_url\b|\bai_model\b/i);
@@ -242,8 +257,11 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(calls.insert.values[19], 40);
   assert.equal(calls.insert.values[20], '["猫","夜景"]');
   assert.equal(calls.insert.values[21], '猫 夜景 HELLO');
-  assert.equal(calls.insert.values[22], 'done');
-  assert.equal(calls.insert.values[23], 'pending');
+  assert.equal(calls.insert.values[22], '深蓝色 #0F172A');
+  assert.equal(calls.insert.values[23], '["#0F172A","#F59E0B"]');
+  assert.equal(calls.insert.values[24], '主体居中，暗色背景突出轮廓。');
+  assert.equal(calls.insert.values[25], 'done');
+  assert.equal(calls.insert.values[26], 'pending');
   assert.equal(calls.selectedKey, data.key);
 });
 

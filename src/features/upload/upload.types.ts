@@ -17,6 +17,9 @@ export interface UploadMeta {
   location_lng: number | null;
   tags: string;
   search_content: string;
+  dominant_color: string;
+  palette: string;
+  composition: string;
   ai_status: 'pending' | 'done' | 'failed';
 }
 

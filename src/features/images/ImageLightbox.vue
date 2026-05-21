@@ -54,6 +54,9 @@ const editForm = reactive({
   title: '',
   caption: '',
   tags: '',
+  dominant_color: '',
+  palette: '',
+  composition: '',
   location_name: '',
   location_lat: '' as number | '',
   location_lng: '' as number | '',
@@ -150,6 +153,36 @@ const tagsTextFromImage = (image: ImageRecord | null | undefined): string => tag
 
 const aiTags = computed(() => tagsFromImage(props.image));
 
+const paletteFromImage = (image: ImageRecord | null | undefined): string[] => {
+  if (!image?.color_palette_json) return [];
+  try {
+    const parsed = JSON.parse(image.color_palette_json) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((color): color is string => typeof color === 'string')
+      .map((color) => color.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
+const paletteTextFromImage = (image: ImageRecord | null | undefined): string =>
+  paletteFromImage(image).join(', ');
+
+const parseDominantColor = (value: string | null | undefined): { name: string; hex: string } => {
+  const raw = value?.trim() ?? '';
+  const hex = raw.match(/#[0-9a-fA-F]{6}\b/)?.[0].toUpperCase() ?? '';
+  const name = hex ? raw.replace(new RegExp(hex, 'i'), '').trim() : raw;
+  return {
+    name: name || raw || '未记录',
+    hex,
+  };
+};
+
+const aiPalette = computed(() => paletteFromImage(props.image));
+const dominantColor = computed(() => parseDominantColor(props.image?.dominant_color));
+
 const hasCoordinates = computed(
   () => props.image?.location_lat != null && props.image?.location_lng != null,
 );
@@ -193,6 +226,9 @@ const resetForm = (image: ImageRecord | null | undefined) => {
   editForm.title = image?.title ?? '';
   editForm.caption = image?.caption ?? '';
   editForm.tags = tagsTextFromImage(image);
+  editForm.dominant_color = image?.dominant_color ?? '';
+  editForm.palette = paletteTextFromImage(image);
+  editForm.composition = image?.composition ?? '';
   editForm.location_name = image?.location_name ?? '';
   editForm.location_lat = image?.location_lat ?? '';
   editForm.location_lng = image?.location_lng ?? '';
@@ -221,6 +257,9 @@ const saveAiMetadata = async () => {
       location_lat: props.image.location_lat,
       location_lng: props.image.location_lng,
       tags: editForm.tags,
+      dominant_color: editForm.dominant_color,
+      palette: editForm.palette,
+      composition: editForm.composition,
     });
     emit('updated', updated);
     resetForm(updated);
@@ -260,6 +299,9 @@ const saveLocation = async () => {
       location_lat: editForm.location_lat === '' ? null : Number(editForm.location_lat),
       location_lng: editForm.location_lng === '' ? null : Number(editForm.location_lng),
       tags: tagsTextFromImage(props.image),
+      dominant_color: props.image.dominant_color ?? '',
+      palette: paletteTextFromImage(props.image),
+      composition: props.image.composition ?? '',
     });
     emit('updated', updated);
     resetForm(updated);
@@ -535,6 +577,41 @@ onBeforeUnmount(() => {
                       </div>
                       <p v-else class="item-description text-muted">暂无标签</p>
                     </div>
+                    <div class="detail-item">
+                      <span class="item-label">主色调</span>
+                      <span
+                        v-if="image.dominant_color"
+                        class="dominant-color-value"
+                        :title="dominantColor.hex || image.dominant_color"
+                      >
+                        <span
+                          v-if="dominantColor.hex"
+                          class="palette-chip dominant-color-chip"
+                          :style="{ backgroundColor: dominantColor.hex }"
+                          aria-hidden="true"
+                        />
+                        <span class="dominant-color-name">{{ dominantColor.name }}</span>
+                      </span>
+                      <span v-else class="item-value text-muted">未记录</span>
+                    </div>
+                    <div class="detail-item is-column">
+                      <span class="item-label">色板</span>
+                      <div v-if="aiPalette.length" class="palette-list">
+                        <span
+                          v-for="color in aiPalette"
+                          :key="color"
+                          class="palette-chip"
+                          :style="{ backgroundColor: color }"
+                          :title="color"
+                        />
+                      </div>
+                      <p v-else class="item-description text-muted">暂无色板</p>
+                    </div>
+                    <div class="detail-item is-column">
+                      <span class="item-label">构图</span>
+                      <p v-if="image.composition" class="item-description">{{ image.composition }}</p>
+                      <p v-else class="item-description text-muted">未记录</p>
+                    </div>
                   </div>
                   <form v-if="aiEditOpen" class="ai-edit-form" @submit.prevent="saveAiMetadata">
                     <label class="edit-field">
@@ -548,6 +625,18 @@ onBeforeUnmount(() => {
                     <label class="edit-field">
                       <span>标签</span>
                       <textarea v-model="editForm.tags" rows="2" placeholder="用逗号或换行分隔" />
+                    </label>
+                    <label class="edit-field">
+                      <span>主色调</span>
+                      <input v-model="editForm.dominant_color" type="text" placeholder="暮光橙 #F59E0B" />
+                    </label>
+                    <label class="edit-field">
+                      <span>色板</span>
+                      <textarea v-model="editForm.palette" rows="2" placeholder="用逗号或换行分隔 HEX" />
+                    </label>
+                    <label class="edit-field">
+                      <span>构图</span>
+                      <textarea v-model="editForm.composition" rows="2" />
                     </label>
                     <p v-if="actionError" class="action-error">{{ actionError }}</p>
                     <div class="edit-actions">
@@ -1135,6 +1224,45 @@ onBeforeUnmount(() => {
   color: rgb(165, 243, 252);
   font-size: 11px;
   font-weight: 700;
+}
+.dominant-color-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(229, 231, 235);
+}
+.dominant-color-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.palette-list {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.palette-list::-webkit-scrollbar {
+  display: none;
+}
+.palette-chip {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+.dominant-color-chip {
+  width: 18px;
+  height: 18px;
 }
 .text-truncate {
   overflow: hidden;

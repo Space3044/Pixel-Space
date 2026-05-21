@@ -22,6 +22,9 @@ export interface ImageRecord {
   exif_shutter: string | null;
   exif_focal_length: number | null;
   tags_json: string | null;
+  dominant_color: string | null;
+  color_palette_json: string | null;
+  composition: string | null;
   ai_status: string;
   ai_error: string | null;
   ai_attempts: number;
@@ -49,6 +52,9 @@ export interface ImageRow {
   exif_shutter: string | null;
   exif_focal_length: number | null;
   tags_json: string | null;
+  dominant_color: string | null;
+  color_palette_json: string | null;
+  composition: string | null;
   ai_status: string;
   ai_error: string | null;
   ai_attempts: number;
@@ -69,6 +75,22 @@ export const normalizeTagsJson = (value: unknown): string | null => {
       : [];
 
   return tags.length > 0 ? JSON.stringify([...new Set(tags)]) : null;
+};
+
+export const normalizeColorPaletteJson = (value: unknown): string | null => {
+  const colors = Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : typeof value === 'string'
+      ? value
+          .split(/[,，\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+
+  return colors.length > 0 ? JSON.stringify([...new Set(colors)]) : null;
 };
 
 export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
@@ -92,6 +114,9 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     exif_shutter: row.exif_shutter,
     exif_focal_length: row.exif_focal_length,
     tags_json: row.tags_json,
+    dominant_color: row.dominant_color,
+    color_palette_json: row.color_palette_json,
+    composition: row.composition,
     ai_status: row.ai_status,
     ai_error: row.ai_error,
     ai_attempts: row.ai_attempts,
