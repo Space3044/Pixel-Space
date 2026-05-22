@@ -108,6 +108,7 @@ test('keeps package scripts and dependencies minimal', () => {
     'exifr',
     'justified-layout',
     'maplibre-gl',
+    'three',
     'vue',
     'vue-router',
   ]);
@@ -118,6 +119,7 @@ test('keeps package scripts and dependencies minimal', () => {
     pkg.devDependencies['@cloudflare/workers-types'],
     '@cloudflare/workers-types must be installed from stage 4',
   );
+  assert.ok(pkg.devDependencies['@types/three'], '@types/three is needed by the Three.js globe');
   assert.match(read('wrangler.toml'), /PUBLIC_BASE_URL\s*=\s*"\/api\/public"/);
   assert.match(read('.gitignore'), /^\.dev\.vars$/m);
   assert.match(read('README.md'), /TG_BOT_TOKEN/);

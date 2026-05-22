@@ -1,277 +1,807 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import AppShell from '@/shared/ui/AppShell.vue';
-// 阶段 5/12 增强：从 GET /api/list 拉全部公开图，HoneycombCanvas 内部实现拖动平移、视口预加载、滚动加载更多
-// 阶段 12：键盘 F 全屏、双击切换全屏、点击单图弹出 lightbox
+import type { ImageRecord } from '@/features/images/image.types';
+import { listImages } from '@/features/images/images.api';
+import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from '@/features/upload/map-style';
+import WorldBoundaryGlobe from './WorldBoundaryGlobe.vue';
 
-const FA = {
-  images: { vb: '0 0 576 512', d: 'M160 32c-35.3 0-64 28.7-64 64V320c0 35.3 28.7 64 64 64H512c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64H160zM396 138.7l96 144c4.9 7.4 5.4 16.8 1.2 24.6S480.9 320 472 320H328 280 200c-9.2 0-17.6-5.3-21.6-13.6s-2.9-18.2 2.9-25.4l64-80c4.6-5.7 11.4-9 18.7-9s14.2 3.3 18.7 9l17.3 21.6 56-84C360.5 132 368 128 376 128s15.5 4 20 10.7zM192 128a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zM48 120c0-13.3-10.7-24-24-24S0 106.7 0 120V344c0 75.1 60.9 136 136 136H456c13.3 0 24-10.7 24-24s-10.7-24-24-24H136c-48.6 0-88-39.4-88-88V120z' },
-  expand: { vb: '0 0 448 512', d: 'M32 32C14.3 32 0 46.3 0 64v96c0 17.7 14.3 32 32 32s32-14.3 32-32V96h64c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zM64 352c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7 14.3 32 32 32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H64V352zM320 32c-17.7 0-32 14.3-32 32s14.3 32 32 32h64v64c0 17.7 14.3 32 32 32s32-14.3 32-32V64c0-17.7-14.3-32-32-32H320zM448 352c0-17.7-14.3-32-32-32s-32 14.3-32 32v64H320c-17.7 0-32 14.3-32 32s14.3 32 32 32h96c17.7 0 32-14.3 32-32V352z' },
-  hand: { vb: '0 0 512 512', d: 'M256 0c-25.3 0-47.2 14.7-57.6 36c-7-2.6-14.5-4-22.4-4c-35.3 0-64 28.7-64 64V261.7C82.5 252 64 226.2 64 196c0-17.7-14.3-32-32-32s-32 14.3-32 32c0 64.6 39.8 119.9 96.2 142.9c12.8 5.2 21.8 17.2 21.8 31V408c0 57.4 46.6 104 104 104h135.7c63 0 117.3-44.5 129.6-106.3l32.3-161.7c2.2-10.9 3.3-22 3.3-33.2c0-50.5-37.3-92.4-85.8-99.4c-3.7-31.7-30.7-56.4-63.3-56.4c-7.9 0-15.4 1.4-22.4 4C303.2 14.7 281.3 0 256 0zM240 96.1l0-.1V64c0-8.8 7.2-16 16-16s16 7.2 16 16V224c0 8.8 7.2 16 16 16s16-7.2 16-16V96c0-8.8 7.2-16 16-16s16 7.2 16 16V224c0 8.8 7.2 16 16 16s16-7.2 16-16V128c0-8.8 7.2-16 16-16c8.7 0 15.8 6.9 16 15.5V288c0 8.8 7.2 16 16 16s16-7.2 16-16V160c8.8 0 16 7.2 16 16v32c0 7.3-.7 14.6-2.2 21.7L427.9 391.5c-6.1 30.9-33.2 53.1-64.6 53.1H227.7c-30.8 0-56-24.7-56.7-55.3c19.4-11.5 32.6-32.6 33-56.9V196c0 17.7 14.3 32 32 32s32-14.3 32-32V96.1z' },
-  chevronUp: { vb: '0 0 512 512', d: 'M233.4 105.4c12.5-12.5 32.8-12.5 45.3 0l192 192c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L256 173.3 86.6 342.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l192-192z' },
-  chevronDown: { vb: '0 0 512 512', d: 'M201.4 374.6c12.5 12.5 32.8 12.5 45.3 0l160-160c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L224 306.7 86.6 169.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160z' },
-};
+interface LocatedImage extends ImageRecord {
+  location_lat: number;
+  location_lng: number;
+}
 
-const HEX_COLS = 16;
-const HEX_ROWS = 14;
-const TOTAL_HEX = HEX_COLS * HEX_ROWS;
+interface FootprintGroup {
+  key: string;
+  name: string;
+  lat: number;
+  lng: number;
+  cover: ImageRecord;
+  images: ImageRecord[];
+}
 
-const TINT_PALETTE = [
-  'from-neon-cyan/25 to-neon-cyan/10',
-  'from-neon-pink/25 to-neon-pink/10',
-  'from-neon-violet/25 to-neon-violet/10',
-  'from-neon-lime/25 to-neon-lime/10',
-  'from-sky-400/20 to-indigo-500/10',
-  'from-amber-400/20 to-rose-500/10',
-  'from-emerald-400/20 to-cyan-500/10',
-  'from-fuchsia-400/20 to-purple-500/10',
-];
+const DEFAULT_CENTER: [number, number] = [104.1954, 35.8617];
+const FLAT_ZOOM = 3;
+const FLAT_FOCUS_ZOOM = 8;
 
-const rows = computed(() =>
-  Array.from({ length: HEX_ROWS }, (_, rowIdx) => ({
-    idx: rowIdx,
-    offset: rowIdx % 2 === 1,
-    items: Array.from({ length: HEX_COLS }, (_, colIdx) => {
-      const seed = rowIdx * 73 + colIdx * 17;
-      return {
-        key: `${rowIdx}-${colIdx}`,
-        tint: TINT_PALETTE[seed % TINT_PALETTE.length],
-        rotate: ((seed % 5) - 2) * 0.4,
+const flatMapEl = ref<HTMLElement | null>(null);
+const loading = ref(false);
+const loadError = ref<string | null>(null);
+const images = ref<ImageRecord[]>([]);
+const activeFootprintKey = ref<string | null>(null);
+const hoveredFootprintKey = ref<string | null>(null);
+
+let flatMap: MapLibreMap | null = null;
+let maplibre: typeof import('maplibre-gl') | null = null;
+let maplibrePromise: Promise<typeof import('maplibre-gl')> | null = null;
+let flatMarkers: Marker[] = [];
+let flatMarkerElements = new Map<string, HTMLElement>();
+
+const isLocatedImage = (image: ImageRecord): image is LocatedImage =>
+  image.location_lat !== null && image.location_lng !== null
+  && Number.isFinite(image.location_lat) && Number.isFinite(image.location_lng);
+
+const coordinateLabel = (lat: number, lng: number) => `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+const locatedImages = computed(() => images.value.filter(isLocatedImage));
+const unlocatedCount = computed(() => Math.max(0, images.value.length - locatedImages.value.length));
+
+const footprints = computed(() => {
+  const groups = new Map<string, FootprintGroup>();
+
+  for (const image of locatedImages.value) {
+    const name = image.location_name?.trim() || coordinateLabel(image.location_lat, image.location_lng);
+    const key = `${name}|${image.location_lat.toFixed(4)}|${image.location_lng.toFixed(4)}`;
+    let group = groups.get(key);
+
+    if (!group) {
+      group = {
+        key,
+        name,
+        lat: image.location_lat,
+        lng: image.location_lng,
+        cover: image,
+        images: [],
       };
-    }),
-  }))
+      groups.set(key, group);
+    }
+
+    group.images.push(image);
+    if (!group.cover.caption && image.caption) group.cover = image;
+  }
+
+  return [...groups.values()].sort((a, b) =>
+    b.images.length - a.images.length || a.name.localeCompare(b.name, 'zh-CN'),
+  );
+});
+
+const visitedPlaces = computed(() => {
+  const names = footprints.value.map((footprint) => footprint.name.trim()).filter(Boolean);
+  return [...new Set(names)];
+});
+
+const visitedCoordinates = computed(() =>
+  footprints.value.map((footprint) => ({
+    lat: footprint.lat,
+    lng: footprint.lng,
+  })),
 );
 
-const tipsHidden = ref(false);
-const toggleTips = () => { tipsHidden.value = !tipsHidden.value; };
+const activeFootprint = computed(() =>
+  footprints.value.find((footprint) => footprint.key === activeFootprintKey.value) ?? footprints.value[0] ?? null,
+);
 
-const BG_ORBS = Array.from({ length: 6 }, (_, i) => ({
-  key: i,
-  left: `${(i * 17 + 7) % 90}%`,
-  top: `${(i * 23 + 11) % 80}%`,
-  size: 40 + (i % 3) * 20,
-  delay: `${i * 0.6}s`,
-}));
+const hoveredFootprint = computed(() =>
+  footprints.value.find((footprint) => footprint.key === hoveredFootprintKey.value) ?? null,
+);
 
-const handleKey = (e: KeyboardEvent) => {
-  const tag = (document.activeElement?.tagName || '').toUpperCase();
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-  if (e.key === 'h' || e.key === 'H') {
-    e.preventDefault();
-    toggleTips();
+const loadMaplibre = async () => {
+  maplibrePromise ??= import('maplibre-gl');
+  maplibre = await maplibrePromise;
+  return maplibre;
+};
+
+const clearFlatMarkers = () => {
+  for (const marker of flatMarkers) marker.remove();
+  flatMarkers = [];
+  flatMarkerElements = new Map<string, HTMLElement>();
+};
+
+const updateMarkerStyles = () => {
+  for (const [key, element] of flatMarkerElements.entries()) {
+    element.classList.toggle('is-active', key === activeFootprint.value?.key);
+    element.classList.toggle('is-hovered', key === hoveredFootprint.value?.key);
   }
 };
 
-onMounted(() => window.addEventListener('keydown', handleKey));
-onUnmounted(() => window.removeEventListener('keydown', handleKey));
+const focusFlatMapOn = (footprint: FootprintGroup, zoom = FLAT_FOCUS_ZOOM) => {
+  if (!flatMap) return;
+  flatMap.flyTo({
+    center: [footprint.lng, footprint.lat],
+    zoom: Math.max(flatMap.getZoom(), zoom),
+    speed: 0.8,
+  });
+};
+
+const previewFootprint = (footprint: FootprintGroup | null) => {
+  hoveredFootprintKey.value = footprint?.key ?? null;
+};
+
+const selectFootprint = (footprint: FootprintGroup) => {
+  activeFootprintKey.value = footprint.key;
+  focusFlatMapOn(footprint);
+};
+
+const createMarkerElement = (footprint: FootprintGroup) => {
+  const marker = document.createElement('button');
+  marker.type = 'button';
+  marker.className = 'footprint-marker';
+  marker.setAttribute('aria-label', `${footprint.name}，已点亮，${footprint.images.length} 张图片`);
+
+  const ring = document.createElement('span');
+  ring.className = 'footprint-marker-ring';
+  marker.appendChild(ring);
+
+  const core = document.createElement('span');
+  core.className = 'footprint-marker-core';
+  marker.appendChild(core);
+
+  const count = document.createElement('span');
+  count.className = 'footprint-marker-count';
+  count.textContent = String(footprint.images.length);
+  marker.appendChild(count);
+
+  marker.addEventListener('mouseenter', () => previewFootprint(footprint));
+  marker.addEventListener('mouseleave', () => previewFootprint(null));
+  marker.addEventListener('focus', () => previewFootprint(footprint));
+  marker.addEventListener('blur', () => previewFootprint(null));
+  marker.addEventListener('click', () => selectFootprint(footprint));
+
+  flatMarkerElements.set(footprint.key, marker);
+  return marker;
+};
+
+const createPopupNode = (footprint: FootprintGroup) => {
+  const root = document.createElement('article');
+  root.className = 'footprint-popup';
+
+  const image = document.createElement('img');
+  image.src = footprint.cover.public_url;
+  image.alt = footprint.cover.title || footprint.cover.original_filename || footprint.name;
+  image.className = 'footprint-popup-image';
+  root.appendChild(image);
+
+  const body = document.createElement('div');
+  body.className = 'footprint-popup-body';
+
+  const title = document.createElement('strong');
+  title.textContent = footprint.name;
+  body.appendChild(title);
+
+  const count = document.createElement('span');
+  count.textContent = `${footprint.images.length} 张图片`;
+  body.appendChild(count);
+
+  const link = document.createElement('a');
+  link.href = `/p/${encodeURIComponent(footprint.cover.key)}`;
+  link.textContent = '查看图片';
+  body.appendChild(link);
+
+  root.appendChild(body);
+  return root;
+};
+
+const fitFlatMapToFootprints = () => {
+  if (!flatMap || !maplibre) return;
+
+  if (footprints.value.length === 0) {
+    flatMap.setCenter(DEFAULT_CENTER);
+    flatMap.setZoom(FLAT_ZOOM);
+    return;
+  }
+
+  if (footprints.value.length === 1) {
+    focusFlatMapOn(footprints.value[0]);
+    return;
+  }
+
+  const bounds = new maplibre.LngLatBounds();
+  for (const footprint of footprints.value) {
+    bounds.extend([footprint.lng, footprint.lat]);
+  }
+  flatMap.fitBounds(bounds, { padding: 90, maxZoom: 9, duration: 700 });
+};
+
+const renderFlatMarkers = () => {
+  if (!flatMap || !maplibre) return;
+
+  clearFlatMarkers();
+  for (const footprint of footprints.value) {
+    const marker = new maplibre.Marker({
+      element: createMarkerElement(footprint),
+      anchor: 'center',
+    })
+      .setLngLat([footprint.lng, footprint.lat])
+      .setPopup(
+        new maplibre.Popup({
+          offset: 18,
+          closeButton: false,
+          className: 'footprint-map-popup',
+        }).setDOMContent(createPopupNode(footprint)),
+      )
+      .addTo(flatMap);
+
+    flatMarkers.push(marker);
+  }
+
+  updateMarkerStyles();
+  fitFlatMapToFootprints();
+};
+
+const initFlatMap = async () => {
+  if (!flatMapEl.value || flatMap) return;
+
+  maplibre = await loadMaplibre();
+  flatMap = new maplibre.Map({
+    container: flatMapEl.value,
+    style: MAP_STYLE_URL,
+    center: DEFAULT_CENTER,
+    zoom: FLAT_ZOOM,
+    attributionControl: false,
+  });
+
+  flatMap.once('error', () => {
+    if (!flatMap) return;
+    flatMap.setStyle(RASTER_FALLBACK_STYLE);
+    flatMap.once('styledata', renderFlatMarkers);
+  });
+  flatMap.once('load', renderFlatMarkers);
+};
+
+const loadFootprints = async () => {
+  loading.value = true;
+  loadError.value = null;
+
+  try {
+    images.value = await listImages();
+    activeFootprintKey.value = footprints.value[0]?.key ?? null;
+  } catch (error) {
+    loadError.value = (error as Error).message;
+  } finally {
+    loading.value = false;
+  }
+};
+
+watch(
+  footprints,
+  () => {
+    void nextTick(renderFlatMarkers);
+  },
+  { deep: true },
+);
+
+watch([activeFootprint, hoveredFootprint], updateMarkerStyles);
+
+onMounted(() => {
+  void initFlatMap();
+  void loadFootprints();
+});
+
+onBeforeUnmount(() => {
+  clearFlatMarkers();
+  flatMap?.remove();
+  flatMap = null;
+  maplibre = null;
+  maplibrePromise = null;
+});
 </script>
 
 <template>
   <AppShell fluid>
-    <div class="-mx-3 -mt-16 sm:-mx-4">
-      <section class="hive-stage">
-        <div aria-hidden="true" class="orbs">
-          <div
-            v-for="orb in BG_ORBS"
-            :key="orb.key"
-            class="hex-orb"
-            :style="{ left: orb.left, top: orb.top, width: orb.size + 'px', height: orb.size + 'px', animationDelay: orb.delay }"
-          />
+    <section class="footprint-page">
+      <header class="footprint-hero cyber-panel">
+        <div>
+          <p class="eyebrow">Travel Footprint</p>
         </div>
-
-        <div class="honeycomb">
-          <div
-            v-for="row in rows"
-            :key="row.idx"
-            class="hive-row"
-            :class="{ 'is-offset': row.offset }"
-          >
-            <div
-              v-for="hex in row.items"
-              :key="hex.key"
-              class="hive-hex"
-            >
-              <div
-                class="hex-face"
-                :class="['bg-gradient-to-br', hex.tint]"
-                :style="{ transform: `rotate(${hex.rotate}deg)` }"
-              />
-            </div>
+        <div class="hero-stats" aria-label="旅行足迹统计">
+          <div>
+            <span>{{ footprints.length }}</span>
+            <p>点亮地点</p>
+          </div>
+          <div>
+            <span>{{ locatedImages.length }}</span>
+            <p>定位图片</p>
+          </div>
+          <div>
+            <span>{{ unlocatedCount }}</span>
+            <p>未定位</p>
           </div>
         </div>
+      </header>
 
-        <aside class="user-tips" :class="{ 'is-hidden': tipsHidden }" aria-label="蜂巢操作提示">
-          <header class="mb-2 flex items-center gap-2">
-            <span class="inline-block h-2 w-2 rounded-full bg-neon-cyan shadow-[0_0_8px_rgba(53,243,255,0.8)]" />
-            <span class="text-[11px] font-bold uppercase tracking-[0.2em] text-neon-cyan">Hive Tips</span>
-          </header>
+      <div v-if="loading" class="page-state cyber-panel">
+        正在加载旅行足迹…
+      </div>
+      <div v-else-if="loadError" class="page-state is-error cyber-panel">
+        加载失败：{{ loadError }}
+      </div>
 
-          <ul class="space-y-1.5 text-xs text-slate-300">
-            <li class="flex items-center gap-2">
-              <svg :viewBox="FA.images.vb" fill="currentColor" class="h-3 w-3 text-neon-cyan/80" aria-hidden="true"><path :d="FA.images.d" /></svg>
-              <span>已加载 <span class="font-mono font-bold text-white">{{ TOTAL_HEX }}</span> 个占位</span>
-            </li>
-            <li class="flex items-center gap-2">
-              <svg :viewBox="FA.expand.vb" fill="currentColor" class="h-3 w-3 text-neon-cyan/80" aria-hidden="true"><path :d="FA.expand.d" /></svg>
-              <span>双击 <kbd>F</kbd> 切换全屏（阶段 12 接入）</span>
-            </li>
-            <li class="flex items-center gap-2">
-              <svg :viewBox="FA.hand.vb" fill="currentColor" class="h-3 w-3 text-neon-cyan/80" aria-hidden="true"><path :d="FA.hand.d" /></svg>
-              <span>拖动浏览蜂巢（阶段 12 接入）</span>
-            </li>
-          </ul>
+      <div class="stacked-map-layout">
+        <article class="flat-map-card cyber-panel" aria-label="旅行足迹平面地图">
+          <div class="flat-layout">
+            <div class="flat-map-wrap">
+              <div ref="flatMapEl" class="flat-map" aria-label="旅行足迹平面地图" />
+              <div v-if="!loading && !loadError && footprints.length === 0" class="map-empty">
+                暂无带经纬度的图片。
+              </div>
+            </div>
 
-          <button
-            type="button"
-            class="tips-toggle"
-            :aria-label="tipsHidden ? '展开提示' : '收起提示'"
-            @click="toggleTips"
-          >
-            <svg :viewBox="tipsHidden ? FA.chevronDown.vb : FA.chevronUp.vb" fill="currentColor" class="h-3 w-3" aria-hidden="true">
-              <path :d="tipsHidden ? FA.chevronDown.d : FA.chevronUp.d" />
-            </svg>
-          </button>
-        </aside>
-      </section>
-    </div>
+            <aside class="footprint-side">
+              <section class="side-card">
+                <p class="section-label">当前点位</p>
+                <template v-if="activeFootprint">
+                  <img class="active-cover" :src="activeFootprint.cover.public_url" :alt="activeFootprint.cover.title" />
+                  <h3>{{ activeFootprint.name }}</h3>
+                  <p class="coordinate">{{ coordinateLabel(activeFootprint.lat, activeFootprint.lng) }}</p>
+                </template>
+                <p v-else class="side-copy">上传并标记位置后，这里会显示最近点亮的地点。</p>
+              </section>
+
+              <section class="side-card">
+                <div class="list-heading">
+                  <p class="section-label">已点亮</p>
+                  <span>{{ footprints.length }} 个地点</span>
+                </div>
+
+                <div v-if="footprints.length" class="footprint-list">
+                  <button
+                    v-for="footprint in footprints"
+                    :key="footprint.key"
+                    type="button"
+                    class="footprint-item"
+                    :class="{ 'is-active': footprint.key === activeFootprint?.key }"
+                    @click="selectFootprint(footprint)"
+                    @mouseenter="previewFootprint(footprint)"
+                    @mouseleave="previewFootprint(null)"
+                  >
+                    <img :src="footprint.cover.public_url" :alt="footprint.cover.title" />
+                    <span>
+                      <strong>{{ footprint.name }}</strong>
+                      <small>{{ footprint.images.length }} 张图片 · {{ coordinateLabel(footprint.lat, footprint.lng) }}</small>
+                    </span>
+                  </button>
+                </div>
+                <p v-else class="side-copy">还没有可点亮的位置。</p>
+              </section>
+            </aside>
+          </div>
+        </article>
+
+        <article class="globe-boundary-card cyber-panel" aria-label="边界地球模型">
+          <WorldBoundaryGlobe :visited-places="visitedPlaces" :visited-coordinates="visitedCoordinates" />
+        </article>
+      </div>
+    </section>
   </AppShell>
 </template>
 
 <style scoped>
-.hive-stage {
-  position: relative;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #04040c 0%, #070713 50%, #0a0a1a 100%);
-  overflow: hidden;
+.footprint-page {
+  width: min(100%, 1600px);
+  min-height: calc(100svh - 4rem);
+  margin: 0 auto;
+  padding: 0 1rem 2rem;
 }
 
-.orbs {
+.footprint-hero,
+.flat-map-card,
+.globe-boundary-card,
+.page-state {
+  border-radius: 6px;
+}
+
+.footprint-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.eyebrow,
+.section-label {
+  margin: 0;
+  color: rgb(53, 243, 255);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.hero-stats {
+  display: grid;
+  min-width: 24rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.hero-stats div {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.42);
+  padding: 0.7rem;
+}
+
+.hero-stats span {
+  color: white;
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.hero-stats p {
+  margin: 0.18rem 0 0;
+  color: rgba(148, 163, 184, 0.86);
+  font-size: 0.7rem;
+}
+
+.page-state {
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.85rem;
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 0.82rem;
+}
+
+.page-state.is-error {
+  border-color: rgba(251, 113, 133, 0.36);
+  color: rgb(253, 164, 175);
+}
+
+.stacked-map-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.flat-map-card,
+.globe-boundary-card {
+  position: relative;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.flat-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1rem;
+  min-height: 38rem;
+}
+
+.flat-map-wrap {
+  position: relative;
+  min-height: 38rem;
+  overflow: hidden;
+  border: 1px solid rgba(53, 243, 255, 0.14);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.5);
+}
+
+.flat-map {
+  position: absolute;
+  inset: 0;
+}
+
+.map-empty {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 5;
+  border: 1px solid rgba(53, 243, 255, 0.18);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.72);
+  padding: 0.6rem 0.75rem;
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 0.82rem;
+  backdrop-filter: blur(10px);
+}
+
+.footprint-side {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.side-card {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.34);
+  padding: 0.9rem;
+}
+
+.active-cover {
+  display: block;
+  width: 100%;
+  height: 9rem;
+  margin-top: 0.75rem;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.side-card h3 {
+  margin: 0.7rem 0 0;
+  overflow: hidden;
+  color: white;
+  font-size: 1rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coordinate {
+  margin: 0.32rem 0 0;
+  color: rgb(53, 243, 255);
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 0.72rem;
+}
+
+.side-copy {
+  margin: 0.6rem 0 0;
+  color: rgba(203, 213, 225, 0.78);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.list-heading span {
+  color: rgba(148, 163, 184, 0.82);
+  font-size: 0.74rem;
+}
+
+.footprint-list {
+  display: grid;
+  max-height: 20rem;
+  gap: 0.55rem;
+  overflow-y: auto;
+  margin-top: 0.8rem;
+  padding-right: 0.15rem;
+}
+
+.footprint-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.38);
+  padding: 0.5rem;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.footprint-item:hover,
+.footprint-item.is-active {
+  border-color: rgba(53, 243, 255, 0.34);
+  background: rgba(53, 243, 255, 0.08);
+}
+
+.footprint-item img {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.footprint-item strong,
+.footprint-item small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footprint-item strong {
+  color: rgb(226, 232, 240);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.footprint-item small {
+  margin-top: 0.22rem;
+  color: rgba(148, 163, 184, 0.82);
+  font-size: 0.7rem;
+}
+
+.globe-boundary-card {
+  min-height: 42rem;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(53, 243, 255, 0.12), transparent 25rem),
+    linear-gradient(180deg, rgba(8, 13, 26, 0.72), rgba(3, 7, 18, 0.88));
+}
+
+.globe-boundary-card::before {
+  content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 1;
+  background-image:
+    linear-gradient(rgba(53, 243, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(53, 243, 255, 0.035) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at 50% 52%, black, transparent 72%);
 }
 
-.hex-orb {
-  position: absolute;
-  background: rgba(53, 243, 255, 0.08);
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  animation: orb-float 8s ease-in-out infinite;
+:deep(.maplibregl-canvas) {
+  background: transparent;
+  outline: none;
 }
 
-@keyframes orb-float {
-  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.6; }
-  50% { transform: translateY(-30px) rotate(180deg); opacity: 1; }
-}
-
-.honeycomb {
-  --hex-w: clamp(60px, 7vw, 110px);
-  --hex-h: calc(var(--hex-w) * 1.1547);
-  --gap: 4px;
-
+:deep(.footprint-marker) {
   position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6rem 0 4rem;
-  user-select: none;
-}
-
-.hive-row {
-  display: flex;
-  gap: var(--gap);
-  margin-bottom: calc(var(--hex-h) * -0.25 + var(--gap));
-}
-
-.hive-row.is-offset {
-  margin-left: calc((var(--hex-w) + var(--gap)) * 0.5);
-}
-
-.hive-hex {
-  flex: 0 0 var(--hex-w);
-  width: var(--hex-w);
-  height: var(--hex-h);
-  position: relative;
-  transition: transform 0.25s ease;
-}
-
-.hive-hex:hover {
-  transform: scale(1.08);
-  z-index: 5;
-}
-
-.hex-face {
-  position: absolute;
-  inset: 0;
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  transition: filter 0.25s ease, box-shadow 0.25s ease;
-}
-
-.hive-hex:hover .hex-face {
-  filter: brightness(1.4);
-  box-shadow: 0 0 24px rgba(53, 243, 255, 0.4);
-}
-
-.user-tips {
-  position: fixed;
-  top: 5rem;
-  left: 1.25rem;
-  z-index: 30;
-  width: 16rem;
-  padding: 0.875rem 1rem 1rem;
-  background: rgba(7, 7, 19, 0.78);
-  border: 1px solid rgba(53, 243, 255, 0.25);
-  border-radius: 0.625rem;
-  backdrop-filter: blur(14px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.user-tips.is-hidden {
-  transform: translateY(calc(-100% + 2.25rem));
-  opacity: 0.95;
-}
-
-kbd {
-  display: inline-block;
-  min-width: 1.2rem;
-  padding: 0.1rem 0.3rem;
-  margin: 0 0.15rem;
-  font-family: 'Courier New', monospace;
-  font-size: 0.6rem;
-  color: rgb(53, 243, 255);
-  background: rgba(53, 243, 255, 0.1);
-  border: 1px solid rgba(53, 243, 255, 0.3);
-  border-radius: 0.25rem;
-  text-align: center;
-}
-
-.tips-toggle {
-  position: absolute;
-  bottom: -14px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 9999px;
-  background: rgba(53, 243, 255, 0.2);
-  border: 1px solid rgba(53, 243, 255, 0.4);
-  color: rgb(53, 243, 255);
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   cursor: pointer;
-  transition: all 0.25s ease;
 }
 
-.tips-toggle:hover {
-  background: rgba(53, 243, 255, 0.35);
-  box-shadow: 0 0 12px rgba(53, 243, 255, 0.5);
+:deep(.footprint-marker-ring) {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(53, 243, 255, 0.72);
+  border-radius: 999px;
+  box-shadow: 0 0 14px rgba(53, 243, 255, 0.44);
+  animation: marker-pulse 2.4s ease-out infinite;
 }
 
-@media (max-width: 768px) {
-  .user-tips { top: 4.5rem; left: 0.75rem; right: 0.75rem; width: auto; }
+:deep(.footprint-marker-core) {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: rgb(53, 243, 255);
+  box-shadow: 0 0 0 5px rgba(53, 243, 255, 0.16), 0 0 20px rgba(53, 243, 255, 0.72);
+}
+
+:deep(.footprint-marker-count) {
+  position: relative;
+  z-index: 1;
+  color: rgb(5, 5, 16);
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+:deep(.footprint-marker.is-active .footprint-marker-core),
+:deep(.footprint-marker.is-hovered .footprint-marker-core) {
+  background: rgb(255, 79, 216);
+  box-shadow: 0 0 0 6px rgba(255, 79, 216, 0.18), 0 0 24px rgba(255, 79, 216, 0.82);
+}
+
+:deep(.footprint-marker.is-active .footprint-marker-ring),
+:deep(.footprint-marker.is-hovered .footprint-marker-ring) {
+  border-color: rgba(255, 79, 216, 0.82);
+  box-shadow: 0 0 18px rgba(255, 79, 216, 0.5);
+}
+
+:deep(.maplibregl-popup-content) {
+  border: 1px solid rgba(53, 243, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(7, 7, 19, 0.9);
+  padding: 0;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+}
+
+:deep(.maplibregl-popup-tip) {
+  border-top-color: rgba(7, 7, 19, 0.9);
+}
+
+:deep(.footprint-popup) {
+  display: grid;
+  grid-template-columns: 4.5rem 9rem;
+  gap: 0.7rem;
+  padding: 0.6rem;
+}
+
+:deep(.footprint-popup-image) {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+:deep(.footprint-popup-body) {
+  min-width: 0;
+}
+
+:deep(.footprint-popup-body strong),
+:deep(.footprint-popup-body span),
+:deep(.footprint-popup-body a) {
+  display: block;
+}
+
+:deep(.footprint-popup-body strong) {
+  overflow: hidden;
+  color: white;
+  font-size: 0.86rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.footprint-popup-body span) {
+  margin-top: 0.35rem;
+  color: rgba(148, 163, 184, 0.86);
+  font-size: 0.74rem;
+}
+
+:deep(.footprint-popup-body a) {
+  margin-top: 0.55rem;
+  color: rgb(53, 243, 255);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+@keyframes marker-pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.72);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+@media (max-width: 1024px) {
+  .footprint-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero-stats {
+    min-width: 0;
+  }
+
+  .flat-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .footprint-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .footprint-page {
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .hero-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .flat-layout,
+  .flat-map-wrap {
+    min-height: 24rem;
+  }
 }
 </style>

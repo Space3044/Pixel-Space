@@ -50,7 +50,7 @@ const navLinks: { to: string; label: string; icon: IconName }[] = [
   { to: '/images', label: '探索', icon: 'images' },
   { to: '/random', label: '随机', icon: 'random' },
   { to: '/upload', label: '上传', icon: 'upload' },
-  { to: '/hive', label: '蜂巢', icon: 'hive' },
+  { to: '/hive', label: '足迹', icon: 'hive' },
 ];
 
 const route = useRoute();

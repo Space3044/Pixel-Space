@@ -57,7 +57,7 @@ const router = createRouter({
       name: 'hive',
       component: () => import('@/features/hive/HiveView.vue'),
       meta: {
-        title: '蜂巢',
+        title: '足迹',
       },
     },
   ],

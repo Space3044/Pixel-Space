@@ -20,6 +20,10 @@ for (const path of [
   './random-view.test.mjs',
   './geocode-api.test.mjs',
   './location-search-ui.test.mjs',
+  './app-shell.test.mjs',
+  './geo-hit.test.mjs',
+  './world-boundary-globe.test.mjs',
+  './hive-view.test.mjs',
 ]) {
   await import(path);
 }
