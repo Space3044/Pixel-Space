@@ -65,6 +65,67 @@ tests/
 
 **鉴权落地时机与身份源**。管理路径在第一次有真实写接口之前就用 Cloudflare Access 保护，不留裸奔窗口。身份源选 Access 内置的 OTP（One-time PIN，邮箱一次性验证码）：白名单邮箱填 CF 账号绑定邮箱，体验等同于"用 CF 账号登录"，零外部依赖，无需创建 GitHub OAuth App 或其它 IdP。本地开发用 `wrangler pages dev` 跑，Access 在边缘生效，本地 dev 不会触发，需要部署到 Pages Preview 才能完整验证。
 
+**管理员权限边界**。先把"谁能做什么"按接口和 UI 一次性定清楚，后续阶段写守卫时按此对齐，不再每次临场判定。
+
+身份判定只用一个信号：`request.cf` 是否存在。Cloudflare 边缘运行时必然注入这个对象，`wrangler pages dev` 不会注入。所以后端的判定逻辑是：
+
+- `request.cf` 不存在：当作本地开发，身份等同管理员（伪邮箱 `dev@local`）。
+- `request.cf` 存在：必须带 `Cf-Access-Authenticated-User-Email` 请求头才算管理员，否则一律 401。
+
+不读任何环境变量做兜底，也不维护应用内白名单——线上能进来的邮箱就是 Access 配置允许的邮箱，即为管理员。这条规则保证生产环境只有一条认证路径，没有任何环境变量可以反向打开口子。
+
+**仅管理员可访问的接口**：
+
+- `POST /api/upload`：写 D1、写 R2、归档 Telegram，所有写操作的入口。
+- `POST /api/ai/preview`：把图片原图 base64 上行到外部 LLM 代理，消耗主人自己的 LLM 配额（不是 Cloudflare Workers AI）；同时属于敏感出站，必须锁。
+- `GET /api/check-hash`：上传去重探测，本身无破坏性，但只在上传流里有用，跟 `/api/upload` 同权限收口防止刷库。
+- `GET /api/original/:key`：从 Telegram 拉原图，原图属于管理员资产，不对公众开放。
+- `PATCH /api/admin/image/:key`：编辑图片元数据（标题、说明、位置、标签、配色等）。
+- `DELETE /api/admin/image/:key`：删除图片（清 R2 + D1，未来可能联动 TG 消息删除）。
+- `GET /api/admin/ai-settings` / `PATCH /api/admin/ai-settings`：读写 AI 代理 URL 与模型配置。
+- 新增辅助接口 `GET /api/admin/me`：返回当前管理员邮箱，未登录返回 401，供前端守卫和 UI 条件渲染使用。
+
+**保持公开的接口**：
+
+- `GET /api/list`：图库列表与搜索。
+- `GET /api/image/:key`：单图公开元数据。
+- `GET /api/public/:key`：R2 压缩图回吐（本地开发用，生产走 R2 公共域名直链）。
+- `GET /api/geocode`：地理编码代理，无破坏性，目前不锁；若后续被刷再单独做限流。
+- 公开分享页 `/p/:key`、首页、图库 `/images`、随机 `/random`、蜂巢 `/hive` 等纯展示路由。
+
+**前端权限点**：
+
+- `/upload` 整页加路由守卫，未登录时跳转登录提示页或显示 403 占位。
+- 图库 lightbox 与公开页里的"编辑/删除/复制原图链接"按钮根据 `/api/admin/me` 返回结果条件渲染。前端守卫只是 UX，真正的安全闸在后端。
+- 前端通过共享 composable（`src/shared/auth/useAdmin.ts`）拿到 `{ email | null }` 状态，全局复用，避免每个组件单独 fetch。
+
+**不做的事**：
+
+- 不做角色分级（超管 / 普通管理员），凡是过了 Access 的邮箱权限等同。
+- 不做应用内用户表、不做应用内邮箱白名单，名单交给 Access 维护。
+- 当前阶段不在 Worker 内做 Cf-Access-Jwt-Assertion 签名校验，靠 Access 边缘拦截 + 邮箱头识别即可；如果未来需要进一步收紧，再拉取 `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` 做 JWT 验签。
+
+**内容可见性模型**。在身份判定之外，每张图自带两个独立的可见性开关，分别控制"是否进入公开聚合"和"是否对外暴露位置"。管理员视角不受任何开关影响，看到的永远是真实数据；开关只决定访客视角看到什么。
+
+两个开关都落在 `images` 表，需要新增迁移 `0008_add_visibility_columns.sql`：
+
+- `is_public INTEGER NOT NULL DEFAULT 1`：是否公开到图库/探索/随机/蜂巢/足迹等任何聚合视图。`0` 表示"私藏"，访客在所有列表型接口里都看不到这张图，但只要拿到 `key` 仍可通过 `GET /api/image/:key` 与 `/p/:key` 直接访问（key 是 UUID 不可枚举，等同"凭直链可见"）。
+- `location_public INTEGER NOT NULL DEFAULT 1`：是否对访客暴露位置。`0` 表示访客拿不到 `location_lat`、`location_lng`、`location_name`；详情页的地图区块仍然渲染，但是是一张**没有标记的空地图**，明确传达"作者保留了位置但选择不公开"的语义。无位置数据的图（lat/lng/name 全空）不渲染地图区块，与"有位置但不公开"在视觉上有别。
+
+上传页表单新增两个开关：
+
+- "公开到探索"：默认开。
+- "显示位置"：默认开，仅在当前 `location_lat`/`location_lng` 有值时才生效；无坐标时开关置灰或隐藏。
+
+接口层处理（统一在 `_shared/images.ts` 或同层加一个 `scrubForVisitor` 工具，避免每个接口各写一份）：
+
+- **聚合型接口**（公开收口必须过滤 `is_public`）：`GET /api/list`、未来的 `/api/random`、`/api/hive`、`/api/footprint` 等任何"批量返回多张图"的接口，对访客一律加 `WHERE is_public = 1`；管理员视角不加过滤。
+- **单图接口** `GET /api/image/:key` 与公开页 `/p/:key`：不按 `is_public` 拦（保留"凭直链分享私图"的能力），但对访客若 `location_public = 0`，把响应里的 `location_lat` / `location_lng` / `location_name` 置 null。
+- **搜索接口**：访客侧搜索结果继承 `is_public = 1` 过滤；管理员搜索看全量。
+- **足迹 / 地图聚合视图**（未实现，列入阶段 12）：对访客必须同时满足 `is_public = 1` 且 `location_public = 1` 才出现在地图上。
+
+前端只在管理员视角下展示两个开关的状态徽标（如缩略图角标"私"、"位置隐藏"），方便管理员一眼识别。访客侧任何 UI 都不暗示这些开关的存在。
+
 **图片 key 策略**。key 使用 `crypto.randomUUID()` 生成，对外不可枚举。`hash` 列存 SHA-256，用于上传时前端展示"可能重复"提示，不强制阻塞。R2 对象 key 与 D1 主键一致。
 
 **EXIF 处理路径**。在前端压缩之前用 `exifr` 读取拍摄时间、相机型号、ISO、光圈、快门、焦距以及 GPS 经纬度，单独作为 FormData 字段发到后端。GPS 解析出 WGS84 十进制坐标后只作为**地图标记与表单的默认值**，最终是否随 `location_lat` / `location_lng` 落库由管理员在上传页确认或调整（可清空、可拖动地图覆盖、可手动改数字）。压缩使用 `browser-image-compression` 输出 WebP，会自然清除所有 EXIF（包括 GPS），公开访问的压缩图不会泄露原始坐标。不依赖后端做 EXIF 解析。
