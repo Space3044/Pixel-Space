@@ -19,12 +19,12 @@ test('PublicImageView updates Open Graph metadata after loading the image', () =
   assert.match(view, /ensureMeta\('og:description', image\.caption/);
 });
 
-test('PublicImageView copies absolute image urls in Markdown and HTML snippets', () => {
-  assert.match(view, /import \{[^}]*buildAbsoluteImageUrl[^}]*\} from '\.\/image-links'/s);
-  assert.match(view, /const imageUrl = buildAbsoluteImageUrl\(image\.value\.public_url,\s*origin\)/);
-  assert.match(view, /const imageForCopy = \{ \.\.\.image\.value, public_url: imageUrl \}/);
-  assert.match(view, /buildMarkdown\(imageForCopy\)/);
-  assert.match(view, /buildHtml\(imageForCopy\)/);
+test('PublicImageView does not render public copy link controls', () => {
+  assert.match(view, /import \{\s*buildAbsoluteImageUrl\s*\} from '\.\/image-links'/);
+  assert.doesNotMatch(view, /buildMarkdown|buildHtml|buildPublicPageUrl/);
+  assert.doesNotMatch(view, /linkRows|copiedLabel|navigator\.clipboard|COPY_ICON|CHECK_ICON/);
+  assert.doesNotMatch(view, /Copy Links|复制|Markdown|公开页直链|label:\s*'HTML'|>HTML</);
+  assert.doesNotMatch(view, /class="link-row"|class="link-copy"|class="link-value"|class="link-label"/);
 });
 
 test('PublicImageView renders a read-only map when coordinates exist', () => {

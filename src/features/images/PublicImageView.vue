@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import type { ImageRecord } from './image.types';
-import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
+import { buildAbsoluteImageUrl } from './image-links';
 import { fetchImage } from './images.api';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 
@@ -44,17 +44,6 @@ onMounted(async () => {
   }
 });
 
-const linkRows = computed(() => {
-  if (!image.value) return [];
-  const imageUrl = buildAbsoluteImageUrl(image.value.public_url, origin);
-  const imageForCopy = { ...image.value, public_url: imageUrl };
-  return [
-    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
-    { label: 'HTML', value: buildHtml(imageForCopy) },
-    { label: '公开页直链', value: buildPublicPageUrl(image.value, origin) },
-  ];
-});
-
 const exifRows = computed(() => {
   const current = image.value;
   if (!current) return [];
@@ -81,32 +70,6 @@ const exifRows = computed(() => {
     },
   ];
 });
-
-const copiedLabel = ref<string | null>(null);
-let copyTimer: ReturnType<typeof setTimeout> | null = null;
-
-const copy = async (label: string, value: string) => {
-  try {
-    await navigator.clipboard.writeText(value);
-  } catch {
-    return;
-  }
-  copiedLabel.value = label;
-  if (copyTimer) clearTimeout(copyTimer);
-  copyTimer = setTimeout(() => {
-    copiedLabel.value = null;
-  }, 1400);
-};
-
-const COPY_ICON = {
-  vb: '0 0 448 512',
-  d: 'M208 0H332.1c12.7 0 24.9 5.1 33.9 14.1l67.9 67.9c9 9 14.1 21.2 14.1 33.9V336c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V48c0-26.5 21.5-48 48-48zM48 128h80v64H64V448H256V416h64v48c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V176c0-26.5 21.5-48 48-48z',
-};
-
-const CHECK_ICON = {
-  vb: '0 0 448 512',
-  d: 'M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z',
-};
 </script>
 
 <template>
@@ -163,36 +126,6 @@ const CHECK_ICON = {
                 :lng="image.location_lng"
                 :label="image.location_name || image.title"
               />
-            </section>
-
-            <section class="public-info-card cyber-panel">
-              <header class="mb-4 flex items-center justify-between gap-3">
-                <p class="text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Copy Links</p>
-                <span v-if="copiedLabel" class="text-xs font-semibold text-neon-lime">{{ copiedLabel }} 已复制</span>
-              </header>
-
-              <ul class="space-y-3">
-                <li v-for="row in linkRows" :key="row.label" class="link-row">
-                  <span class="link-label">{{ row.label }}</span>
-                  <code class="link-value">{{ row.value }}</code>
-                  <button
-                    type="button"
-                    class="link-copy"
-                    :aria-label="`复制 ${row.label}`"
-                    @click="copy(row.label, row.value)"
-                  >
-                    <svg
-                      :viewBox="copiedLabel === row.label ? CHECK_ICON.vb : COPY_ICON.vb"
-                      fill="currentColor"
-                      class="h-3.5 w-3.5"
-                      aria-hidden="true"
-                    >
-                      <path :d="copiedLabel === row.label ? CHECK_ICON.d : COPY_ICON.d" />
-                    </svg>
-                    <span>{{ copiedLabel === row.label ? '已复制' : '复制' }}</span>
-                  </button>
-                </li>
-              </ul>
             </section>
           </aside>
         </div>
@@ -267,68 +200,6 @@ const CHECK_ICON = {
 
 .public-exif-item dd.is-muted {
   color: rgba(148, 163, 184, 0.7);
-}
-
-.link-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  background: rgba(7, 7, 19, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  transition: border-color 0.2s ease;
-}
-
-.link-row:hover {
-  border-color: rgba(53, 243, 255, 0.25);
-}
-
-.link-label {
-  grid-column: 1 / 2;
-  font-family: 'Menlo', 'Consolas', monospace;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: rgb(53, 243, 255);
-}
-
-.link-value {
-  display: block;
-  grid-column: 1 / 3;
-  grid-row: 2 / 3;
-  font-family: 'Menlo', 'Consolas', monospace;
-  font-size: 0.78rem;
-  color: rgb(203, 213, 225);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.link-copy {
-  display: inline-flex;
-  grid-column: 2 / 3;
-  grid-row: 1 / 2;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgb(148, 163, 184);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.link-copy:hover {
-  color: rgb(53, 243, 255);
-  border-color: rgba(53, 243, 255, 0.45);
-  background: rgba(53, 243, 255, 0.08);
 }
 
 @media (max-width: 900px) {
