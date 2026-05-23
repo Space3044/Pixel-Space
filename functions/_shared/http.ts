@@ -21,6 +21,10 @@ export function badRequest(message = 'bad_request'): Response {
   return json({ error: message }, 400);
 }
 
+export function unauthorized(message = 'unauthorized'): Response {
+  return json({ error: message }, 401);
+}
+
 export function serverError(message = 'server_error'): Response {
   return json({ error: message }, 500);
 }

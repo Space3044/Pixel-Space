@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
+import { isAdmin, refreshAdmin } from '@/shared/auth/useAdmin';
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -25,6 +27,7 @@ const router = createRouter({
       component: () => import('@/features/upload/UploadView.vue'),
       meta: {
         title: '上传',
+        requiresAdmin: true,
       },
     },
     {
@@ -61,6 +64,13 @@ const router = createRouter({
       },
     },
   ],
+});
+
+router.beforeEach(async (to) => {
+  if (!to.meta.requiresAdmin) return true;
+  if (!isAdmin.value) await refreshAdmin();
+  if (isAdmin.value) return true;
+  return { name: 'login', query: { redirect: to.fullPath } };
 });
 
 router.afterEach((to) => {

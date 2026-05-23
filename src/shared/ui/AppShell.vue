@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { devRole as currentDevRole, isDev, setDevRole } from '@/shared/auth/useAdmin';
 
 defineProps<{ fluid?: boolean }>();
 
@@ -102,6 +103,32 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
         </div>
 
         <div class="flex shrink-0 items-center gap-3">
+          <div
+            v-if="isDev"
+            class="dev-role-switch"
+            :class="currentDevRole === 'admin' ? 'is-admin' : 'is-visitor'"
+            role="group"
+            aria-label="本地角色切换（仅开发）"
+            title="本地开发角色切换：管理员 / 访客。线上无效，仅靠 X-Dev-Role 注入。"
+          >
+            <button
+              type="button"
+              class="dev-role-btn"
+              :class="{ 'is-on': currentDevRole === 'admin' }"
+              @click="setDevRole('admin')"
+            >
+              管理员
+            </button>
+            <button
+              type="button"
+              class="dev-role-btn"
+              :class="{ 'is-on': currentDevRole === 'visitor' }"
+              @click="setDevRole('visitor')"
+            >
+              访客
+            </button>
+          </div>
+
           <button
             type="button"
             class="tool-btn"
@@ -220,6 +247,42 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
 .tool-btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
+}
+
+.dev-role-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(53, 243, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.55);
+}
+.dev-role-switch.is-visitor {
+  border-color: rgba(255, 79, 216, 0.32);
+}
+.dev-role-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgb(148, 163, 184);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.dev-role-btn:hover {
+  color: rgb(226, 232, 240);
+}
+.dev-role-btn.is-on {
+  background: rgba(53, 243, 255, 0.16);
+  color: rgb(165, 243, 252);
+}
+.dev-role-switch.is-visitor .dev-role-btn.is-on {
+  background: rgba(255, 79, 216, 0.14);
+  color: rgb(251, 182, 232);
 }
 
 .login-btn {
