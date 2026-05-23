@@ -1,5 +1,6 @@
 import type { Env } from '../../types';
-import { notFound, serverError } from '../../_shared/http';
+import { notFound, serverError, unauthorized } from '../../_shared/http';
+import { resolveAdmin } from '../../_shared/auth';
 import { getTelegramFileUrl } from '../../_shared/telegram';
 
 const ORIGINAL_SQL = 'SELECT key, title, original_filename, tg_file_id FROM images WHERE key = ?';
@@ -15,7 +16,9 @@ function downloadName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_') || 'original';
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ env, params, request }) => {
+  if (!resolveAdmin(request, env)) return unauthorized();
+
   const key = String(params.key ?? '');
   if (!key) return notFound();
 

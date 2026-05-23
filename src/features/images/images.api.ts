@@ -12,6 +12,8 @@ export interface ImageUpdatePayload {
   dominant_color: string;
   palette: string;
   composition: string;
+  is_public: 0 | 1;
+  location_public: 0 | 1;
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {

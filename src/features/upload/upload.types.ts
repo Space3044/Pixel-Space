@@ -21,6 +21,8 @@ export interface UploadMeta {
   palette: string;
   composition: string;
   ai_status: 'pending' | 'done' | 'failed';
+  is_public: 0 | 1;
+  location_public: 0 | 1;
 }
 
 export interface UploadDimensions {

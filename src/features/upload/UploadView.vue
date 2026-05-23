@@ -66,6 +66,8 @@ const createMeta = (file: File): UploadMeta => ({
   palette: '',
   composition: '',
   ai_status: 'pending',
+  is_public: 1,
+  location_public: 1,
 });
 
 let entryIdSeq = 0;
@@ -107,6 +109,30 @@ let maplibre: typeof import('maplibre-gl') | null = null;
 let usingFallbackStyle = false;
 
 const currentEntry = computed(() => entries.value.find((entry) => entry.id === currentEntryId.value) ?? null);
+const hasCurrent = computed(() => currentEntry.value !== null);
+
+// 侧栏在未选图时也按"未填写的表单"样式展示。这个占位 entry 不入队列，
+// 仅作为 displayEntry 的回落对象，用户的占位输入不会污染真实数据。
+const placeholderEntry = ref<UploadEntry>({
+  id: '__placeholder__',
+  file: new File([], ''),
+  previewUrl: null,
+  previewObjectUrl: null,
+  compressedFile: null,
+  compressedDimensions: null,
+  exif: emptyExif(),
+  meta: createMeta(new File([], '')),
+  status: 'ready',
+  errorMessage: null,
+  aiStatus: 'idle',
+  aiError: null,
+  aiRequestId: 0,
+  uploadResult: null,
+  duplicate: false,
+});
+
+const displayEntry = computed<UploadEntry>(() => currentEntry.value ?? placeholderEntry.value);
+const displayFileName = computed(() => currentEntry.value?.file.name ?? '--');
 const hasEntries = computed(() => entries.value.length > 0);
 const readyEntries = computed(() => entries.value.filter((entry) => entry.status === 'ready'));
 const doneEntries = computed(() =>
@@ -532,6 +558,14 @@ const clearLocation = () => {
   setEntryCoordinates(entry, null, null, false);
 };
 
+const setIsPublic = (entry: UploadEntry, checked: boolean) => {
+  entry.meta.is_public = checked ? 1 : 0;
+};
+
+const setLocationPublic = (entry: UploadEntry, checked: boolean) => {
+  entry.meta.location_public = checked ? 1 : 0;
+};
+
 const applyLocationSearchResult = (result: GeocodeResult) => {
   const entry = currentEntry.value;
   if (!entry) return;
@@ -777,174 +811,239 @@ onBeforeUnmount(() => {
           </figure>
 
           <aside class="meta-sidebar cyber-panel">
-            <template v-if="currentEntry">
-              <section class="meta-section">
-                <header class="meta-section-title">
-                  <svg viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M0 64C0 28.7 28.7 0 64 0H224V128c0 17.7 14.3 32 32 32H384V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm384 64H256V0L384 128z" /></svg>
-                  <span>文件</span>
-                </header>
-                <dl class="meta-list">
-                  <div class="meta-row">
-                    <dt>文件名</dt>
-                    <dd class="truncate font-mono">{{ currentEntry.file.name }}</dd>
-                  </div>
-                  <div class="meta-row">
-                    <dt>原始大小</dt>
-                    <dd class="font-mono">{{ originalSize }}</dd>
-                  </div>
-                  <div class="meta-row">
-                    <dt>压缩后</dt>
-                    <dd class="font-mono">{{ compressedSize }}</dd>
-                  </div>
-                </dl>
-              </section>
+            <section class="meta-section">
+              <header class="meta-section-title">
+                <svg viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M0 64C0 28.7 28.7 0 64 0H224V128c0 17.7 14.3 32 32 32H384V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm384 64H256V0L384 128z" /></svg>
+                <span>文件</span>
+              </header>
+              <dl class="meta-list">
+                <div class="meta-row">
+                  <dt>文件名</dt>
+                  <dd class="truncate font-mono">{{ displayFileName }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>原始大小</dt>
+                  <dd class="font-mono">{{ originalSize }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>压缩后</dt>
+                  <dd class="font-mono">{{ compressedSize }}</dd>
+                </div>
+              </dl>
+            </section>
 
-              <section class="meta-section">
-                <header class="meta-section-title">
-                  <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M149.1 64.8L138.7 96H64C28.7 96 0 124.7 0 160V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H373.3L362.9 64.8C356.4 45.2 338.1 32 317.4 32H194.6c-20.7 0-39 13.2-45.5 32.8zM256 192a96 96 0 1 1 0 192 96 96 0 1 1 0-192z" /></svg>
-                  <span>EXIF</span>
-                </header>
-                <dl class="exif-grid">
-                  <div class="meta-row exif-row-wide">
-                    <dt>拍摄时间</dt>
-                    <dd class="font-mono">{{ formatExifTakenAt(currentEntry.exif.taken_at) }}</dd>
-                  </div>
-                  <div class="meta-row exif-row-wide">
-                    <dt>相机</dt>
-                    <dd class="font-mono truncate">{{ display(currentEntry.exif.camera) }}</dd>
-                  </div>
-                  <div class="meta-row">
-                    <dt>ISO</dt>
-                    <dd class="font-mono">{{ display(currentEntry.exif.iso) }}</dd>
-                  </div>
-                  <div class="meta-row">
-                    <dt>快门</dt>
-                    <dd class="font-mono">{{ display(currentEntry.exif.shutter) }}</dd>
-                  </div>
-                  <div class="meta-row">
-                    <dt>光圈</dt>
-                    <dd class="font-mono">{{ currentEntry.exif.aperture === null ? '--' : `f/${currentEntry.exif.aperture}` }}</dd>
-                  </div>
-                  <div class="meta-row">
-                    <dt>焦距</dt>
-                    <dd class="font-mono">{{ formatFocalLength(currentEntry.exif.focal_length) }}</dd>
-                  </div>
-                </dl>
-              </section>
+            <section class="meta-section">
+              <header class="meta-section-title">
+                <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M149.1 64.8L138.7 96H64C28.7 96 0 124.7 0 160V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H373.3L362.9 64.8C356.4 45.2 338.1 32 317.4 32H194.6c-20.7 0-39 13.2-45.5 32.8zM256 192a96 96 0 1 1 0 192 96 96 0 1 1 0-192z" /></svg>
+                <span>EXIF</span>
+              </header>
+              <dl class="exif-grid">
+                <div class="meta-row exif-row-wide">
+                  <dt>拍摄时间</dt>
+                  <dd class="font-mono">{{ formatExifTakenAt(displayEntry.exif.taken_at) }}</dd>
+                </div>
+                <div class="meta-row exif-row-wide">
+                  <dt>相机</dt>
+                  <dd class="font-mono truncate">{{ display(displayEntry.exif.camera) }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>ISO</dt>
+                  <dd class="font-mono">{{ display(displayEntry.exif.iso) }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>快门</dt>
+                  <dd class="font-mono">{{ display(displayEntry.exif.shutter) }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>光圈</dt>
+                  <dd class="font-mono">{{ displayEntry.exif.aperture === null ? '--' : `f/${displayEntry.exif.aperture}` }}</dd>
+                </div>
+                <div class="meta-row">
+                  <dt>焦距</dt>
+                  <dd class="font-mono">{{ formatFocalLength(displayEntry.exif.focal_length) }}</dd>
+                </div>
+              </dl>
+            </section>
 
-              <section class="meta-section meta-section-form">
-                <header class="meta-section-title meta-section-title-pink form-header">
-                  <span class="form-title">
-                    <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z" /></svg>
-                    <span>当前图片信息</span>
+            <section class="meta-section meta-section-visibility">
+              <header class="meta-section-title">
+                <svg viewBox="0 0 576 512" fill="currentColor" aria-hidden="true"><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256A144 144 0 1 1 144 256a144 144 0 1 1 288 0zM288 192c0 35.3-28.7 64-64 64c-7.1 0-13.9-1.2-20.3-3.3c-5.5-1.8-11.9 1.6-11.7 7.4c.3 6.9 1.3 13.8 3.2 20.7c13.7 51.2 66.4 81.6 117.6 67.9s81.6-66.4 67.9-117.6c-11.1-41.5-47.8-69.4-88.6-71.1c-5.8-.2-9.2 6.1-7.4 11.7c2.1 6.4 3.3 13.2 3.3 20.3z" /></svg>
+                <span>可见性</span>
+              </header>
+              <label
+                class="visibility-toggle"
+                :class="{ 'is-on': displayEntry.meta.is_public === 1, 'is-disabled': !hasCurrent }"
+              >
+                <span class="visibility-toggle-text">
+                  <span class="visibility-toggle-title">公开到探索</span>
+                  <span class="visibility-toggle-hint">
+                    {{
+                      displayEntry.meta.is_public === 1
+                        ? '会出现在图库、随机和蜂巢等公开聚合视图'
+                        : '私藏，仅凭直链可见，不进入任何公开聚合'
+                    }}
                   </span>
+                </span>
+                <input
+                  type="checkbox"
+                  class="visibility-toggle-input"
+                  :checked="displayEntry.meta.is_public === 1"
+                  :disabled="!hasCurrent"
+                  @change="setIsPublic(displayEntry, ($event.target as HTMLInputElement).checked)"
+                />
+                <span class="visibility-toggle-switch" aria-hidden="true"></span>
+              </label>
+            </section>
+
+            <section class="meta-section meta-section-form">
+              <header class="meta-section-title meta-section-title-pink form-header">
+                <span class="form-title">
+                  <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true"><path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z" /></svg>
+                  <span>当前图片信息</span>
+                </span>
+                <button
+                  type="button"
+                  class="ai-preview-button"
+                  :disabled="!currentEntry?.compressedFile || currentEntry?.aiStatus === 'pending'"
+                  @click="triggerAiForCurrent"
+                >
+                  {{ currentEntry?.aiStatus === 'pending' ? 'AI 分析中' : '重新 AI 分析' }}
+                </button>
+              </header>
+              <p v-if="currentEntry?.aiError" class="ai-error">{{ currentEntry.aiError }}</p>
+              <label class="field">
+                <span class="field-label">标题</span>
+                <input v-model="displayEntry.meta.title" type="text" class="cyber-input" :disabled="!hasCurrent" />
+              </label>
+              <label class="field">
+                <span class="field-label">描述</span>
+                <textarea v-model="displayEntry.meta.caption" rows="3" class="cyber-input" :disabled="!hasCurrent"></textarea>
+              </label>
+              <label class="field">
+                <span class="field-label">标签</span>
+                <input
+                  v-model="displayEntry.meta.tags"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="用逗号分隔，例如：猫, 夜景"
+                  :disabled="!hasCurrent"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">主色调</span>
+                <input
+                  v-model="displayEntry.meta.dominant_color"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="例如：暮光橙 #F59E0B"
+                  :disabled="!hasCurrent"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">色板</span>
+                <input
+                  v-model="displayEntry.meta.palette"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="用逗号分隔，例如：#F59E0B, #0F172A"
+                  :disabled="!hasCurrent"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">构图</span>
+                <textarea v-model="displayEntry.meta.composition" rows="2" class="cyber-input" :disabled="!hasCurrent"></textarea>
+              </label>
+              <label class="field">
+                <span class="field-label">搜索文本</span>
+                <textarea v-model="displayEntry.meta.search_content" rows="2" class="cyber-input" :disabled="!hasCurrent"></textarea>
+              </label>
+              <label class="field">
+                <span class="field-label">位置名称</span>
+                <input
+                  v-model="displayEntry.meta.location_name"
+                  type="text"
+                  class="cyber-input"
+                  placeholder="例如：上海 外滩"
+                  :disabled="!hasCurrent"
+                />
+              </label>
+
+              <div class="map-block">
+                <div class="map-block-header">
+                  <span class="field-label">地图坐标</span>
+                  <label
+                    class="visibility-inline"
+                    :class="{
+                      'is-on': displayEntry.meta.location_public === 1,
+                      'is-disabled':
+                        !hasCurrent ||
+                        displayEntry.meta.location_lat === null ||
+                        displayEntry.meta.location_lng === null,
+                    }"
+                    :title="
+                      !hasCurrent
+                        ? '请先选择图片'
+                        : displayEntry.meta.location_lat === null || displayEntry.meta.location_lng === null
+                          ? '未设置坐标'
+                          : displayEntry.meta.location_public === 1
+                            ? '访客可见地名和地图标记'
+                            : '访客只看到空地图'
+                    "
+                  >
+                    <span class="visibility-inline-label">公开显示位置</span>
+                    <input
+                      type="checkbox"
+                      class="visibility-toggle-input"
+                      :checked="displayEntry.meta.location_public === 1"
+                      :disabled="
+                        !hasCurrent ||
+                        displayEntry.meta.location_lat === null ||
+                        displayEntry.meta.location_lng === null
+                      "
+                      @change="setLocationPublic(displayEntry, ($event.target as HTMLInputElement).checked)"
+                    />
+                    <span class="visibility-inline-switch" aria-hidden="true"></span>
+                  </label>
                   <button
                     type="button"
-                    class="ai-preview-button"
-                    :disabled="!currentEntry.compressedFile || currentEntry.aiStatus === 'pending'"
-                    @click="triggerAiForCurrent"
+                    class="map-clear"
+                    :disabled="!hasCurrent"
+                    @click="clearLocation"
                   >
-                    {{ currentEntry.aiStatus === 'pending' ? 'AI 分析中' : '重新 AI 分析' }}
+                    清空
                   </button>
-                </header>
-                <p v-if="currentEntry.aiError" class="ai-error">{{ currentEntry.aiError }}</p>
-                <label class="field">
-                  <span class="field-label">标题</span>
-                  <input v-model="currentEntry.meta.title" type="text" class="cyber-input" />
-                </label>
-                <label class="field">
-                  <span class="field-label">描述</span>
-                  <textarea v-model="currentEntry.meta.caption" rows="3" class="cyber-input"></textarea>
-                </label>
-                <label class="field">
-                  <span class="field-label">标签</span>
-                  <input
-                    v-model="currentEntry.meta.tags"
-                    type="text"
-                    class="cyber-input"
-                    placeholder="用逗号分隔，例如：猫, 夜景"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field-label">主色调</span>
-                  <input
-                    v-model="currentEntry.meta.dominant_color"
-                    type="text"
-                    class="cyber-input"
-                    placeholder="例如：暮光橙 #F59E0B"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field-label">色板</span>
-                  <input
-                    v-model="currentEntry.meta.palette"
-                    type="text"
-                    class="cyber-input"
-                    placeholder="用逗号分隔，例如：#F59E0B, #0F172A"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field-label">构图</span>
-                  <textarea v-model="currentEntry.meta.composition" rows="2" class="cyber-input"></textarea>
-                </label>
-                <label class="field">
-                  <span class="field-label">搜索文本</span>
-                  <textarea v-model="currentEntry.meta.search_content" rows="2" class="cyber-input"></textarea>
-                </label>
-                <label class="field">
-                  <span class="field-label">位置名称</span>
-                  <input
-                    v-model="currentEntry.meta.location_name"
-                    type="text"
-                    class="cyber-input"
-                    placeholder="例如：上海 外滩"
-                  />
-                </label>
-
-                <div class="map-block">
-                  <div class="map-block-header">
-                    <span class="field-label">地图坐标</span>
-                    <button
-                      type="button"
-                      class="map-clear"
-                      @click="clearLocation"
-                    >
-                      清空
-                    </button>
-                  </div>
-                  <LocationSearch class="location-search" @select="applyLocationSearchResult" />
-                  <div ref="mapRef" class="map-pane" aria-label="点击地图选择图片位置"></div>
-                  <p v-if="mapLoadState !== 'ready'" class="map-status">
-                    {{ mapLoadState === 'fallback' ? '矢量地图加载慢，已切到深色备用底图' : '正在加载地图' }}
-                  </p>
-                  <div class="map-coords">
-                    <label class="field">
-                      <span class="field-sublabel">纬度</span>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        class="cyber-input"
-                        :value="currentEntry.meta.location_lat ?? ''"
-                        @input="updateLat"
-                      />
-                    </label>
-                    <label class="field">
-                      <span class="field-sublabel">经度</span>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        class="cyber-input"
-                        :value="currentEntry.meta.location_lng ?? ''"
-                        @input="updateLng"
-                      />
-                    </label>
-                  </div>
                 </div>
-              </section>
-            </template>
-            <template v-else>
-              <p class="meta-placeholder">从队列里选一张图片，开始编辑它的元数据喵～</p>
-            </template>
+                <LocationSearch class="location-search" @select="applyLocationSearchResult" />
+                <div ref="mapRef" class="map-pane" aria-label="点击地图选择图片位置"></div>
+                <p v-if="mapLoadState !== 'ready'" class="map-status">
+                  {{ mapLoadState === 'fallback' ? '矢量地图加载慢，已切到深色备用底图' : '正在加载地图' }}
+                </p>
+                <div class="map-coords">
+                  <label class="field">
+                    <span class="field-sublabel">纬度</span>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      class="cyber-input"
+                      :value="displayEntry.meta.location_lat ?? ''"
+                      :disabled="!hasCurrent"
+                      @input="updateLat"
+                    />
+                  </label>
+                  <label class="field">
+                    <span class="field-sublabel">经度</span>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      class="cyber-input"
+                      :value="displayEntry.meta.location_lng ?? ''"
+                      :disabled="!hasCurrent"
+                      @input="updateLng"
+                    />
+                  </label>
+                </div>
+              </div>
+            </section>
           </aside>
         </div>
 
@@ -1496,6 +1595,17 @@ onBeforeUnmount(() => {
   color: rgb(148, 163, 184);
 }
 
+.meta-sidebar :deep(.cyber-input:disabled),
+.meta-sidebar :deep(input:disabled),
+.meta-sidebar :deep(textarea:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.meta-sidebar .map-clear:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .queue-list,
 .meta-sidebar {
   scrollbar-width: thin;
@@ -1692,6 +1802,86 @@ onBeforeUnmount(() => {
   color: rgb(148, 163, 184);
 }
 
+.visibility-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.55rem;
+  background: rgba(15, 23, 42, 0.45);
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.visibility-toggle:hover:not(.is-disabled) {
+  border-color: rgba(53, 243, 255, 0.35);
+}
+.visibility-toggle.is-on {
+  border-color: rgba(53, 243, 255, 0.45);
+  background: rgba(53, 243, 255, 0.06);
+}
+.visibility-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.visibility-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.visibility-toggle-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(226, 232, 240);
+}
+.visibility-toggle-hint {
+  font-size: 11px;
+  color: rgb(148, 163, 184);
+  line-height: 1.4;
+}
+.visibility-toggle-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}
+.visibility-toggle-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 1.3rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: background-color 160ms ease;
+}
+.visibility-toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: rgb(248, 250, 252);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+.visibility-toggle.is-on .visibility-toggle-switch {
+  background: rgba(53, 243, 255, 0.7);
+}
+.visibility-toggle.is-on .visibility-toggle-switch::after {
+  left: 1.25rem;
+}
+
 .map-block {
   display: flex;
   flex-direction: column;
@@ -1705,6 +1895,58 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.visibility-inline {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  margin-right: 0.6rem;
+  padding: 0.15rem 0.1rem;
+  cursor: pointer;
+  user-select: none;
+}
+.visibility-inline.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.visibility-inline-label {
+  font-size: 11px;
+  color: rgb(148, 163, 184);
+  letter-spacing: 0.02em;
+}
+.visibility-inline.is-on .visibility-inline-label {
+  color: rgba(103, 232, 249, 0.95);
+}
+.visibility-inline-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 1.8rem;
+  height: 0.95rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: background-color 160ms ease;
+}
+.visibility-inline-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0.12rem;
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 50%;
+  background: rgb(248, 250, 252);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+.visibility-inline.is-on .visibility-inline-switch {
+  background: rgba(53, 243, 255, 0.7);
+}
+.visibility-inline.is-on .visibility-inline-switch::after {
+  left: 0.96rem;
 }
 
 .map-clear {

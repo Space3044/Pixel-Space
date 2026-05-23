@@ -1,7 +1,8 @@
 import type { Env } from '../../types';
-import { badRequest, json, serverError } from '../../_shared/http';
+import { badRequest, json, serverError, unauthorized } from '../../_shared/http';
 import type { AiSettings } from '../../_shared/ai';
 import { getAiSettings } from '../../_shared/ai';
+import { resolveAdmin } from '../../_shared/auth';
 
 const UPSERT_SQL = `
 INSERT INTO ai_settings (id, proxy_url, model, updated_at)
@@ -31,7 +32,9 @@ const payloadFromRequest = async (request: Request): Promise<AiSettings | null> 
   }
 };
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+  if (!resolveAdmin(request, env)) return unauthorized();
+
   try {
     return json(await getAiSettings(env));
   } catch (error) {
@@ -41,6 +44,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 };
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
+  if (!resolveAdmin(request, env)) return unauthorized();
+
   const payload = await payloadFromRequest(request);
   if (!payload) return badRequest('invalid_ai_settings_payload');
 

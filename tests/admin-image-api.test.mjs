@@ -155,6 +155,8 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
     '暖橙色 #F59E0B',
     '["#F59E0B","#0F172A"]',
     '三分法构图',
+    null,
+    null,
     'img-key',
   ]);
 });

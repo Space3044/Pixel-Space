@@ -25,4 +25,6 @@ export interface ImageRecord {
   ai_error: string | null;
   ai_attempts: number;
   ai_finished_at: string | null;
+  is_public: number;
+  location_public: number;
 }

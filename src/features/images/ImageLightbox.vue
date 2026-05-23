@@ -6,6 +6,7 @@ import LocationSearch from './LocationSearch.vue';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 import type { GeocodeResult } from './geocode.api';
 import { deleteImage, updateImage } from './images.api';
+import { isAdmin } from '@/shared/auth/useAdmin';
 
 const props = defineProps<{ open: boolean; image?: ImageRecord | null }>();
 const emit = defineEmits<{ close: []; prev: []; next: []; updated: [image: ImageRecord]; deleted: [key: string] }>();
@@ -63,6 +64,8 @@ const editForm = reactive({
   location_name: '',
   location_lat: '' as number | '',
   location_lng: '' as number | '',
+  is_public: 1 as 0 | 1,
+  location_public: 1 as 0 | 1,
 });
 
 const publicPageUrl = computed(() => {
@@ -236,6 +239,8 @@ const resetForm = (image: ImageRecord | null | undefined) => {
   editForm.location_name = image?.location_name ?? '';
   editForm.location_lat = image?.location_lat ?? '';
   editForm.location_lng = image?.location_lng ?? '';
+  editForm.is_public = image?.is_public === 0 ? 0 : 1;
+  editForm.location_public = image?.location_public === 0 ? 0 : 1;
 };
 
 const openAiEditor = () => {
@@ -264,6 +269,8 @@ const saveAiMetadata = async () => {
       dominant_color: editForm.dominant_color,
       palette: editForm.palette,
       composition: editForm.composition,
+      is_public: editForm.is_public,
+      location_public: editForm.location_public,
     });
     emit('updated', updated);
     resetForm(updated);
@@ -312,6 +319,8 @@ const saveLocation = async () => {
       dominant_color: props.image.dominant_color ?? '',
       palette: paletteTextFromImage(props.image),
       composition: props.image.composition ?? '',
+      is_public: editForm.is_public,
+      location_public: editForm.location_public,
     });
     emit('updated', updated);
     resetForm(updated);
@@ -336,6 +345,34 @@ const deleteCurrentImage = async () => {
     actionError.value = (error as Error).message;
   } finally {
     deleting.value = false;
+  }
+};
+
+const saveVisibilityFlag = async (field: 'is_public' | 'location_public', next: 0 | 1) => {
+  const image = props.image;
+  if (!image || saving.value || deleting.value) return;
+  saving.value = true;
+  actionError.value = null;
+  try {
+    const updated = await updateImage(image.key, {
+      title: image.title,
+      caption: image.caption ?? '',
+      location_name: image.location_name ?? '',
+      location_lat: image.location_lat,
+      location_lng: image.location_lng,
+      tags: tagsTextFromImage(image),
+      dominant_color: image.dominant_color ?? '',
+      palette: paletteTextFromImage(image),
+      composition: image.composition ?? '',
+      is_public: field === 'is_public' ? next : (image.is_public === 0 ? 0 : 1),
+      location_public: field === 'location_public' ? next : (image.location_public === 0 ? 0 : 1),
+    });
+    emit('updated', updated);
+    resetForm(updated);
+  } catch (error) {
+    actionError.value = (error as Error).message;
+  } finally {
+    saving.value = false;
   }
 };
 
@@ -440,7 +477,7 @@ onBeforeUnmount(() => {
                   <svg :viewBox="ICONS.info.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.info.d" /></svg>
                 </button>
                 <a
-                  v-if="image"
+                  v-if="image && isAdmin"
                   class="viewer-action-btn"
                   :href="originalUrl"
                   target="_blank"
@@ -450,13 +487,14 @@ onBeforeUnmount(() => {
                 >
                   <svg :viewBox="ICONS.download.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.download.d" /></svg>
                 </a>
-                <button v-else type="button" class="viewer-action-btn" title="下载原图" aria-label="下载原图" disabled>
+                <button v-else-if="isAdmin" type="button" class="viewer-action-btn" title="下载原图" aria-label="下载原图" disabled>
                   <svg :viewBox="ICONS.download.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.download.d" /></svg>
                 </button>
                 <button type="button" class="viewer-action-btn" title="全屏" aria-label="全屏（阶段 7 接入）" disabled>
                   <svg :viewBox="ICONS.expand.vb" fill="currentColor" class="h-3.5 w-3.5" aria-hidden="true"><path :d="ICONS.expand.d" /></svg>
                 </button>
                 <button
+                  v-if="isAdmin"
                   type="button"
                   class="viewer-action-btn danger"
                   title="删除图片"
@@ -531,7 +569,23 @@ onBeforeUnmount(() => {
                     <div class="detail-item">
                       <span class="item-label">访问级别</span>
                       <span class="item-value">
-                        <span class="badge badge-lime">公开</span>
+                        <label
+                          v-if="isAdmin"
+                          class="inline-flag"
+                          :class="{ 'is-on': image.is_public !== 0, 'is-busy': saving }"
+                          :title="image.is_public !== 0 ? '点击收回为私藏' : '点击公开到探索'"
+                        >
+                          <input
+                            type="checkbox"
+                            class="inline-flag-input"
+                            :checked="image.is_public !== 0"
+                            :disabled="saving || deleting"
+                            @change="saveVisibilityFlag('is_public', ($event.target as HTMLInputElement).checked ? 1 : 0)"
+                          />
+                          <span class="inline-flag-switch" aria-hidden="true"></span>
+                          <span class="inline-flag-text">{{ image.is_public !== 0 ? '公开' : '私藏' }}</span>
+                        </label>
+                        <span v-else class="badge badge-lime">公开</span>
                       </span>
                     </div>
                   </div>
@@ -562,6 +616,7 @@ onBeforeUnmount(() => {
                       <span>AI 分析</span>
                     </span>
                     <button
+                      v-if="isAdmin"
                       type="button"
                       class="ai-edit-button"
                       :disabled="saving || deleting"
@@ -648,6 +703,25 @@ onBeforeUnmount(() => {
                       <span>构图</span>
                       <textarea v-model="editForm.composition" rows="2" />
                     </label>
+                    <label class="edit-toggle" :class="{ 'is-on': editForm.is_public === 1 }">
+                      <span class="edit-toggle-text">
+                        <span class="edit-toggle-title">公开到探索</span>
+                        <span class="edit-toggle-hint">
+                          {{
+                            editForm.is_public === 1
+                              ? '出现在图库、随机和蜂巢等公开聚合'
+                              : '私藏，仅凭直链可见'
+                          }}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        class="edit-toggle-input"
+                        :checked="editForm.is_public === 1"
+                        @change="editForm.is_public = ($event.target as HTMLInputElement).checked ? 1 : 0"
+                      />
+                      <span class="edit-toggle-switch" aria-hidden="true"></span>
+                    </label>
                     <p v-if="actionError" class="action-error">{{ actionError }}</p>
                     <div class="edit-actions">
                       <button type="submit" class="action-btn" :disabled="saving || deleting">
@@ -667,6 +741,7 @@ onBeforeUnmount(() => {
                       <span>位置</span>
                     </span>
                     <button
+                      v-if="isAdmin"
                       type="button"
                       class="location-edit-button"
                       :disabled="saving || deleting"
@@ -689,6 +764,32 @@ onBeforeUnmount(() => {
                         {{ image.location_lat }}, {{ image.location_lng }}
                       </span>
                       <span v-else class="item-value text-muted">未记录</span>
+                    </div>
+                    <div v-if="isAdmin" class="detail-item">
+                      <span class="item-label">位置可见</span>
+                      <span class="item-value">
+                        <label
+                          class="inline-flag"
+                          :class="{
+                            'is-on': image.location_public !== 0,
+                            'is-busy': saving,
+                            'is-disabled': !hasCoordinates,
+                          }"
+                          :title="!hasCoordinates ? '未设置坐标，开关不生效' : image.location_public !== 0 ? '点击隐藏位置' : '点击对访客公开位置'"
+                        >
+                          <input
+                            type="checkbox"
+                            class="inline-flag-input"
+                            :checked="image.location_public !== 0"
+                            :disabled="!hasCoordinates || saving || deleting"
+                            @change="saveVisibilityFlag('location_public', ($event.target as HTMLInputElement).checked ? 1 : 0)"
+                          />
+                          <span class="inline-flag-switch" aria-hidden="true"></span>
+                          <span class="inline-flag-text">
+                            {{ !hasCoordinates ? '无坐标' : image.location_public !== 0 ? '公开' : '仅自己' }}
+                          </span>
+                        </label>
+                      </span>
                     </div>
                   </div>
                   <ReadOnlyMap
@@ -716,6 +817,34 @@ onBeforeUnmount(() => {
                         <input v-model="editForm.location_lng" type="number" step="any" min="-180" max="180" />
                       </label>
                     </div>
+                    <label
+                      class="edit-toggle"
+                      :class="{
+                        'is-on': editForm.location_public === 1,
+                        'is-disabled': editForm.location_lat === '' || editForm.location_lng === '',
+                      }"
+                    >
+                      <span class="edit-toggle-text">
+                        <span class="edit-toggle-title">公开显示位置</span>
+                        <span class="edit-toggle-hint">
+                          {{
+                            editForm.location_lat === '' || editForm.location_lng === ''
+                              ? '未设置坐标，开关不生效'
+                              : editForm.location_public === 1
+                                ? '访客可见地名和地图标记'
+                                : '访客只看到一张空地图'
+                          }}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        class="edit-toggle-input"
+                        :checked="editForm.location_public === 1"
+                        :disabled="editForm.location_lat === '' || editForm.location_lng === ''"
+                        @change="editForm.location_public = ($event.target as HTMLInputElement).checked ? 1 : 0"
+                      />
+                      <span class="edit-toggle-switch" aria-hidden="true"></span>
+                    </label>
                     <p v-if="actionError" class="action-error">{{ actionError }}</p>
                     <div class="edit-actions">
                       <button type="submit" class="action-btn" :disabled="saving || deleting">
@@ -1166,6 +1295,140 @@ onBeforeUnmount(() => {
 .edit-actions {
   display: flex;
   gap: 8px;
+}
+.edit-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.45);
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.edit-toggle:hover:not(.is-disabled) {
+  border-color: rgba(53, 243, 255, 0.35);
+}
+.edit-toggle.is-on {
+  border-color: rgba(53, 243, 255, 0.45);
+  background: rgba(53, 243, 255, 0.06);
+}
+.edit-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.edit-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.edit-toggle-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgb(226, 232, 240);
+}
+.edit-toggle-hint {
+  font-size: 11px;
+  color: rgb(148, 163, 184);
+  line-height: 1.4;
+}
+.edit-toggle-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.edit-toggle-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: background-color 160ms ease;
+}
+.edit-toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgb(248, 250, 252);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+.edit-toggle.is-on .edit-toggle-switch {
+  background: rgba(53, 243, 255, 0.7);
+}
+.edit-toggle.is-on .edit-toggle-switch::after {
+  left: 20px;
+}
+
+.inline-flag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.inline-flag.is-disabled,
+.inline-flag.is-busy {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.inline-flag-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}
+.inline-flag-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.32);
+  transition: background-color 160ms ease;
+}
+.inline-flag-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgb(248, 250, 252);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+.inline-flag.is-on .inline-flag-switch {
+  background: rgba(132, 247, 153, 0.6);
+}
+.inline-flag.is-on .inline-flag-switch::after {
+  left: 16px;
+}
+.inline-flag-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(148, 163, 184, 0.85);
+}
+.inline-flag.is-on .inline-flag-text {
+  color: rgb(132, 247, 153);
 }
 .action-btn,
 .inline-copy {

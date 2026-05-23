@@ -1,6 +1,7 @@
 import type { Env } from '../../types';
 import { analyzeImageWithAi } from '../../_shared/ai';
-import { badRequest, json, serverError } from '../../_shared/http';
+import { resolveAdmin } from '../../_shared/auth';
+import { badRequest, json, serverError, unauthorized } from '../../_shared/http';
 
 const fileFromForm = (formData: FormData, name: string): File | null => {
   const value = formData.get(name);
@@ -8,6 +9,8 @@ const fileFromForm = (formData: FormData, name: string): File | null => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  if (!resolveAdmin(request, env)) return unauthorized();
+
   let formData: FormData;
   try {
     formData = await request.formData();

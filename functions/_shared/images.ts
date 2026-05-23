@@ -29,6 +29,8 @@ export interface ImageRecord {
   ai_error: string | null;
   ai_attempts: number;
   ai_finished_at: string | null;
+  is_public: number;
+  location_public: number;
 }
 
 // D1 表里的原始行形状（只声明 list / detail 接口会用到的列）。
@@ -59,6 +61,8 @@ export interface ImageRow {
   ai_error: string | null;
   ai_attempts: number;
   ai_finished_at: string | null;
+  is_public: number;
+  location_public: number;
 }
 
 export const normalizeTagsJson = (value: unknown): string | null => {
@@ -121,5 +125,19 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     ai_error: row.ai_error,
     ai_attempts: row.ai_attempts,
     ai_finished_at: row.ai_finished_at,
+    is_public: row.is_public,
+    location_public: row.location_public,
+  };
+}
+
+// 把记录按访客视角清洗：location_public=0 时擦掉地名与经纬度。
+// 管理员视角不应调用此函数。
+export function scrubRecordForVisitor(record: ImageRecord): ImageRecord {
+  if (record.location_public !== 0) return record;
+  return {
+    ...record,
+    location_name: null,
+    location_lat: null,
+    location_lng: null,
   };
 }

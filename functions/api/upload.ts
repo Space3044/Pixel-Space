@@ -1,5 +1,6 @@
 import type { Env } from '../types';
-import { badRequest, json, serverError } from '../_shared/http';
+import { badRequest, json, serverError, unauthorized } from '../_shared/http';
+import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
 import { normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../_shared/images';
 import { archiveOriginalToTelegram } from '../_shared/telegram';
@@ -34,15 +35,17 @@ INSERT INTO images (
   color_palette_json,
   composition,
   ai_status,
-  tg_status
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  tg_status,
+  is_public,
+  location_public
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
-  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE key = ?';
+  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public FROM images WHERE key = ?';
 
 const SELECT_BY_HASH_SQL =
-  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE hash = ? LIMIT 1';
+  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public FROM images WHERE hash = ? LIMIT 1';
 
 const UPDATE_TG_DONE_SQL = `
 UPDATE images
@@ -75,6 +78,8 @@ interface UploadMeta {
   color_palette_json: string | null;
   composition: string | null;
   ai_status: 'pending' | 'done' | 'failed';
+  is_public: 0 | 1;
+  location_public: 0 | 1;
 }
 
 interface UploadExif {
@@ -137,6 +142,12 @@ const normalizeAiStatus = (value: unknown): UploadMeta['ai_status'] => {
   return 'pending';
 };
 
+const normalizeFlag = (value: unknown, fallback: 0 | 1): 0 | 1 => {
+  if (value === true || value === 1 || value === '1') return 1;
+  if (value === false || value === 0 || value === '0') return 0;
+  return fallback;
+};
+
 const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => ({
   title: stringOrEmpty(raw.title),
   caption: stringOrNull(raw.caption),
@@ -149,6 +160,8 @@ const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => ({
   color_palette_json: normalizeColorPaletteJson(raw.palette),
   composition: stringOrNull(raw.composition),
   ai_status: normalizeAiStatus(raw.ai_status),
+  is_public: normalizeFlag(raw.is_public, 1),
+  location_public: normalizeFlag(raw.location_public, 1),
 });
 
 const normalizeExif = (raw: Record<string, unknown>): UploadExif => ({
@@ -178,6 +191,8 @@ const errorMessage = (error: unknown): string => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  if (!resolveAdmin(request, env)) return unauthorized();
+
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -249,6 +264,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         meta.composition,
         meta.ai_status,
         'pending',
+        meta.is_public,
+        meta.location_public,
       )
       .run();
 
