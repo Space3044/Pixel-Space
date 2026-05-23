@@ -41,6 +41,9 @@ INSERT INTO images (
 const SELECT_SQL =
   'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE key = ?';
 
+const SELECT_BY_HASH_SQL =
+  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at FROM images WHERE hash = ? LIMIT 1';
+
 const UPDATE_TG_DONE_SQL = `
 UPDATE images
 SET tg_file_id = ?,
@@ -203,9 +206,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const key = crypto.randomUUID();
   const r2Key = key;
   const originalFilename = original.name.trim() || key;
-  const hash = await sha256Hex(compressed);
+  const hash = await sha256Hex(original);
 
   try {
+    const existing = await env.DB.prepare(SELECT_BY_HASH_SQL).bind(hash).first<ImageRow>();
+    if (existing) {
+      return json(rowToRecord(existing, env.PUBLIC_BASE_URL), 200);
+    }
+
     await env.BUCKET.put(r2Key, compressed, {
       httpMetadata: {
         contentType: compressed.type,

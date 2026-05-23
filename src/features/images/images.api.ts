@@ -34,6 +34,16 @@ export function fetchImage(key: string): Promise<ImageRecord> {
   return fetchJson<ImageRecord>(`/image/${encodeURIComponent(key)}`);
 }
 
+export async function checkImageHash(hash: string): Promise<ImageRecord | null> {
+  const response = await fetch(`${API_BASE}/check-hash?hash=${encodeURIComponent(hash)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`check-hash failed: ${response.status} ${text}`);
+  }
+  return (await response.json()) as ImageRecord;
+}
+
 export function updateImage(key: string, payload: ImageUpdatePayload): Promise<ImageRecord> {
   return fetchJson<ImageRecord>(`/admin/image/${encodeURIComponent(key)}`, {
     method: 'PATCH',
