@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { Map as MapLibreMap, Marker } from 'maplibre-gl';
+import type { GeoJSONSource, Map as MapLibreMap, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
@@ -25,6 +25,13 @@ interface FootprintGroup {
 const DEFAULT_CENTER: [number, number] = [104.1954, 35.8617];
 const FLAT_ZOOM = 3;
 const FLAT_FOCUS_ZOOM = 8;
+const FOOTPRINT_SOURCE_ID = 'footprints-source';
+const FOOTPRINT_HEATMAP_LAYER_ID = 'footprints-heatmap-layer';
+const FOOTPRINT_POINT_LAYER_ID = 'footprints-point-layer';
+const HEATMAP_FADE_START = 5;
+const HEATMAP_FADE_END = 8;
+const MARKER_FADE_IN = 6;
+const MARKER_MIN_ZOOM = MARKER_FADE_IN - 0.5;
 
 const flatMapEl = ref<HTMLElement | null>(null);
 const loading = ref(false);
@@ -36,8 +43,9 @@ const hoveredFootprintKey = ref<string | null>(null);
 let flatMap: MapLibreMap | null = null;
 let maplibre: typeof import('maplibre-gl') | null = null;
 let maplibrePromise: Promise<typeof import('maplibre-gl')> | null = null;
-let flatMarkers: Marker[] = [];
+let markersByKey = new Map<string, Marker>();
 let flatMarkerElements = new Map<string, HTMLElement>();
+let sourceReady = false;
 
 const isLocatedImage = (image: ImageRecord): image is LocatedImage =>
   image.location_lat !== null && image.location_lng !== null
@@ -90,7 +98,7 @@ const visitedCoordinates = computed(() =>
 );
 
 const activeFootprint = computed(() =>
-  footprints.value.find((footprint) => footprint.key === activeFootprintKey.value) ?? footprints.value[0] ?? null,
+  footprints.value.find((footprint) => footprint.key === activeFootprintKey.value) ?? null,
 );
 
 const hoveredFootprint = computed(() =>
@@ -103,10 +111,36 @@ const loadMaplibre = async () => {
   return maplibre;
 };
 
-const clearFlatMarkers = () => {
-  for (const marker of flatMarkers) marker.remove();
-  flatMarkers = [];
-  flatMarkerElements = new Map<string, HTMLElement>();
+const clearAllMarkers = () => {
+  for (const marker of markersByKey.values()) marker.remove();
+  markersByKey = new Map();
+  flatMarkerElements = new Map();
+};
+
+interface PointFeatureProps {
+  footprintKey: string;
+}
+
+interface RenderedFeature {
+  geometry: { coordinates: [number, number] };
+  properties: PointFeatureProps;
+}
+
+const buildGeoJSON = () => ({
+  type: 'FeatureCollection' as const,
+  features: footprints.value.map((footprint) => ({
+    type: 'Feature' as const,
+    geometry: { type: 'Point' as const, coordinates: [footprint.lng, footprint.lat] },
+    properties: { footprintKey: footprint.key, weight: footprint.images.length },
+  })),
+});
+
+const getFootprintSource = (): GeoJSONSource | null => {
+  return (flatMap?.getSource(FOOTPRINT_SOURCE_ID) as GeoJSONSource | undefined) ?? null;
+};
+
+const closeFlatPopups = () => {
+  for (const marker of markersByKey.values()) marker.getPopup()?.remove();
 };
 
 const updateMarkerStyles = () => {
@@ -132,6 +166,16 @@ const previewFootprint = (footprint: FootprintGroup | null) => {
 const selectFootprint = (footprint: FootprintGroup) => {
   activeFootprintKey.value = footprint.key;
   focusFlatMapOn(footprint);
+};
+
+const resetFlatMapView = () => {
+  activeFootprintKey.value = null;
+  hoveredFootprintKey.value = null;
+  closeFlatPopups();
+  void nextTick(() => {
+    flatMap?.resize();
+    fitFlatMapToFootprints();
+  });
 };
 
 const createMarkerElement = (footprint: FootprintGroup) => {
@@ -215,29 +259,122 @@ const fitFlatMapToFootprints = () => {
 };
 
 const renderFlatMarkers = () => {
-  if (!flatMap || !maplibre) return;
+  if (!flatMap || !maplibre || !sourceReady) return;
 
-  clearFlatMarkers();
-  for (const footprint of footprints.value) {
-    const marker = new maplibre.Marker({
-      element: createMarkerElement(footprint),
-      anchor: 'center',
-    })
-      .setLngLat([footprint.lng, footprint.lat])
-      .setPopup(
-        new maplibre.Popup({
-          offset: 18,
-          closeButton: false,
-          className: 'footprint-map-popup',
-        }).setDOMContent(createPopupNode(footprint)),
-      )
-      .addTo(flatMap);
+  const nextKeys = new Set<string>();
 
-    flatMarkers.push(marker);
+  if (flatMap.getZoom() >= MARKER_MIN_ZOOM) {
+    const features = flatMap.querySourceFeatures(FOOTPRINT_SOURCE_ID) as unknown as RenderedFeature[];
+
+    for (const feature of features) {
+      const coordinates = feature.geometry.coordinates;
+      const footprintKey = feature.properties.footprintKey;
+      const key = `point_${footprintKey}`;
+
+      if (nextKeys.has(key)) continue;
+      nextKeys.add(key);
+
+      if (markersByKey.has(key)) {
+        markersByKey.get(key)!.setLngLat(coordinates);
+        continue;
+      }
+
+      const footprint = footprints.value.find((fp) => fp.key === footprintKey);
+      if (!footprint) continue;
+
+      const element = createMarkerElement(footprint);
+      const marker = new maplibre.Marker({ element, anchor: 'center' })
+        .setLngLat(coordinates)
+        .setPopup(
+          new maplibre.Popup({ offset: 18, closeButton: false, className: 'footprint-map-popup' })
+            .setDOMContent(createPopupNode(footprint)),
+        )
+        .addTo(flatMap);
+      markersByKey.set(key, marker);
+    }
+  }
+
+  for (const [key, marker] of markersByKey) {
+    if (!nextKeys.has(key)) {
+      marker.remove();
+      markersByKey.delete(key);
+      if (key.startsWith('point_')) {
+        const footprintKey = key.slice('point_'.length);
+        flatMarkerElements.delete(footprintKey);
+      }
+    }
   }
 
   updateMarkerStyles();
-  fitFlatMapToFootprints();
+};
+
+const ensureFootprintLayers = () => {
+  if (!flatMap) return;
+  if (flatMap.getSource(FOOTPRINT_SOURCE_ID)) return;
+
+  flatMap.addSource(FOOTPRINT_SOURCE_ID, {
+    type: 'geojson',
+    data: buildGeoJSON(),
+  });
+
+  flatMap.addLayer({
+    id: FOOTPRINT_HEATMAP_LAYER_ID,
+    type: 'heatmap',
+    source: FOOTPRINT_SOURCE_ID,
+    maxzoom: HEATMAP_FADE_END + 0.5,
+    paint: {
+      'heatmap-weight': [
+        'interpolate',
+        ['linear'],
+        ['coalesce', ['get', 'weight'], 1],
+        1, 0.4,
+        20, 1,
+      ],
+      'heatmap-intensity': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        0, 0.8,
+        HEATMAP_FADE_END, 1.6,
+      ],
+      'heatmap-radius': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        0, 14,
+        4, 22,
+        HEATMAP_FADE_END, 36,
+      ],
+      'heatmap-color': [
+        'interpolate',
+        ['linear'],
+        ['heatmap-density'],
+        0, 'rgba(7, 10, 24, 0)',
+        0.2, 'rgba(53, 243, 255, 0.25)',
+        0.4, 'rgba(53, 243, 255, 0.55)',
+        0.6, 'rgba(124, 247, 212, 0.78)',
+        0.8, 'rgba(255, 232, 156, 0.88)',
+        1, 'rgba(255, 79, 216, 0.95)',
+      ],
+      'heatmap-opacity': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        HEATMAP_FADE_START, 0.95,
+        HEATMAP_FADE_END, 0,
+      ],
+    },
+  });
+
+  flatMap.addLayer({
+    id: FOOTPRINT_POINT_LAYER_ID,
+    type: 'circle',
+    source: FOOTPRINT_SOURCE_ID,
+    paint: {
+      'circle-radius': 1,
+      'circle-opacity': 0,
+    },
+  });
 };
 
 const initFlatMap = async () => {
@@ -252,12 +389,26 @@ const initFlatMap = async () => {
     attributionControl: false,
   });
 
+  const onStyleReady = () => {
+    if (!flatMap) return;
+    ensureFootprintLayers();
+    fitFlatMapToFootprints();
+  };
+
   flatMap.once('error', () => {
     if (!flatMap) return;
     flatMap.setStyle(RASTER_FALLBACK_STYLE);
-    flatMap.once('styledata', renderFlatMarkers);
+    flatMap.once('styledata', onStyleReady);
   });
-  flatMap.once('load', renderFlatMarkers);
+  flatMap.once('load', onStyleReady);
+
+  flatMap.on('sourcedata', (event) => {
+    if (event.sourceId !== FOOTPRINT_SOURCE_ID || !event.isSourceLoaded) return;
+    sourceReady = true;
+    renderFlatMarkers();
+  });
+  flatMap.on('moveend', renderFlatMarkers);
+  flatMap.on('zoomend', renderFlatMarkers);
 };
 
 const loadFootprints = async () => {
@@ -266,7 +417,7 @@ const loadFootprints = async () => {
 
   try {
     images.value = await listImages();
-    activeFootprintKey.value = footprints.value[0]?.key ?? null;
+    activeFootprintKey.value = null;
   } catch (error) {
     loadError.value = (error as Error).message;
   } finally {
@@ -277,12 +428,21 @@ const loadFootprints = async () => {
 watch(
   footprints,
   () => {
-    void nextTick(renderFlatMarkers);
+    void nextTick(() => {
+      const source = getFootprintSource();
+      if (!source) return;
+      sourceReady = false;
+      source.setData(buildGeoJSON());
+      fitFlatMapToFootprints();
+    });
   },
   { deep: true },
 );
 
-watch([activeFootprint, hoveredFootprint], updateMarkerStyles);
+watch([activeFootprint, hoveredFootprint], () => {
+  updateMarkerStyles();
+  void nextTick(() => flatMap?.resize());
+});
 
 onMounted(() => {
   void initFlatMap();
@@ -290,11 +450,12 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  clearFlatMarkers();
+  clearAllMarkers();
   flatMap?.remove();
   flatMap = null;
   maplibre = null;
   maplibrePromise = null;
+  sourceReady = false;
 });
 </script>
 
@@ -302,19 +463,19 @@ onBeforeUnmount(() => {
   <AppShell fluid>
     <section class="footprint-page">
       <header class="footprint-hero cyber-panel">
-        <div>
-          <p class="eyebrow">Travel Footprint</p>
-        </div>
+        <p class="eyebrow">Travel Footprint</p>
         <div class="hero-stats" aria-label="旅行足迹统计">
-          <div>
+          <div class="hero-stat">
             <span>{{ footprints.length }}</span>
             <p>点亮地点</p>
           </div>
-          <div>
+          <span class="hero-stat-divider" aria-hidden="true" />
+          <div class="hero-stat">
             <span>{{ locatedImages.length }}</span>
             <p>定位图片</p>
           </div>
-          <div>
+          <span class="hero-stat-divider" aria-hidden="true" />
+          <div class="hero-stat">
             <span>{{ unlocatedCount }}</span>
             <p>未定位</p>
           </div>
@@ -330,7 +491,7 @@ onBeforeUnmount(() => {
 
       <div class="stacked-map-layout">
         <article class="flat-map-card cyber-panel" aria-label="旅行足迹平面地图">
-          <div class="flat-layout">
+          <div class="flat-layout" :class="{ 'has-selection': activeFootprint }">
             <div class="flat-map-wrap">
               <div ref="flatMapEl" class="flat-map" aria-label="旅行足迹平面地图" />
               <div v-if="!loading && !loadError && footprints.length === 0" class="map-empty">
@@ -338,42 +499,46 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <aside class="footprint-side">
+            <aside v-if="activeFootprint" class="footprint-side">
+              <button
+                type="button"
+                class="map-overview-button"
+                @click="resetFlatMapView"
+              >
+                返回总览
+              </button>
               <section class="side-card">
                 <p class="section-label">当前点位</p>
-                <template v-if="activeFootprint">
+                <div class="active-point">
                   <img class="active-cover" :src="activeFootprint.cover.public_url" :alt="activeFootprint.cover.title" />
-                  <h3>{{ activeFootprint.name }}</h3>
-                  <p class="coordinate">{{ coordinateLabel(activeFootprint.lat, activeFootprint.lng) }}</p>
-                </template>
-                <p v-else class="side-copy">上传并标记位置后，这里会显示最近点亮的地点。</p>
+                  <div class="active-point-body">
+                    <h3>{{ activeFootprint.name }}</h3>
+                    <p class="coordinate">{{ coordinateLabel(activeFootprint.lat, activeFootprint.lng) }}</p>
+                    <p class="side-copy">{{ activeFootprint.images.length }} 张图片</p>
+                  </div>
+                </div>
               </section>
 
               <section class="side-card">
                 <div class="list-heading">
-                  <p class="section-label">已点亮</p>
-                  <span>{{ footprints.length }} 个地点</span>
+                  <p class="section-label">点位图片</p>
+                  <span>{{ activeFootprint.images.length }} 张图片</span>
                 </div>
 
-                <div v-if="footprints.length" class="footprint-list">
-                  <button
-                    v-for="footprint in footprints"
-                    :key="footprint.key"
-                    type="button"
-                    class="footprint-item"
-                    :class="{ 'is-active': footprint.key === activeFootprint?.key }"
-                    @click="selectFootprint(footprint)"
-                    @mouseenter="previewFootprint(footprint)"
-                    @mouseleave="previewFootprint(null)"
+                <div class="point-image-list">
+                  <a
+                    v-for="pointImage in activeFootprint.images"
+                    :key="pointImage.key"
+                    class="point-image-item"
+                    :href="`/p/${encodeURIComponent(pointImage.key)}`"
                   >
-                    <img :src="footprint.cover.public_url" :alt="footprint.cover.title" />
+                    <img :src="pointImage.public_url" :alt="pointImage.title" />
                     <span>
-                      <strong>{{ footprint.name }}</strong>
-                      <small>{{ footprint.images.length }} 张图片 · {{ coordinateLabel(footprint.lat, footprint.lng) }}</small>
+                      <strong>{{ pointImage.title || pointImage.original_filename }}</strong>
+                      <small>{{ pointImage.width }} × {{ pointImage.height }} · {{ pointImage.format.toUpperCase() }}</small>
                     </span>
-                  </button>
+                  </a>
                 </div>
-                <p v-else class="side-copy">还没有可点亮的位置。</p>
               </section>
             </aside>
           </div>
@@ -404,11 +569,12 @@ onBeforeUnmount(() => {
 
 .footprint-hero {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
-  margin-bottom: 1rem;
-  padding: 1.1rem 1.25rem;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+  padding: 0.55rem 1rem;
+  min-height: 0;
 }
 
 .eyebrow,
@@ -422,30 +588,40 @@ onBeforeUnmount(() => {
 }
 
 .hero-stats {
-  display: grid;
-  min-width: 24rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
-.hero-stats div {
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 4px;
-  background: rgba(7, 7, 19, 0.42);
-  padding: 0.7rem;
+.hero-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 
-.hero-stats span {
+.hero-stat span {
   color: white;
   font-family: 'Menlo', 'Consolas', monospace;
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 900;
+  line-height: 1;
 }
 
-.hero-stats p {
-  margin: 0.18rem 0 0;
+.hero-stat p {
+  margin: 0;
   color: rgba(148, 163, 184, 0.86);
   font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.hero-stat-divider {
+  width: 1px;
+  height: 0.85rem;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .page-state {
@@ -474,9 +650,13 @@ onBeforeUnmount(() => {
 
 .flat-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22rem;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   min-height: 38rem;
+}
+
+.flat-layout.has-selection {
+  grid-template-columns: minmax(0, 1fr) minmax(28rem, 34rem);
 }
 
 .flat-map-wrap {
@@ -493,21 +673,79 @@ onBeforeUnmount(() => {
   inset: 0;
 }
 
+.map-overview-button {
+  justify-self: end;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0.04) 45%,
+      rgba(255, 255, 255, 0.1) 100%
+    ),
+    rgba(7, 10, 24, 0.32);
+  padding: 0.32rem 0.78rem;
+  color: rgb(241, 245, 249);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 6px 18px rgba(0, 0, 0, 0.28);
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.map-overview-button:hover,
+.map-overview-button:focus-visible {
+  border-color: rgba(53, 243, 255, 0.5);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(53, 243, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(53, 243, 255, 0.14) 100%
+    ),
+    rgba(7, 10, 24, 0.32);
+  color: white;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(53, 243, 255, 0.12),
+    0 8px 22px rgba(53, 243, 255, 0.26);
+  outline: none;
+}
+
 .map-empty {
   position: absolute;
   left: 1rem;
   bottom: 1rem;
   z-index: 5;
-  border: 1px solid rgba(53, 243, 255, 0.18);
-  border-radius: 4px;
-  background: rgba(7, 7, 19, 0.72);
-  padding: 0.6rem 0.75rem;
-  color: rgba(226, 232, 240, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.03) 50%,
+      rgba(255, 255, 255, 0.08) 100%
+    ),
+    rgba(7, 10, 24, 0.22);
+  padding: 0.6rem 0.85rem;
+  color: rgba(241, 245, 249, 0.94);
   font-size: 0.82rem;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .footprint-side {
+  position: relative;
   display: grid;
   gap: 1rem;
   align-content: start;
@@ -521,17 +759,33 @@ onBeforeUnmount(() => {
   padding: 0.9rem;
 }
 
+.active-point {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
 .active-cover {
   display: block;
-  width: 100%;
-  height: 9rem;
+  width: 5.5rem;
+  height: 5.5rem;
   margin-top: 0.75rem;
   border-radius: 4px;
   object-fit: cover;
 }
 
+.active-point .active-cover {
+  margin-top: 0;
+}
+
+.active-point-body {
+  min-width: 0;
+}
+
 .side-card h3 {
-  margin: 0.7rem 0 0;
+  margin: 0;
   overflow: hidden;
   color: white;
   font-size: 1rem;
@@ -566,7 +820,7 @@ onBeforeUnmount(() => {
   font-size: 0.74rem;
 }
 
-.footprint-list {
+.point-image-list {
   display: grid;
   max-height: 20rem;
   gap: 0.55rem;
@@ -575,10 +829,10 @@ onBeforeUnmount(() => {
   padding-right: 0.15rem;
 }
 
-.footprint-item {
+.point-image-item {
   display: grid;
   width: 100%;
-  grid-template-columns: 3rem minmax(0, 1fr);
+  grid-template-columns: 4rem minmax(0, 1fr);
   gap: 0.65rem;
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -586,26 +840,25 @@ onBeforeUnmount(() => {
   background: rgba(7, 7, 19, 0.38);
   padding: 0.5rem;
   color: inherit;
-  cursor: pointer;
   text-align: left;
+  text-decoration: none;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
-.footprint-item:hover,
-.footprint-item.is-active {
+.point-image-item:hover {
   border-color: rgba(53, 243, 255, 0.34);
   background: rgba(53, 243, 255, 0.08);
 }
 
-.footprint-item img {
-  width: 3rem;
-  height: 3rem;
+.point-image-item img {
+  width: 4rem;
+  height: 4rem;
   border-radius: 4px;
   object-fit: cover;
 }
 
-.footprint-item strong,
-.footprint-item small {
+.point-image-item strong,
+.point-image-item small {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -613,13 +866,13 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.footprint-item strong {
+.point-image-item strong {
   color: rgb(226, 232, 240);
   font-size: 0.82rem;
   font-weight: 850;
 }
 
-.footprint-item small {
+.point-image-item small {
   margin-top: 0.22rem;
   color: rgba(148, 163, 184, 0.82);
   font-size: 0.7rem;
@@ -672,8 +925,11 @@ onBeforeUnmount(() => {
 
 :deep(.footprint-marker-core) {
   position: absolute;
+  top: 50%;
+  left: 50%;
   width: 13px;
   height: 13px;
+  transform: translate(-50%, -50%);
   border-radius: 999px;
   background: rgb(53, 243, 255);
   box-shadow: 0 0 0 5px rgba(53, 243, 255, 0.16), 0 0 20px rgba(53, 243, 255, 0.72);
@@ -701,7 +957,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.maplibregl-popup-content) {
-  border: 1px solid rgba(53, 243, 255, 0.18);
+  border: 0;
   border-radius: 6px;
   background: rgba(7, 7, 19, 0.9);
   padding: 0;
@@ -754,9 +1010,19 @@ onBeforeUnmount(() => {
 
 :deep(.footprint-popup-body a) {
   margin-top: 0.55rem;
+  border: 0;
   color: rgb(53, 243, 255);
   font-size: 0.74rem;
   font-weight: 800;
+  outline: none;
+  box-shadow: none;
+  text-decoration: none;
+}
+
+:deep(.footprint-popup-body a:focus-visible) {
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 0.18rem;
 }
 
 @keyframes marker-pulse {
@@ -772,19 +1038,24 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1024px) {
   .footprint-hero {
-    align-items: stretch;
-    flex-direction: column;
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
   }
 
   .hero-stats {
     min-width: 0;
+    gap: 0.65rem;
   }
 
   .flat-layout {
     grid-template-columns: 1fr;
   }
 
-  .footprint-list {
+  .flat-layout.has-selection {
+    grid-template-columns: 1fr;
+  }
+
+  .point-image-list {
     max-height: none;
   }
 }

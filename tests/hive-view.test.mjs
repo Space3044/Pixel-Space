@@ -28,7 +28,7 @@ test('HiveView stacks the flat image map above the WorldHeatmap-style globe', ()
   assert.match(view, /class="globe-boundary-card/);
   assert.match(view, /<WorldBoundaryGlobe\s+:visited-places="visitedPlaces"\s+:visited-coordinates="visitedCoordinates"/);
   assert.match(view, /class="flat-map/);
-  assert.match(view, /class="footprint-list/);
+  assert.match(view, /class="point-image-list/);
   assert.ok(view.indexOf('class="flat-map-card') < view.indexOf('class="globe-boundary-card'));
   assert.doesNotMatch(view, /HEX_COLS|HEX_ROWS|TOTAL_HEX|honeycomb|Hive Tips|hive-hex/);
 });
@@ -47,6 +47,7 @@ test('HiveView removes redundant hero title and active footprint copy', () => {
   assert.doesNotMatch(view, /这里收录了\s*\{\{\s*activeFootprint\.images\.length\s*\}\}\s*张图片，平面地图会定位到这个地点。/);
   assert.doesNotMatch(view, /\.footprint-hero h1/);
   assert.doesNotMatch(view, /\.hero-copy/);
+  assert.match(view, /\.footprint-hero\s*\{[^}]*align-items:\s*flex-start;/s);
 });
 
 test('HiveView derives lit locations from image coordinates', () => {
@@ -70,4 +71,38 @@ test('HiveView shows image positions only on the flat map', () => {
   assert.doesNotMatch(view, /globeMap|renderGlobeMarkers|globeMarkers|createMarkerElement\(footprint,\s*'globe'\)|focusGlobeOn\(footprint\)/);
   assert.match(view, /footprint\.images\.length/);
   assert.match(view, /footprint\.cover\.public_url/);
+});
+
+test('HiveView only shows the right side detail after a map point is selected', () => {
+  assert.match(view, /const activeFootprint = computed\(\(\) =>\s*footprints\.value\.find\(\(footprint\) => footprint\.key === activeFootprintKey\.value\) \?\? null,/s);
+  assert.match(view, /activeFootprintKey\.value = null/);
+  assert.match(view, /class="flat-layout"\s*:class="\{ 'has-selection': activeFootprint \}"/);
+  assert.match(view, /<aside v-if="activeFootprint" class="footprint-side">/);
+  assert.doesNotMatch(view, /上传并标记位置后，这里会显示最近点亮的地点。/);
+  assert.match(view, /marker\.addEventListener\('click',\s*\(\) => selectFootprint\(footprint\)\)/);
+});
+
+test('HiveView right panel lists only images from the selected footprint', () => {
+  assert.match(view, /v-for="pointImage in activeFootprint\.images"/);
+  assert.match(view, /:href="`\/p\/\$\{encodeURIComponent\(pointImage\.key\)\}`"/);
+  assert.match(view, /activeFootprint\.images\.length\s*\}\}\s*张图片/);
+  assert.doesNotMatch(view, /v-for="footprint in footprints"/);
+  assert.match(view, /\.active-point\s*\{[^}]*grid-template-columns:\s*5\.5rem minmax\(0,\s*1fr\);/s);
+  assert.match(view, /\.active-cover\s*\{[^}]*width:\s*5\.5rem;[^}]*height:\s*5\.5rem;/s);
+  assert.match(view, /\.flat-layout\.has-selection\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(28rem,\s*34rem\);/s);
+});
+
+test('HiveView can reset the flat map back to the full overview', () => {
+  assert.match(view, /const resetFlatMapView = \(\) => \{/);
+  assert.match(view, /activeFootprintKey\.value = null;\s*hoveredFootprintKey\.value = null;/);
+  assert.match(view, /fitFlatMapToFootprints\(\);/);
+  assert.match(view, /class="map-overview-button"/);
+  assert.match(view, /@click="resetFlatMapView"/);
+  assert.match(view, />\s*返回总览\s*</);
+});
+
+test('HiveView removes the popup and link outer frame', () => {
+  assert.match(view, /:deep\(\.maplibregl-popup-content\)\s*\{[^}]*border:\s*0;/s);
+  assert.match(view, /:deep\(\.footprint-popup-body a\)\s*\{[^}]*border:\s*0;[^}]*outline:\s*none;[^}]*box-shadow:\s*none;/s);
+  assert.match(view, /:deep\(\.footprint-popup-body a:focus-visible\)\s*\{[^}]*outline:\s*none;[^}]*text-decoration:\s*underline;/s);
 });
