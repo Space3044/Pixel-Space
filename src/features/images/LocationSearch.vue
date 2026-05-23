@@ -65,11 +65,10 @@ const setRegion = (region: GeocodeRegion) => {
         v-model="query"
         type="search"
         class="location-search-input"
-        :placeholder="selectedRegion === 'cn' ? '搜索国内位置，例如：上海外滩' : '搜索国外位置，例如：Tokyo Tower'"
         aria-label="搜索位置"
       />
       <button type="submit" class="location-search-button" :disabled="searching || !query.trim()">
-        {{ searching ? '搜索中…' : '搜索位置' }}
+        {{ searching ? '搜索中…' : '搜索' }}
       </button>
     </form>
 
@@ -98,7 +97,8 @@ const setRegion = (region: GeocodeRegion) => {
 
 .location-search-form {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  align-items: stretch;
 }
 
 .location-region-toggle {
@@ -152,7 +152,10 @@ const setRegion = (region: GeocodeRegion) => {
 }
 
 .location-search-button {
-  padding: 0 0.72rem;
+  flex-shrink: 0;
+  padding: 0 0.55rem;
+  min-height: 0;
+  font-size: 0.72rem;
   white-space: nowrap;
 }
 

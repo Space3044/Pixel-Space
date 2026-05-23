@@ -206,7 +206,7 @@ const initMap = async () => {
     style: MAP_STYLE_URL,
     center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
     zoom: 9,
-    attributionControl: { compact: true },
+    attributionControl: false,
   });
   map.addControl(
     new maplibreGl.NavigationControl({ showCompass: true, showZoom: true }),
@@ -1238,7 +1238,38 @@ onBeforeUnmount(() => {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 .meta-section-form {
-  gap: 0.7rem;
+  gap: 0.55rem;
+}
+
+.meta-section-form .field {
+  gap: 0.22rem;
+}
+
+.meta-section-form .field-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(148, 163, 184);
+}
+
+.meta-section-form .field-sublabel {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: rgba(148, 163, 184, 0.82);
+}
+
+.meta-section-form :deep(.cyber-input) {
+  min-height: 32px;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.meta-section-form :deep(textarea.cyber-input) {
+  min-height: 0;
+  padding: 0.45rem 0.6rem;
+  line-height: 1.45;
 }
 
 .meta-section-title {
@@ -1265,7 +1296,7 @@ onBeforeUnmount(() => {
 
 .form-header {
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .form-title {
@@ -1277,15 +1308,15 @@ onBeforeUnmount(() => {
 
 .ai-preview-button {
   flex-shrink: 0;
-  min-height: 1.8rem;
-  padding: 0.25rem 0.55rem;
-  border-radius: 0.4rem;
+  min-height: 1.55rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 0.35rem;
   border: 1px solid rgba(255, 79, 216, 0.26);
   background: rgba(255, 79, 216, 0.08);
   color: rgb(244, 194, 255);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: 0.04em;
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
@@ -1302,12 +1333,12 @@ onBeforeUnmount(() => {
 }
 
 .ai-error {
-  padding: 0.45rem 0.55rem;
+  padding: 0.4rem 0.55rem;
   border-radius: 0.4rem;
   border: 1px solid rgba(248, 113, 113, 0.26);
   background: rgba(248, 113, 113, 0.08);
   color: rgb(254, 205, 211);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .meta-list {
@@ -1366,7 +1397,10 @@ onBeforeUnmount(() => {
 .map-block {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.06);
 }
 
 .map-block-header {
@@ -1376,7 +1410,8 @@ onBeforeUnmount(() => {
 }
 
 .map-clear {
-  font-size: 11px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
   color: rgb(148, 163, 184);
   background: transparent;
   border: none;
@@ -1392,7 +1427,7 @@ onBeforeUnmount(() => {
 }
 
 .map-pane {
-  height: 11rem;
+  height: 14rem;
   overflow: hidden;
   border-radius: 0.45rem;
   border: 1px solid rgba(53, 243, 255, 0.2);
@@ -1449,7 +1484,7 @@ onBeforeUnmount(() => {
 .map-coords {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .upload-result {
