@@ -30,7 +30,6 @@ const formatBytes = (bytes: number): string => {
 
 const photosLabel = computed(() => (stats.value ? formatNumber(stats.value.photos) : '--'));
 const storageLabel = computed(() => (stats.value ? formatBytes(stats.value.storage_bytes) : '--'));
-const aiTaggedLabel = computed(() => (stats.value ? formatNumber(stats.value.ai_tagged) : '--'));
 const placesLabel = computed(() => (stats.value ? formatNumber(stats.value.places) : '--'));
 
 const latest = computed(() => stats.value?.latest ?? []);
@@ -77,12 +76,46 @@ onMounted(async () => {
         </p>
 
         <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
-          <RouterLink to="/images" class="cyber-button">探索图库</RouterLink>
-          <RouterLink to="/upload" class="cyber-button">开始上传</RouterLink>
-          <RouterLink to="/random" class="ghost-button">随机一张</RouterLink>
+          <RouterLink to="/images" class="hero-cta cta-primary">
+            <span class="cta-glow" aria-hidden="true"></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cta-icon" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <span class="cta-label">探索图库</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cta-arrow" aria-hidden="true">
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </RouterLink>
+
+          <RouterLink to="/upload" class="hero-cta cta-secondary">
+            <span class="cta-glow" aria-hidden="true"></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cta-icon" aria-hidden="true">
+              <path d="M12 3v12" />
+              <path d="m6 9 6-6 6 6" />
+              <path d="M5 21h14" />
+            </svg>
+            <span class="cta-label">开始上传</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cta-arrow" aria-hidden="true">
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </RouterLink>
+
+          <RouterLink to="/random" class="hero-cta cta-ghost">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="cta-icon" aria-hidden="true">
+              <path d="M16 3h5v5" />
+              <path d="M4 20 21 3" />
+              <path d="M21 16v5h-5" />
+              <path d="m15 15 6 6" />
+              <path d="M4 4l5 5" />
+            </svg>
+            <span class="cta-label">随机一张</span>
+          </RouterLink>
         </div>
 
-        <dl class="mt-16 grid w-full max-w-3xl grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-8">
+        <dl class="mt-16 grid w-full max-w-3xl grid-cols-3 gap-6 sm:gap-8">
           <div class="stat-cell">
             <dt class="stat-label">Photos</dt>
             <dd class="stat-value">{{ photosLabel }}</dd>
@@ -92,11 +125,6 @@ onMounted(async () => {
             <dt class="stat-label">Storage</dt>
             <dd class="stat-value">{{ storageLabel }}</dd>
             <p class="stat-hint">压缩后占用</p>
-          </div>
-          <div class="stat-cell">
-            <dt class="stat-label">AI Tagged</dt>
-            <dd class="stat-value">{{ aiTaggedLabel }}</dd>
-            <p class="stat-hint">AI 标注就绪</p>
           </div>
           <div class="stat-cell">
             <dt class="stat-label">Places</dt>
@@ -257,24 +285,118 @@ onMounted(async () => {
   -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
 }
 
-.ghost-button {
+.hero-cta {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 0.75rem 1.25rem;
+  gap: 0.55rem;
+  min-height: 48px;
+  padding: 0.85rem 1.4rem;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  color: rgb(226, 232, 240);
-  background: rgba(15, 23, 42, 0.4);
-  font-weight: 700;
-  transition: border-color 180ms ease, color 180ms ease, background 180ms ease;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease;
 }
 
-.ghost-button:hover {
-  border-color: rgba(53, 243, 255, 0.6);
-  color: rgb(165, 243, 252);
-  background: rgba(53, 243, 255, 0.08);
+.hero-cta:hover {
+  transform: translateY(-2px);
+}
+
+.hero-cta:active {
+  transform: translateY(0);
+}
+
+.cta-icon,
+.cta-arrow {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.cta-arrow {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hero-cta:hover .cta-arrow {
+  transform: translateX(3px);
+}
+
+.cta-label {
+  position: relative;
+  z-index: 1;
+}
+
+.cta-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent 25%, rgba(255, 255, 255, 0.32) 50%, transparent 75%);
+  transform: translateX(-120%);
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hero-cta:hover .cta-glow {
+  transform: translateX(120%);
+}
+
+.cta-primary {
+  border: 1px solid rgba(53, 243, 255, 0.55);
+  background:
+    linear-gradient(135deg, rgba(53, 243, 255, 0.28), rgba(53, 243, 255, 0.05) 60%, rgba(7, 7, 19, 0.6)),
+    rgba(7, 7, 19, 0.4);
+  color: rgb(220, 252, 255);
+  box-shadow:
+    0 8px 28px rgba(53, 243, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.cta-primary:hover {
+  border-color: rgba(53, 243, 255, 0.95);
+  color: white;
+  box-shadow:
+    0 12px 36px rgba(53, 243, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.cta-secondary {
+  border: 1px solid rgba(255, 79, 216, 0.5);
+  background:
+    linear-gradient(135deg, rgba(255, 79, 216, 0.28), rgba(255, 79, 216, 0.05) 60%, rgba(7, 7, 19, 0.6)),
+    rgba(7, 7, 19, 0.4);
+  color: rgb(254, 222, 245);
+  box-shadow:
+    0 8px 28px rgba(255, 79, 216, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.cta-secondary:hover {
+  border-color: rgba(255, 79, 216, 0.95);
+  color: white;
+  box-shadow:
+    0 12px 36px rgba(255, 79, 216, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.cta-ghost {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.4);
+  color: rgb(203, 213, 225);
+  backdrop-filter: blur(8px);
+}
+
+.cta-ghost:hover {
+  border-color: rgba(165, 243, 252, 0.5);
+  color: rgb(220, 252, 255);
+  background: rgba(15, 23, 42, 0.7);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
 }
 
 .stat-cell {
