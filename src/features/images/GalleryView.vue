@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import justifiedLayout from 'justified-layout';
 import AppShell from '@/shared/ui/AppShell.vue';
+import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from './image.types';
 import { listImages } from './images.api';
 import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
@@ -14,8 +15,13 @@ const loading = ref(true);
 const loadError = ref<string | null>(null);
 const searchQuery = ref('');
 
-type SortMode = 'created-desc' | 'created-asc' | 'taken-desc' | 'taken-asc';
-const sortMode = ref<SortMode>('created-desc');
+const sortMode = ref<string>('created-desc');
+const sortOptions = [
+  { value: 'created-desc', label: '最新上传' },
+  { value: 'created-asc', label: '最早上传' },
+  { value: 'taken-desc', label: '最新拍摄' },
+  { value: 'taken-asc', label: '最早拍摄' },
+];
 
 // 文件夹筛选状态：
 //   '' 表示「全部」（不传 folder 参数）
@@ -159,21 +165,17 @@ const clearSearch = async () => {
             <span>{{ resultLabel }}</span>
           </div>
           <button type="button" class="toolbar-icon" aria-label="刷新图库" @click="loadImages">刷新</button>
-          <label class="toolbar-sort" aria-label="排序方式">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sort-icon" aria-hidden="true">
-              <path d="M3 6h13" />
-              <path d="M3 12h9" />
-              <path d="M3 18h5" />
-              <path d="m17 8 4 4-4 4" />
-              <path d="M21 12H10" />
-            </svg>
-            <select v-model="sortMode" class="sort-select">
-              <option value="created-desc">最新上传</option>
-              <option value="created-asc">最早上传</option>
-              <option value="taken-desc">最新拍摄</option>
-              <option value="taken-asc">最早拍摄</option>
-            </select>
-          </label>
+          <SelectPopover v-model="sortMode" :options="sortOptions" aria-label="排序方式">
+            <template #leading-icon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="leading-icon" aria-hidden="true">
+                <path d="M3 6h13" />
+                <path d="M3 12h9" />
+                <path d="M3 18h5" />
+                <path d="m17 8 4 4-4 4" />
+                <path d="M21 12H10" />
+              </svg>
+            </template>
+          </SelectPopover>
           <FolderPickerPopover v-model="folderFilter" :folders="folders" />
           <form class="gallery-search" @submit.prevent="loadImages">
             <input
@@ -281,7 +283,6 @@ const clearSearch = async () => {
 
 .toolbar-segment,
 .toolbar-icon,
-.toolbar-sort,
 .gallery-search-button {
   display: inline-flex;
   align-items: center;
@@ -297,44 +298,11 @@ const clearSearch = async () => {
   white-space: nowrap;
 }
 
-.toolbar-sort {
-  gap: 0.45rem;
-  padding-right: 0.4rem;
-  cursor: pointer;
-  transition: border-color 160ms ease, color 160ms ease;
-}
-
-.toolbar-sort:hover,
-.toolbar-sort:focus-within {
-  border-color: rgba(53, 243, 255, 0.62);
-  color: rgb(53, 243, 255);
-}
-
-.sort-icon {
+.leading-icon {
   width: 14px;
   height: 14px;
   color: rgba(165, 243, 252, 0.85);
-}
-
-.sort-select {
-  appearance: none;
-  -webkit-appearance: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  padding-right: 1rem;
-  cursor: pointer;
-  outline: none;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 8px) 14px, calc(100% - 4px) 14px;
-  background-size: 4px 4px;
-  background-repeat: no-repeat;
-}
-
-.sort-select option {
-  background: rgb(9, 14, 28);
-  color: rgb(226, 232, 240);
+  flex-shrink: 0;
 }
 
 .toolbar-icon {
