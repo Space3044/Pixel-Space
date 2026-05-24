@@ -5,9 +5,16 @@ import type { FolderRecord } from '@/features/library/library.api';
 interface Props {
   modelValue: string;
   folders: FolderRecord[];
+  placeholder?: string;
+  noneLabel?: string;
+  showNone?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  placeholder: '全部文件夹',
+  noneLabel: '未分类',
+  showNone: true,
+});
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void;
 }>();
@@ -55,8 +62,8 @@ const findNodeById = (nodes: TreeNode[], id: string): TreeNode | null => {
 };
 
 const currentLabel = computed(() => {
-  if (props.modelValue === '') return '全部文件夹';
-  if (props.modelValue === '__none__') return '未分类';
+  if (props.modelValue === '') return props.placeholder;
+  if (props.modelValue === '__none__') return props.noneLabel;
   return findNodeById(tree.value, props.modelValue)?.path ?? '未知文件夹';
 });
 
@@ -212,9 +219,10 @@ onBeforeUnmount(() => {
             <circle cx="12" cy="12" r="9" />
             <path d="M3 12h18" />
           </svg>
-          <span class="folder-row-label">全部文件夹</span>
+          <span class="folder-row-label">{{ placeholder }}</span>
         </div>
         <div
+          v-if="showNone"
           role="button"
           tabindex="0"
           class="folder-row"
@@ -228,7 +236,7 @@ onBeforeUnmount(() => {
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <path d="M9 12h6" />
           </svg>
-          <span class="folder-row-label">未分类</span>
+          <span class="folder-row-label">{{ noneLabel }}</span>
         </div>
       </div>
 
