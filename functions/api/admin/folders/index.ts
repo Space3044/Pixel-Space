@@ -1,12 +1,7 @@
 import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
-import {
-  LIST_FOLDERS_SQL,
-  normalizeParentId,
-  sanitizeFolderName,
-  type FolderRecord,
-} from '../../../_shared/folders';
+import { normalizeParentId, sanitizeFolderName } from '../../../_shared/folders';
 
 interface CreatePayload {
   name: string;
@@ -34,17 +29,6 @@ const cryptoUUID = (): string => {
     return crypto.randomUUID();
   }
   throw new Error('crypto.randomUUID is unavailable');
-};
-
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
-  try {
-    const result = await env.DB.prepare(LIST_FOLDERS_SQL).all<FolderRecord>();
-    return json({ folders: result.results ?? [] });
-  } catch (error) {
-    console.error('GET /api/admin/folders failed', error);
-    return serverError('folders_list_failed');
-  }
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
