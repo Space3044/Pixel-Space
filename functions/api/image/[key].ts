@@ -7,7 +7,7 @@ import { rowToRecord, scrubRecordForVisitor } from '../../_shared/images';
 // 单图详情：保留"凭直链访问私图"的能力（is_public 不参与过滤），
 // 管理员视角返回全量；访客视角对 location_public=0 的图擦掉地名与坐标。
 const DETAIL_SQL =
-  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public FROM images WHERE key = ?';
+  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public, folder_id FROM images WHERE key = ?';
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, params, request }) => {
   const key = String(params.key ?? '');

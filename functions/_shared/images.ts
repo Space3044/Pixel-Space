@@ -31,6 +31,7 @@ export interface ImageRecord {
   ai_finished_at: string | null;
   is_public: number;
   location_public: number;
+  folder_id: string | null;
 }
 
 // D1 表里的原始行形状（只声明 list / detail 接口会用到的列）。
@@ -63,6 +64,7 @@ export interface ImageRow {
   ai_finished_at: string | null;
   is_public: number;
   location_public: number;
+  folder_id: string | null;
 }
 
 export const normalizeTagsJson = (value: unknown): string | null => {
@@ -127,6 +129,7 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     ai_finished_at: row.ai_finished_at,
     is_public: row.is_public,
     location_public: row.location_public,
+    folder_id: row.folder_id,
   };
 }
 

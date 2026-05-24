@@ -27,4 +27,5 @@ export interface ImageRecord {
   ai_finished_at: string | null;
   is_public: number;
   location_public: number;
+  folder_id: string | null;
 }
