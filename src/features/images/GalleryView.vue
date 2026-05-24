@@ -12,6 +12,9 @@ const loading = ref(true);
 const loadError = ref<string | null>(null);
 const searchQuery = ref('');
 
+type SortMode = 'created-desc' | 'created-asc' | 'taken-desc' | 'taken-asc';
+const sortMode = ref<SortMode>('created-desc');
+
 const containerRef = ref<HTMLElement | null>(null);
 const containerWidth = ref(0);
 
@@ -24,12 +27,29 @@ const resultLabel = computed(() => {
   return `${images.value.length} 张图片`;
 });
 
+// 列表本身从后端按 created_at DESC 拿到；拍摄时间排序时把 exif_taken_at 为空的图统一沉到末尾，
+// 避免空值跟有值混排造成跳跃。
+const displayImages = computed<ImageRecord[]>(() => {
+  const list = [...images.value];
+  if (sortMode.value === 'created-desc') return list;
+  if (sortMode.value === 'created-asc') return list.reverse();
+  const direction = sortMode.value === 'taken-desc' ? -1 : 1;
+  return list.sort((a, b) => {
+    const av = a.exif_taken_at;
+    const bv = b.exif_taken_at;
+    if (av === bv) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return av < bv ? -direction : direction;
+  });
+});
+
 const layout = computed(() => {
-  if (images.value.length === 0 || containerWidth.value === 0) {
+  if (displayImages.value.length === 0 || containerWidth.value === 0) {
     return { boxes: [], containerHeight: 0, widowCount: 0 };
   }
   return justifiedLayout(
-    images.value.map((img) => ({ width: img.width, height: img.height })),
+    displayImages.value.map((img) => ({ width: img.width, height: img.height })),
     {
       containerWidth: containerWidth.value,
       targetRowHeight: 240,
@@ -109,8 +129,22 @@ const clearSearch = async () => {
             <span>{{ resultLabel }}</span>
           </div>
           <button type="button" class="toolbar-icon" aria-label="刷新图库" @click="loadImages">刷新</button>
+          <label class="toolbar-sort" aria-label="排序方式">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sort-icon" aria-hidden="true">
+              <path d="M3 6h13" />
+              <path d="M3 12h9" />
+              <path d="M3 18h5" />
+              <path d="m17 8 4 4-4 4" />
+              <path d="M21 12H10" />
+            </svg>
+            <select v-model="sortMode" class="sort-select">
+              <option value="created-desc">最新上传</option>
+              <option value="created-asc">最早上传</option>
+              <option value="taken-desc">最新拍摄</option>
+              <option value="taken-asc">最早拍摄</option>
+            </select>
+          </label>
           <form class="gallery-search" @submit.prevent="loadImages">
-            <span class="search-mode">常规</span>
             <input
               v-model="searchQuery"
               type="search"
@@ -133,7 +167,7 @@ const clearSearch = async () => {
       >
         <button
           v-for="(box, i) in layout.boxes"
-          :key="images[i].key"
+          :key="displayImages[i].key"
           type="button"
           class="group absolute overflow-hidden rounded-lg border border-white/10 bg-void/60 transition hover:border-neon-cyan/50 hover:shadow-[0_4px_20px_rgba(53,243,255,0.15)] focus:outline-none focus:ring-2 focus:ring-neon-cyan/60"
           :style="{
@@ -142,12 +176,12 @@ const clearSearch = async () => {
             width: box.width + 'px',
             height: box.height + 'px',
           }"
-          :aria-label="images[i].title || images[i].key"
-          @click="openLightbox(images[i])"
+          :aria-label="displayImages[i].title || displayImages[i].key"
+          @click="openLightbox(displayImages[i])"
         >
           <img
-            :src="images[i].public_url"
-            :alt="images[i].title"
+            :src="displayImages[i].public_url"
+            :alt="displayImages[i].title"
             loading="lazy"
             class="h-full w-full object-cover transition group-hover:scale-[1.02]"
           />
@@ -214,7 +248,7 @@ const clearSearch = async () => {
 
 .toolbar-segment,
 .toolbar-icon,
-.search-mode,
+.toolbar-sort,
 .gallery-search-button {
   display: inline-flex;
   align-items: center;
@@ -228,6 +262,46 @@ const clearSearch = async () => {
   font-weight: 700;
   color: rgb(203, 213, 225);
   white-space: nowrap;
+}
+
+.toolbar-sort {
+  gap: 0.45rem;
+  padding-right: 0.4rem;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.toolbar-sort:hover,
+.toolbar-sort:focus-within {
+  border-color: rgba(53, 243, 255, 0.62);
+  color: rgb(53, 243, 255);
+}
+
+.sort-icon {
+  width: 14px;
+  height: 14px;
+  color: rgba(165, 243, 252, 0.85);
+}
+
+.sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding-right: 1rem;
+  cursor: pointer;
+  outline: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 8px) 14px, calc(100% - 4px) 14px;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.sort-select option {
+  background: rgb(9, 14, 28);
+  color: rgb(226, 232, 240);
 }
 
 .toolbar-icon {
