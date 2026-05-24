@@ -32,7 +32,7 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function fetchFolders(): Promise<FolderRecord[]> {
-  return jsonFetch<FoldersResponse>('/api/admin/folders').then((data) => data.folders);
+  return jsonFetch<FoldersResponse>('/api/folders').then((data) => data.folders);
 }
 
 export function createFolder(payload: { name: string; parent_id: string | null }): Promise<FolderRecord> {

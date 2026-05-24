@@ -25,11 +25,25 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function listImages(query = ''): Promise<ImageRecord[]> {
+export interface ListImagesOptions {
+  // null 表示「未分类（folder_id IS NULL）」；undefined 表示不过滤。
+  folderId?: string | null;
+  // 是否递归把子目录的图也带回来。默认 true，符合「进文件夹能看到所有后代图」的直觉。
+  recursive?: boolean;
+}
+
+export function listImages(query = '', options: ListImagesOptions = {}): Promise<ImageRecord[]> {
+  const params = new URLSearchParams();
   const trimmed = query.trim();
-  if (!trimmed) return fetchJson<ImageRecord[]>('/list');
-  const params = new URLSearchParams({ q: trimmed });
-  return fetchJson<ImageRecord[]>(`/list?${params.toString()}`);
+  if (trimmed) params.set('q', trimmed);
+  if (options.folderId === null) {
+    params.set('folder', '__none__');
+  } else if (typeof options.folderId === 'string' && options.folderId) {
+    params.set('folder', options.folderId);
+    if (options.recursive === false) params.set('recursive', '0');
+  }
+  const qs = params.toString();
+  return fetchJson<ImageRecord[]>(qs ? `/list?${qs}` : '/list');
 }
 
 export function fetchImage(key: string): Promise<ImageRecord> {
