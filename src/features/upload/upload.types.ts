@@ -23,6 +23,7 @@ export interface UploadMeta {
   ai_status: 'pending' | 'done' | 'failed';
   is_public: 0 | 1;
   location_public: 0 | 1;
+  folder_id: string | null;
 }
 
 export interface UploadDimensions {

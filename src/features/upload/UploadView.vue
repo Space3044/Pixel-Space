@@ -7,6 +7,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 import AppShell from '@/shared/ui/AppShell.vue';
 import LocationSearch from '@/features/images/LocationSearch.vue';
+import FolderPickerPopover from '@/features/images/FolderPickerPopover.vue';
+import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
 import type { GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
 import { checkImageHash } from '@/features/images/images.api';
@@ -68,6 +70,7 @@ const createMeta = (file: File): UploadMeta => ({
   ai_status: 'pending',
   is_public: 1,
   location_public: 1,
+  folder_id: null,
 });
 
 let entryIdSeq = 0;
@@ -102,6 +105,11 @@ const currentEntryId = ref<string | null>(null);
 const isBatchUploading = ref(false);
 const globalError = ref<string | null>(null);
 const mapLoadState = ref<MapLoadState>('loading');
+
+// 整批上传配置：目标文件夹 + 是否把当前图位置自动同步到队列里其它没坐标的图。
+const batchFolderId = ref<string>('');
+const syncLocation = ref<boolean>(false);
+const folders = ref<FolderRecord[]>([]);
 
 let map: MapLibreMap | null = null;
 let marker: Marker | null = null;
@@ -243,6 +251,33 @@ const setEntryCoordinates = (entry: UploadEntry, lat: number | null, lng: number
   entry.meta.location_lat = lat;
   entry.meta.location_lng = lng;
   if (entry.id === currentEntryId.value) updateMapMarker(centerMap);
+};
+
+// 把当前选中图的位置广播给目标图：只在同步开关打开、对方还没坐标时才覆盖；
+// 地名同样仅在对方留空时拷过去，避免覆盖用户手填的别名。
+const broadcastLocationInto = (target: UploadEntry) => {
+  if (!syncLocation.value) return;
+  const cur = currentEntry.value;
+  if (!cur || cur.id === target.id) return;
+  if (cur.meta.location_lat === null || cur.meta.location_lng === null) return;
+  if (target.meta.location_lat !== null && target.meta.location_lng !== null) return;
+  target.meta.location_lat = cur.meta.location_lat;
+  target.meta.location_lng = cur.meta.location_lng;
+  if (!target.meta.location_name) target.meta.location_name = cur.meta.location_name;
+};
+
+const broadcastLocationToAll = () => {
+  if (!syncLocation.value) return;
+  for (const entry of entries.value) broadcastLocationInto(entry);
+};
+
+const loadFolders = async () => {
+  try {
+    folders.value = await fetchFolders();
+  } catch {
+    // 拉不到不阻塞上传，文件夹选择就只有「不放入文件夹」。
+    folders.value = [];
+  }
 };
 
 const useRasterFallbackStyle = () => {
@@ -411,6 +446,7 @@ const processEntry = async (entry: UploadEntry) => {
     }
     entry.status = 'ready';
     enqueueAi(entry);
+    broadcastLocationInto(entry);
   } catch (error) {
     entry.status = 'error';
     entry.errorMessage = (error as Error).message || '图片处理失败。';
@@ -585,7 +621,7 @@ const uploadEntry = async (entry: UploadEntry) => {
     original: entry.file,
     compressed: entry.compressedFile,
     exif: entry.exif,
-    meta: { ...entry.meta },
+    meta: { ...entry.meta, folder_id: batchFolderId.value || null },
     dimensions: entry.compressedDimensions,
   });
 
@@ -615,10 +651,6 @@ const submitUploadAll = async () => {
   }
 };
 
-const startNextUpload = () => {
-  openFilePicker();
-};
-
 watch(currentEntryId, () => {
   void nextTick(() => {
     if (!map && mapRef.value) {
@@ -632,15 +664,29 @@ watch(currentEntryId, () => {
 
 watch(
   () => currentEntry.value?.meta.location_lat,
-  () => updateMapMarker(false),
+  () => {
+    updateMapMarker(false);
+    broadcastLocationToAll();
+  },
 );
 watch(
   () => currentEntry.value?.meta.location_lng,
-  () => updateMapMarker(false),
+  () => {
+    updateMapMarker(false);
+    broadcastLocationToAll();
+  },
 );
+watch(
+  () => currentEntry.value?.meta.location_name,
+  () => broadcastLocationToAll(),
+);
+watch(syncLocation, (val) => {
+  if (val) broadcastLocationToAll();
+});
 
 onMounted(() => {
   void initMap();
+  void loadFolders();
 });
 
 onBeforeUnmount(() => {
@@ -689,18 +735,52 @@ onBeforeUnmount(() => {
             </div>
           </button>
 
-          <aside class="action-pill" :class="statusVariant">
-            <span class="status-dot" aria-hidden="true" />
-            <span class="status-text">{{ statusLabel }}</span>
-            <button
-              type="button"
-              class="cyber-button submit-button"
-              :disabled="!canSubmit"
-              @click="submitUploadAll"
-            >
-              {{ isBatchUploading ? '上传中' : `上传 ${readyEntries.length || ''} 张`.trim() }}
-            </button>
-          </aside>
+          <div class="action-stack">
+            <div class="options-pill">
+              <div class="options-cell">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="options-icon" aria-hidden="true">
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                </svg>
+                <span class="options-label">放入文件夹</span>
+                <FolderPickerPopover
+                  v-model="batchFolderId"
+                  :folders="folders"
+                  placeholder="不放入"
+                  :show-none="false"
+                />
+              </div>
+              <label
+                class="options-cell sync-toggle"
+                :class="{ 'is-on': syncLocation }"
+                :title="
+                  syncLocation
+                    ? '当前图位置会自动补到队列里其它没坐标的图'
+                    : '开启后，给当前图设位置会同步到没坐标的图'
+                "
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="options-icon" aria-hidden="true">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span class="options-label">位置同步</span>
+                <input v-model="syncLocation" type="checkbox" class="sync-input" />
+                <span class="sync-switch" aria-hidden="true" />
+              </label>
+            </div>
+
+            <aside class="action-pill" :class="statusVariant">
+              <span class="status-dot" aria-hidden="true" />
+              <span class="status-text">{{ statusLabel }}</span>
+              <button
+                type="button"
+                class="cyber-button submit-button"
+                :disabled="!canSubmit"
+                @click="submitUploadAll"
+              >
+                {{ isBatchUploading ? '上传中' : `上传 ${readyEntries.length || ''} 张`.trim() }}
+              </button>
+            </aside>
+          </div>
         </div>
 
         <div
@@ -1046,18 +1126,6 @@ onBeforeUnmount(() => {
             </section>
           </aside>
         </div>
-
-        <section v-if="doneEntries.length > 0" class="upload-result cyber-panel" aria-live="polite">
-          <header class="upload-result-head">
-            <div>
-              <p class="section-eyebrow">Uploaded</p>
-              <h2>已上传 {{ doneEntries.length }} 张</h2>
-            </div>
-            <button type="button" class="result-action" @click="startNextUpload">
-              继续添加图片
-            </button>
-          </header>
-        </section>
       </div>
     </section>
   </AppShell>
@@ -1067,6 +1135,16 @@ onBeforeUnmount(() => {
 .upload-page {
   position: relative;
   isolation: isolate;
+  overflow-x: clip;
+  margin-left: -0.75rem;
+  margin-right: -0.75rem;
+}
+
+@media (min-width: 640px) {
+  .upload-page {
+    margin-left: -1rem;
+    margin-right: -1rem;
+  }
 }
 
 .orbs {
@@ -1104,11 +1182,19 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  padding-top: 0.75rem;
-  padding-bottom: 2rem;
+  padding: 0.75rem 1rem 2rem;
+}
+
+@media (min-width: 640px) {
+  .page-inner {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
 }
 
 .action-row {
+  position: relative;
+  z-index: 20;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
@@ -1184,6 +1270,146 @@ onBeforeUnmount(() => {
   margin-top: 0.2rem;
   font-size: 0.74rem;
   color: rgb(148, 163, 184);
+}
+
+.action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.options-pill {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(7, 10, 24, 0.45);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+}
+
+.options-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.options-cell:first-of-type {
+  flex: 1 1 auto;
+}
+
+.options-cell + .options-cell {
+  flex-shrink: 0;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.options-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: rgba(165, 243, 252, 0.85);
+}
+
+.options-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(203, 213, 225);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.options-cell :deep(.folder-trigger) {
+  height: 32px;
+  padding: 0 0.7rem;
+  border-color: rgba(53, 243, 255, 0.55);
+  background: linear-gradient(135deg, rgba(53, 243, 255, 0.22), rgba(255, 79, 216, 0.18));
+  color: white;
+  font-size: 0.76rem;
+}
+
+.options-cell :deep(.folder-trigger:hover),
+.options-cell :deep(.folder-trigger:focus-visible),
+.options-cell :deep(.folder-trigger.active) {
+  border-color: rgba(53, 243, 255, 0.95);
+  box-shadow: 0 0 18px rgba(53, 243, 255, 0.22);
+  color: white;
+}
+
+.options-cell :deep(.folder-trigger .folder-icon),
+.options-cell :deep(.folder-trigger .folder-caret) {
+  color: rgba(241, 245, 249, 0.9);
+}
+
+.sync-toggle {
+  cursor: pointer;
+  user-select: none;
+  transition: color 160ms ease;
+}
+
+.sync-toggle:hover .options-label,
+.sync-toggle.is-on .options-label {
+  color: rgb(165, 243, 252);
+}
+
+.sync-toggle.is-on .options-icon {
+  color: rgb(53, 243, 255);
+}
+
+.sync-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+}
+
+.sync-switch {
+  position: relative;
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 1.85rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.35);
+  transition: background-color 160ms ease;
+}
+
+.sync-switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0.15rem;
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 50%;
+  background: rgb(248, 250, 252);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+
+.sync-toggle.is-on .sync-switch {
+  background: rgba(53, 243, 255, 0.7);
+}
+
+.sync-toggle.is-on .sync-switch::after {
+  left: 0.96rem;
 }
 
 .action-pill {
@@ -2016,164 +2242,5 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.4rem;
-}
-
-.upload-result {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding: 1rem;
-  border-radius: 0.6rem;
-  border-color: rgba(132, 247, 153, 0.28);
-  background:
-    linear-gradient(135deg, rgba(132, 247, 153, 0.08), rgba(53, 243, 255, 0.04)),
-    rgba(7, 7, 19, 0.72);
-}
-
-.upload-result-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.upload-result-head h2 {
-  margin-top: 0.25rem;
-  font-size: 1rem;
-  font-weight: 800;
-  color: rgb(255, 255, 255);
-}
-
-.result-action {
-  display: inline-flex;
-  min-height: 2.4rem;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem 0.85rem;
-  border-radius: 0.45rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgb(226, 232, 240);
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
-}
-
-.result-action:hover {
-  border-color: rgba(53, 243, 255, 0.55);
-  background: rgba(53, 243, 255, 0.08);
-  color: rgb(255, 255, 255);
-}
-
-.result-entry-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.result-entry {
-  display: grid;
-  grid-template-columns: 4rem minmax(0, 1fr);
-  gap: 0.85rem;
-  padding: 0.65rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(7, 7, 19, 0.45);
-}
-
-.result-entry-cover img {
-  width: 4rem;
-  height: 4rem;
-  border-radius: 0.4rem;
-  object-fit: cover;
-}
-
-.result-entry-body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.result-entry-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: rgb(226, 232, 240);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.result-entry-tag {
-  display: inline-block;
-  margin-left: 0.4rem;
-  padding: 0.05rem 0.4rem;
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  border-radius: 999px;
-  background: rgba(251, 191, 36, 0.12);
-  color: rgb(251, 191, 36);
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  vertical-align: middle;
-}
-
-.result-links {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.result-link-row {
-  display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 0.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(7, 7, 19, 0.45);
-  font-size: 0.7rem;
-}
-
-.result-link-row span {
-  font-weight: 700;
-  color: rgb(53, 243, 255);
-}
-
-.result-link-row code {
-  min-width: 0;
-  overflow: hidden;
-  color: rgb(203, 213, 225);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.result-link-row button {
-  min-height: 1.8rem;
-  padding: 0.25rem 0.55rem;
-  border-radius: 0.35rem;
-  border: 1px solid rgba(53, 243, 255, 0.22);
-  background: transparent;
-  color: rgb(148, 163, 184);
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
-}
-
-.result-link-row button:hover {
-  border-color: rgba(53, 243, 255, 0.55);
-  color: rgb(53, 243, 255);
-}
-
-@media (max-width: 640px) {
-  .result-link-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .result-link-row code {
-    grid-column: 1 / 3;
-    grid-row: 2 / 3;
-  }
 }
 </style>

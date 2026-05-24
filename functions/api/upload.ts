@@ -37,8 +37,9 @@ INSERT INTO images (
   ai_status,
   tg_status,
   is_public,
-  location_public
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  location_public,
+  folder_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
@@ -80,6 +81,7 @@ interface UploadMeta {
   ai_status: 'pending' | 'done' | 'failed';
   is_public: 0 | 1;
   location_public: 0 | 1;
+  folder_id: string | null;
 }
 
 interface UploadExif {
@@ -162,6 +164,7 @@ const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => ({
   ai_status: normalizeAiStatus(raw.ai_status),
   is_public: normalizeFlag(raw.is_public, 1),
   location_public: normalizeFlag(raw.location_public, 1),
+  folder_id: stringOrNull(raw.folder_id),
 });
 
 const normalizeExif = (raw: Record<string, unknown>): UploadExif => ({
@@ -223,6 +226,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const originalFilename = original.name.trim() || key;
   const hash = await sha256Hex(original);
 
+  if (meta.folder_id) {
+    const folderRow = await env.DB
+      .prepare('SELECT id FROM folders WHERE id = ?')
+      .bind(meta.folder_id)
+      .first<{ id: string }>();
+    if (!folderRow) return badRequest('folder_not_found');
+  }
+
   try {
     const existing = await env.DB.prepare(SELECT_BY_HASH_SQL).bind(hash).first<ImageRow>();
     if (existing) {
@@ -266,6 +277,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         'pending',
         meta.is_public,
         meta.location_public,
+        meta.folder_id,
       )
       .run();
 
