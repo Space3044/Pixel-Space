@@ -90,7 +90,6 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
         <RouterLink to="/" class="flex shrink-0 items-center gap-2 transition hover:scale-[1.02]">
           <span class="font-mono text-xl font-black leading-none tracking-wider text-neon-cyan [text-shadow:0_0_10px_rgba(53,243,255,0.8),0_0_20px_rgba(53,243,255,0.4)]">Pixel</span>
           <span class="font-mono text-xl font-black leading-none tracking-wider text-neon-pink [text-shadow:0_0_10px_rgba(255,79,216,0.8),0_0_20px_rgba(255,79,216,0.4)]">Space</span>
-          <span class="ml-1 hidden font-mono text-[0.6rem] font-semibold uppercase tracking-wider text-neon-lime sm:inline">v0.1.0</span>
         </RouterLink>
 
         <div class="ml-12 hidden flex-1 md:flex">
@@ -175,7 +174,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
           </button>
 
           <a
-            href="#"
+            href="https://github.com/Space3044/imgbed"
             target="_blank"
             rel="noopener noreferrer"
             class="tool-btn"
