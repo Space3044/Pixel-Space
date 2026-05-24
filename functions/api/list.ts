@@ -23,7 +23,14 @@ const SEARCH_VISITOR_SQL = `
 SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public
 FROM images
 WHERE is_public = 1
-  AND (title LIKE ? OR caption LIKE ? OR location_name LIKE ? OR search_content LIKE ? OR dominant_color LIKE ? OR composition LIKE ?)
+  AND (
+    title LIKE ?
+    OR caption LIKE ?
+    OR (location_public = 1 AND location_name LIKE ?)
+    OR search_content LIKE ?
+    OR dominant_color LIKE ?
+    OR composition LIKE ?
+  )
 ORDER BY created_at DESC
 `;
 
