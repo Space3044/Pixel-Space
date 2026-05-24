@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import justifiedLayout from 'justified-layout';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from './image.types';
 import { listImages } from './images.api';
+import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
+import FolderPickerPopover from './FolderPickerPopover.vue';
 
 const ImageLightbox = defineAsyncComponent(() => import('./ImageLightbox.vue'));
 
@@ -14,6 +16,13 @@ const searchQuery = ref('');
 
 type SortMode = 'created-desc' | 'created-asc' | 'taken-desc' | 'taken-asc';
 const sortMode = ref<SortMode>('created-desc');
+
+// 文件夹筛选状态：
+//   '' 表示「全部」（不传 folder 参数）
+//   '__none__' 表示「未分类」
+//   其它字符串为 folder.id
+const folderFilter = ref<string>('');
+const folders = ref<FolderRecord[]>([]);
 
 const containerRef = ref<HTMLElement | null>(null);
 const containerWidth = ref(0);
@@ -59,15 +68,31 @@ const layout = computed(() => {
   );
 });
 
+const folderFilterToOptions = () => {
+  if (folderFilter.value === '') return undefined;
+  if (folderFilter.value === '__none__') return null;
+  return folderFilter.value;
+};
+
 const loadImages = async () => {
   loading.value = true;
   loadError.value = null;
   try {
-    images.value = await listImages(searchQuery.value);
+    const folderId = folderFilterToOptions();
+    images.value = await listImages(searchQuery.value, { folderId });
   } catch (e) {
     loadError.value = (e as Error).message;
   } finally {
     loading.value = false;
+  }
+};
+
+const loadFolders = async () => {
+  try {
+    folders.value = await fetchFolders();
+  } catch {
+    // 文件夹列表拿不到不阻塞主页面，筛选下拉就只剩「全部 / 未分类」。
+    folders.value = [];
   }
 };
 
@@ -83,12 +108,17 @@ onMounted(async () => {
     resizeObserver.observe(containerRef.value);
   }
 
-  await loadImages();
+  await Promise.all([loadFolders(), loadImages()]);
 });
 
 onUnmounted(() => {
   resizeObserver?.disconnect();
   resizeObserver = null;
+});
+
+// 切换文件夹时立刻重新拉取，跟刷新一致。
+watch(folderFilter, () => {
+  void loadImages();
 });
 
 const openLightbox = (img: ImageRecord) => {
@@ -144,6 +174,7 @@ const clearSearch = async () => {
               <option value="taken-asc">最早拍摄</option>
             </select>
           </label>
+          <FolderPickerPopover v-model="folderFilter" :folders="folders" />
           <form class="gallery-search" @submit.prevent="loadImages">
             <input
               v-model="searchQuery"
@@ -205,6 +236,8 @@ const clearSearch = async () => {
 
 <style scoped>
 .explore-header {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
