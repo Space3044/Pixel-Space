@@ -26,7 +26,7 @@ const DEFAULT_CENTER: [number, number] = [104.1954, 35.8617];
 const FLAT_ZOOM = 3;
 const FLAT_FOCUS_ZOOM = 8;
 const FOOTPRINT_SOURCE_ID = 'footprints-source';
-const FOOTPRINT_HEATMAP_LAYER_ID = 'footprints-heatmap-layer';
+const FOOTPRINT_GLOW_LAYER_ID = 'footprints-glow-layer';
 const FOOTPRINT_POINT_LAYER_ID = 'footprints-point-layer';
 const HEATMAP_FADE_START = 5;
 const HEATMAP_FADE_END = 8;
@@ -39,6 +39,10 @@ const loadError = ref<string | null>(null);
 const images = ref<ImageRecord[]>([]);
 const activeFootprintKey = ref<string | null>(null);
 const hoveredFootprintKey = ref<string | null>(null);
+const currentZoom = ref(FLAT_ZOOM);
+const zoomMin = ref(0);
+const zoomMax = ref(22);
+const zoomReady = ref(false);
 
 let flatMap: MapLibreMap | null = null;
 let maplibre: typeof import('maplibre-gl') | null = null;
@@ -119,6 +123,8 @@ const clearAllMarkers = () => {
 
 interface PointFeatureProps {
   footprintKey: string;
+  weight: number;
+  color: string;
 }
 
 interface RenderedFeature {
@@ -126,12 +132,26 @@ interface RenderedFeature {
   properties: PointFeatureProps;
 }
 
+const colorForKey = (key: string): string => {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) {
+    h = ((h << 5) - h) + key.charCodeAt(i);
+    h |= 0;
+  }
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue}, 82%, 64%)`;
+};
+
 const buildGeoJSON = () => ({
   type: 'FeatureCollection' as const,
   features: footprints.value.map((footprint) => ({
     type: 'Feature' as const,
     geometry: { type: 'Point' as const, coordinates: [footprint.lng, footprint.lat] },
-    properties: { footprintKey: footprint.key, weight: footprint.images.length },
+    properties: {
+      footprintKey: footprint.key,
+      weight: footprint.images.length,
+      color: colorForKey(footprint.key),
+    },
   })),
 });
 
@@ -258,6 +278,23 @@ const fitFlatMapToFootprints = () => {
   flatMap.fitBounds(bounds, { padding: 90, maxZoom: 9, duration: 700 });
 };
 
+const zoomBy = (delta: number) => {
+  if (!flatMap) return;
+  const next = Math.max(zoomMin.value, Math.min(zoomMax.value, flatMap.getZoom() + delta));
+  flatMap.easeTo({ zoom: next, duration: 220 });
+};
+
+const resetZoom = () => {
+  if (!flatMap) return;
+  flatMap.easeTo({ zoom: FLAT_ZOOM, duration: 260 });
+};
+
+const onZoomSliderInput = (event: Event) => {
+  if (!flatMap) return;
+  const value = parseFloat((event.target as HTMLInputElement).value);
+  if (Number.isFinite(value)) flatMap.setZoom(value);
+};
+
 const renderFlatMarkers = () => {
   if (!flatMap || !maplibre || !sourceReady) return;
 
@@ -318,51 +355,30 @@ const ensureFootprintLayers = () => {
   });
 
   flatMap.addLayer({
-    id: FOOTPRINT_HEATMAP_LAYER_ID,
-    type: 'heatmap',
+    id: FOOTPRINT_GLOW_LAYER_ID,
+    type: 'circle',
     source: FOOTPRINT_SOURCE_ID,
     maxzoom: HEATMAP_FADE_END + 0.5,
     paint: {
-      'heatmap-weight': [
-        'interpolate',
-        ['linear'],
-        ['coalesce', ['get', 'weight'], 1],
-        1, 0.4,
-        20, 1,
-      ],
-      'heatmap-intensity': [
+      'circle-color': ['get', 'color'],
+      'circle-blur': 1.0,
+      'circle-radius': [
         'interpolate',
         ['linear'],
         ['zoom'],
-        0, 0.8,
-        HEATMAP_FADE_END, 1.6,
+        0, 12,
+        4, 20,
+        HEATMAP_FADE_END, 30,
       ],
-      'heatmap-radius': [
+      'circle-opacity': [
         'interpolate',
         ['linear'],
         ['zoom'],
-        0, 14,
-        4, 22,
-        HEATMAP_FADE_END, 36,
-      ],
-      'heatmap-color': [
-        'interpolate',
-        ['linear'],
-        ['heatmap-density'],
-        0, 'rgba(7, 10, 24, 0)',
-        0.2, 'rgba(53, 243, 255, 0.25)',
-        0.4, 'rgba(53, 243, 255, 0.55)',
-        0.6, 'rgba(124, 247, 212, 0.78)',
-        0.8, 'rgba(255, 232, 156, 0.88)',
-        1, 'rgba(255, 79, 216, 0.95)',
-      ],
-      'heatmap-opacity': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        HEATMAP_FADE_START, 0.95,
+        0, 0.7,
+        HEATMAP_FADE_START, 0.6,
         HEATMAP_FADE_END, 0,
       ],
+      'circle-stroke-width': 0,
     },
   });
 
@@ -387,6 +403,14 @@ const initFlatMap = async () => {
     center: DEFAULT_CENTER,
     zoom: FLAT_ZOOM,
     attributionControl: false,
+  });
+
+  zoomMin.value = flatMap.getMinZoom();
+  zoomMax.value = flatMap.getMaxZoom();
+  currentZoom.value = flatMap.getZoom();
+  zoomReady.value = true;
+  flatMap.on('zoom', () => {
+    if (flatMap) currentZoom.value = flatMap.getZoom();
   });
 
   const onStyleReady = () => {
@@ -494,6 +518,30 @@ onBeforeUnmount(() => {
           <div class="flat-layout" :class="{ 'has-selection': activeFootprint }">
             <div class="flat-map-wrap">
               <div ref="flatMapEl" class="flat-map" aria-label="旅行足迹平面地图" />
+              <div
+                v-if="zoomReady"
+                class="zoom-slider"
+                role="group"
+                aria-label="地图缩放"
+                title="双击恢复默认缩放"
+                @dblclick="resetZoom"
+              >
+                <button type="button" class="zoom-btn" aria-label="放大" @click="zoomBy(1)">+</button>
+                <div class="zoom-track">
+                  <input
+                    type="range"
+                    class="zoom-range"
+                    orient="vertical"
+                    :min="zoomMin"
+                    :max="zoomMax"
+                    step="0.01"
+                    :value="currentZoom"
+                    aria-label="缩放级别"
+                    @input="onZoomSliderInput"
+                  />
+                </div>
+                <button type="button" class="zoom-btn" aria-label="缩小" @click="zoomBy(-1)">−</button>
+              </div>
               <div v-if="!loading && !loadError && footprints.length === 0" class="map-empty">
                 暂无带经纬度的图片。
               </div>
@@ -967,6 +1015,125 @@ onBeforeUnmount(() => {
 
 :deep(.maplibregl-popup-tip) {
   border-top-color: rgba(7, 7, 19, 0.9);
+}
+
+.zoom-slider {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(7, 7, 19, 0.42);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 14px rgba(2, 4, 14, 0.28);
+  opacity: 0.55;
+  transition: opacity 180ms ease, background-color 180ms ease, border-color 180ms ease;
+  user-select: none;
+}
+
+.zoom-slider:hover,
+.zoom-slider:focus-within {
+  opacity: 1;
+  background: rgba(7, 7, 19, 0.7);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.zoom-btn {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgb(248, 250, 252);
+}
+
+.zoom-btn:active {
+  transform: scale(0.92);
+}
+
+.zoom-track {
+  height: 120px;
+  width: 22px;
+  display: grid;
+  place-items: center;
+}
+
+.zoom-range {
+  width: 4px;
+  height: 120px;
+  margin: 0;
+  padding: 0;
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+
+.zoom-range::-webkit-slider-runnable-track {
+  width: 4px;
+  background: transparent;
+  border: 0;
+}
+
+.zoom-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(226, 232, 240, 0.92);
+  border: 0;
+  box-shadow: none;
+  cursor: grab;
+  transition: transform 120ms ease, background-color 120ms ease;
+  margin-left: -3.5px;
+}
+
+.zoom-range:hover::-webkit-slider-thumb {
+  background: rgb(255, 255, 255);
+}
+
+.zoom-range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+  cursor: grabbing;
+}
+
+.zoom-range::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(226, 232, 240, 0.92);
+  border: 0;
+  box-shadow: none;
+  cursor: grab;
+}
+
+.zoom-range::-moz-range-track {
+  background: transparent;
+  border: 0;
+  width: 4px;
 }
 
 :deep(.footprint-popup) {
