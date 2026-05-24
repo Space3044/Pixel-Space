@@ -63,6 +63,15 @@ const router = createRouter({
         title: '足迹',
       },
     },
+    {
+      path: '/library',
+      name: 'library',
+      component: () => import('@/features/library/LibraryView.vue'),
+      meta: {
+        title: '文件库',
+        requiresAdmin: true,
+      },
+    },
   ],
 });
 

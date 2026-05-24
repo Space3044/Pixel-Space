@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { devRole as currentDevRole, isDev, setDevRole } from '@/shared/auth/useAdmin';
+import { devRole as currentDevRole, isAdmin, isDev, setDevRole } from '@/shared/auth/useAdmin';
 
 defineProps<{ fluid?: boolean }>();
 
-type IconName = 'home' | 'images' | 'random' | 'upload' | 'hive' | 'language' | 'moon' | 'github' | 'plug';
+type IconName = 'home' | 'images' | 'random' | 'upload' | 'hive' | 'folder' | 'language' | 'moon' | 'github' | 'plug';
 
 const ICONS: Record<IconName, { vb: string; d: string }> = {
   home: {
@@ -27,6 +27,10 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
   hive: {
     vb: '0 0 512 512',
     d: 'M64 32C28.7 32 0 60.7 0 96V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64H64zm88 64v64H64V96h88zm56 0h88v64H208V96zm240 0v64H360V96h88zM64 224h88v64H64V224zm232 0v64H208V224h88zm64 0h88v64H360V224zM152 352v64H64V352h88zm56 0h88v64H208V352zm240 0v64H360V352h88z',
+  },
+  folder: {
+    vb: '0 0 512 512',
+    d: 'M64 480H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H288c-10.1 0-19.6-4.7-25.6-12.8L243.2 57.6C231.1 41.5 212.1 32 192 32H64C28.7 32 0 60.7 0 96V416c0 35.3 28.7 64 64 64z',
   },
   language: {
     vb: '0 0 640 512',
@@ -52,6 +56,10 @@ const navLinks: { to: string; label: string; icon: IconName }[] = [
   { to: '/random', label: '随机', icon: 'random' },
   { to: '/upload', label: '上传', icon: 'upload' },
   { to: '/hive', label: '足迹', icon: 'hive' },
+];
+
+const adminNavLinks: { to: string; label: string; icon: IconName }[] = [
+  { to: '/library', label: '文件库', icon: 'folder' },
 ];
 
 const route = useRoute();
@@ -99,6 +107,21 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
               </svg>
               <span>{{ link.label }}</span>
             </RouterLink>
+            <template v-if="isAdmin">
+              <span class="mx-1 hidden h-4 w-px bg-neon-cyan/25 lg:inline-block" aria-hidden="true" />
+              <RouterLink
+                v-for="link in adminNavLinks"
+                :key="link.to"
+                :to="link.to"
+                class="nav-item is-admin-only group relative flex items-center gap-2 overflow-hidden whitespace-nowrap rounded px-3.5 py-2 text-[0.8rem] font-semibold tracking-[0.025em] text-slate-200 transition-all duration-200 hover:-translate-y-px hover:text-white"
+                active-class="is-active"
+              >
+                <svg :viewBox="ICONS[link.icon].vb" fill="currentColor" class="nav-icon h-3.5 w-3.5 shrink-0 opacity-85 transition" aria-hidden="true">
+                  <path :d="ICONS[link.icon].d" />
+                </svg>
+                <span>{{ link.label }}</span>
+              </RouterLink>
+            </template>
           </div>
         </div>
 
