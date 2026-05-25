@@ -48,6 +48,75 @@ let copyTimer: ReturnType<typeof setTimeout> | null = null;
 const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
 const detailsOpen = ref(false);
+
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 8;
+const ZOOM_STEP = 1.25;
+
+const zoomScale = ref(1);
+const zoomX = ref(0);
+const zoomY = ref(0);
+const isPanning = ref(false);
+let panStart = { x: 0, y: 0, px: 0, py: 0 };
+
+const zoomTransform = computed(
+  () => `translate(${zoomX.value}px, ${zoomY.value}px) scale(${zoomScale.value})`,
+);
+const zoomPercent = computed(() => Math.round(zoomScale.value * 100));
+const canZoomIn = computed(() => zoomScale.value < ZOOM_MAX - 1e-3);
+const canZoomOut = computed(() => zoomScale.value > ZOOM_MIN + 1e-3);
+
+const resetZoom = () => {
+  zoomScale.value = 1;
+  zoomX.value = 0;
+  zoomY.value = 0;
+};
+
+const setZoom = (next: number) => {
+  zoomScale.value = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+  if (zoomScale.value <= 1) {
+    zoomX.value = 0;
+    zoomY.value = 0;
+  }
+};
+
+const zoomBy = (factor: number) => {
+  setZoom(zoomScale.value * factor);
+};
+
+const onImageWheel = (event: WheelEvent) => {
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+  setZoom(zoomScale.value * factor);
+};
+
+const onImagePointerDown = (event: PointerEvent) => {
+  if (event.button !== 0 || zoomScale.value <= 1) return;
+  isPanning.value = true;
+  panStart = { x: event.clientX, y: event.clientY, px: zoomX.value, py: zoomY.value };
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+};
+
+const onImagePointerMove = (event: PointerEvent) => {
+  if (!isPanning.value) return;
+  zoomX.value = panStart.px + (event.clientX - panStart.x);
+  zoomY.value = panStart.py + (event.clientY - panStart.y);
+};
+
+const onImagePointerUp = (event: PointerEvent) => {
+  if (!isPanning.value) return;
+  isPanning.value = false;
+  try {
+    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+  } catch {
+    /* noop */
+  }
+};
+
+const onImageDoubleClick = (event: MouseEvent) => {
+  event.preventDefault();
+  setZoom(zoomScale.value > 1 ? 1 : 2);
+};
 const aiEditOpen = ref(false);
 const locationEditOpen = ref(false);
 const saving = ref(false);
@@ -414,6 +483,7 @@ watch(
       detailsOpen.value = false;
       aiEditOpen.value = false;
       locationEditOpen.value = false;
+      resetZoom();
       if (copyTimer) {
         clearTimeout(copyTimer);
         copyTimer = null;
@@ -425,7 +495,10 @@ watch(
 
 watch(
   () => props.image,
-  (image) => resetForm(image),
+  (image) => {
+    resetForm(image);
+    resetZoom();
+  },
   { immediate: true },
 );
 
@@ -514,11 +587,85 @@ onBeforeUnmount(() => {
                   :src="image.public_url"
                   :alt="image.title"
                   class="main-image"
+                  :class="{ 'is-panning': isPanning, 'is-zoomed': zoomScale > 1 }"
+                  :style="{ transform: zoomTransform }"
+                  draggable="false"
                   @click.stop
+                  @wheel.prevent="onImageWheel"
+                  @pointerdown="onImagePointerDown"
+                  @pointermove="onImagePointerMove"
+                  @pointerup="onImagePointerUp"
+                  @pointercancel="onImagePointerUp"
+                  @dblclick.stop="onImageDoubleClick"
+                  @dragstart.prevent
                 />
                 <figcaption class="sr-only">
                   {{ image ? `${image.title} 预览` : '未选中图片，请从图库点击进入' }}
                 </figcaption>
+
+                <div v-if="image" class="image-controls" @click.stop @dblclick.stop>
+                  <button
+                    type="button"
+                    class="image-ctrl-btn"
+                    aria-label="上一张"
+                    title="上一张 (←)"
+                    @click="emit('prev')"
+                  >
+                    <svg :viewBox="ICONS.chevronLeft.vb" fill="currentColor" aria-hidden="true">
+                      <path :d="ICONS.chevronLeft.d" />
+                    </svg>
+                  </button>
+                  <span class="ctrl-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    class="image-ctrl-btn"
+                    :disabled="!canZoomOut"
+                    aria-label="缩小"
+                    title="缩小"
+                    @click="zoomBy(1 / ZOOM_STEP)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m20 20-3.5-3.5" />
+                      <path d="M8 11h6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="image-ctrl-btn ctrl-percent"
+                    :title="`重置（当前 ${zoomPercent}%）`"
+                    @click="resetZoom"
+                  >
+                    {{ zoomPercent }}%
+                  </button>
+                  <button
+                    type="button"
+                    class="image-ctrl-btn"
+                    :disabled="!canZoomIn"
+                    aria-label="放大"
+                    title="放大"
+                    @click="zoomBy(ZOOM_STEP)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m20 20-3.5-3.5" />
+                      <path d="M8 11h6" />
+                      <path d="M11 8v6" />
+                    </svg>
+                  </button>
+                  <span class="ctrl-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    class="image-ctrl-btn"
+                    aria-label="下一张"
+                    title="下一张 (→)"
+                    @click="emit('next')"
+                  >
+                    <svg :viewBox="ICONS.chevronRight.vb" fill="currentColor" aria-hidden="true">
+                      <path :d="ICONS.chevronRight.d" />
+                    </svg>
+                  </button>
+                </div>
               </figure>
 
               <button type="button" class="nav-arrow nav-arrow-left" aria-label="上一张（←）" @click.stop="emit('prev')">
@@ -1053,6 +1200,81 @@ onBeforeUnmount(() => {
   max-height: 100%;
   object-fit: contain;
   user-select: none;
+  transform-origin: center center;
+  transition: transform 200ms ease;
+  will-change: transform;
+  touch-action: none;
+}
+
+.main-image.is-zoomed {
+  cursor: grab;
+}
+
+.main-image.is-panning {
+  cursor: grabbing;
+  transition: none;
+}
+
+.image-controls {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(53, 243, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(7, 7, 19, 0.78);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  cursor: default;
+}
+
+.image-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 30px;
+  padding: 0 0.55rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.image-ctrl-btn:hover:not(:disabled) {
+  background: rgba(53, 243, 255, 0.14);
+  color: rgb(165, 243, 252);
+}
+
+.image-ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.image-ctrl-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.image-ctrl-btn.ctrl-percent {
+  min-width: 48px;
+}
+
+.ctrl-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(53, 243, 255, 0.18);
+  margin: 0 2px;
 }
 
 .nav-arrow {
