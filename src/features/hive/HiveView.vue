@@ -289,10 +289,73 @@ const resetZoom = () => {
   flatMap.easeTo({ zoom: FLAT_ZOOM, duration: 260 });
 };
 
-const onZoomSliderInput = (event: Event) => {
-  if (!flatMap) return;
-  const value = parseFloat((event.target as HTMLInputElement).value);
-  if (Number.isFinite(value)) flatMap.setZoom(value);
+const TRACK_HEIGHT = 120;
+const THUMB_SIZE = 13;
+const sliderEl = ref<HTMLElement | null>(null);
+const dragging = ref(false);
+
+const thumbTop = computed(() => {
+  const range = zoomMax.value - zoomMin.value;
+  if (range <= 0) return 0;
+  const ratio = (zoomMax.value - currentZoom.value) / range;
+  return Math.max(0, Math.min(1, ratio)) * (TRACK_HEIGHT - THUMB_SIZE);
+});
+
+const updateFromClientY = (clientY: number) => {
+  if (!flatMap || !sliderEl.value) return;
+  const rect = sliderEl.value.getBoundingClientRect();
+  const usable = rect.height - THUMB_SIZE;
+  if (usable <= 0) return;
+  const raw = clientY - rect.top - THUMB_SIZE / 2;
+  const clamped = Math.max(0, Math.min(usable, raw));
+  const ratio = clamped / usable;
+  const value = zoomMax.value - ratio * (zoomMax.value - zoomMin.value);
+  flatMap.setZoom(value);
+};
+
+const onSliderPointerDown = (event: PointerEvent) => {
+  if (event.button !== 0 || !sliderEl.value) return;
+  dragging.value = true;
+  sliderEl.value.setPointerCapture(event.pointerId);
+  updateFromClientY(event.clientY);
+};
+
+const onSliderPointerMove = (event: PointerEvent) => {
+  if (!dragging.value) return;
+  updateFromClientY(event.clientY);
+};
+
+const onSliderPointerUp = (event: PointerEvent) => {
+  if (!sliderEl.value) return;
+  dragging.value = false;
+  try {
+    sliderEl.value.releasePointerCapture(event.pointerId);
+  } catch {
+    /* noop */
+  }
+};
+
+const onSliderKeyDown = (event: KeyboardEvent) => {
+  const step = event.shiftKey ? 0.1 : 1;
+  if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+    event.preventDefault();
+    zoomBy(step);
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+    event.preventDefault();
+    zoomBy(-step);
+  } else if (event.key === 'PageUp') {
+    event.preventDefault();
+    zoomBy(2);
+  } else if (event.key === 'PageDown') {
+    event.preventDefault();
+    zoomBy(-2);
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    if (flatMap) flatMap.easeTo({ zoom: zoomMax.value, duration: 200 });
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    if (flatMap) flatMap.easeTo({ zoom: zoomMin.value, duration: 200 });
+  }
 };
 
 const renderFlatMarkers = () => {
@@ -403,6 +466,9 @@ const initFlatMap = async () => {
     center: DEFAULT_CENTER,
     zoom: FLAT_ZOOM,
     attributionControl: false,
+    renderWorldCopies: false,
+    minZoom: 1,
+    maxZoom: 14,
   });
 
   zoomMin.value = flatMap.getMinZoom();
@@ -527,17 +593,26 @@ onBeforeUnmount(() => {
                 @dblclick="resetZoom"
               >
                 <button type="button" class="zoom-btn" aria-label="放大" @click="zoomBy(1)">+</button>
-                <div class="zoom-track">
-                  <input
-                    type="range"
-                    class="zoom-range"
-                    orient="vertical"
-                    :min="zoomMin"
-                    :max="zoomMax"
-                    step="0.01"
-                    :value="currentZoom"
-                    aria-label="缩放级别"
-                    @input="onZoomSliderInput"
+                <div
+                  ref="sliderEl"
+                  class="zoom-track"
+                  role="slider"
+                  tabindex="0"
+                  :aria-valuemin="zoomMin"
+                  :aria-valuemax="zoomMax"
+                  :aria-valuenow="Math.round(currentZoom * 10) / 10"
+                  aria-label="缩放级别"
+                  @pointerdown="onSliderPointerDown"
+                  @pointermove="onSliderPointerMove"
+                  @pointerup="onSliderPointerUp"
+                  @keydown="onSliderKeyDown"
+                >
+                  <div class="zoom-track-line" aria-hidden="true" />
+                  <div
+                    class="zoom-thumb"
+                    :class="{ 'is-dragging': dragging }"
+                    :style="{ top: thumbTop + 'px' }"
+                    aria-hidden="true"
                   />
                 </div>
                 <button type="button" class="zoom-btn" aria-label="缩小" @click="zoomBy(-1)">−</button>
@@ -1070,70 +1145,56 @@ onBeforeUnmount(() => {
 }
 
 .zoom-track {
-  height: 120px;
+  position: relative;
   width: 22px;
-  display: grid;
-  place-items: center;
-}
-
-.zoom-range {
-  width: 4px;
   height: 120px;
-  margin: 0;
-  padding: 0;
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
-  writing-mode: vertical-lr;
-  direction: rtl;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  outline: none;
   cursor: pointer;
+  outline: none;
+  touch-action: none;
 }
 
-.zoom-range::-webkit-slider-runnable-track {
-  width: 4px;
-  background: transparent;
-  border: 0;
+.zoom-track:focus-visible {
+  outline: none;
 }
 
-.zoom-range::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 11px;
-  height: 11px;
+.zoom-track:focus-visible .zoom-thumb {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(53, 243, 255, 0.35);
+}
+
+.zoom-track-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  margin-left: -1.5px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.zoom-thumb {
+  position: absolute;
+  left: 50%;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
   border-radius: 50%;
-  background: rgba(226, 232, 240, 0.92);
-  border: 0;
-  box-shadow: none;
-  cursor: grab;
-  transition: transform 120ms ease, background-color 120ms ease;
-  margin-left: -3.5px;
+  background: rgb(248, 250, 252);
+  border: 1.5px solid rgba(7, 7, 19, 0.7);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  transition: box-shadow 140ms ease, transform 140ms ease;
+  will-change: top;
 }
 
-.zoom-range:hover::-webkit-slider-thumb {
-  background: rgb(255, 255, 255);
+.zoom-track:hover .zoom-thumb {
+  transform: scale(1.08);
 }
 
-.zoom-range:active::-webkit-slider-thumb {
-  transform: scale(1.15);
-  cursor: grabbing;
-}
-
-.zoom-range::-moz-range-thumb {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: rgba(226, 232, 240, 0.92);
-  border: 0;
-  box-shadow: none;
-  cursor: grab;
-}
-
-.zoom-range::-moz-range-track {
-  background: transparent;
-  border: 0;
-  width: 4px;
+.zoom-thumb.is-dragging {
+  transform: scale(1.2);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(53, 243, 255, 0.22);
 }
 
 :deep(.footprint-popup) {
