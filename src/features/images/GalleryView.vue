@@ -202,7 +202,7 @@ const clearSearch = async () => {
           v-for="(box, i) in layout.boxes"
           :key="displayImages[i].key"
           type="button"
-          class="group absolute overflow-hidden rounded-lg border border-white/10 bg-void/60 transition hover:border-neon-cyan/50 hover:shadow-[0_4px_20px_rgba(53,243,255,0.15)] focus:outline-none focus:ring-2 focus:ring-neon-cyan/60"
+          class="group absolute overflow-hidden rounded-lg border border-white/10 bg-void/60 transition-all duration-300 ease-out hover:z-10 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-[0_10px_28px_rgba(0,0,0,0.45),0_0_24px_rgba(53,243,255,0.08)] focus:outline-none focus:ring-2 focus:ring-neon-cyan/60"
           :style="{
             top: box.top + 'px',
             left: box.left + 'px',
@@ -216,8 +216,15 @@ const clearSearch = async () => {
             :src="displayImages[i].public_url"
             :alt="displayImages[i].title"
             loading="lazy"
-            class="h-full w-full object-cover transition group-hover:scale-[1.02]"
+            class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
           />
+          <div
+            class="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-void/92 via-void/55 to-transparent px-3 pb-2 pt-7 opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100"
+          >
+            <p class="truncate text-xs font-semibold tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+              {{ displayImages[i].title || displayImages[i].original_filename }}
+            </p>
+          </div>
         </button>
       </div>
 
