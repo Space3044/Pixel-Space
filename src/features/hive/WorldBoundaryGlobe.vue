@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type {
   BufferGeometry,
-  Group,
   Line,
   Material,
   Mesh,
@@ -46,7 +45,6 @@ interface SceneState {
   animationId: number;
   hoverFrame: number;
   countryToLines: Map<string, Line[]>;
-  highlightGroup: Group;
   visitedCountryNames: Set<string>;
   lastHighlightedCountry: string | null;
   resizeObserver: ResizeObserver | null;
@@ -61,8 +59,14 @@ const COLORS = {
   atmosphere: 'rgba(53, 243, 255, 0.16)',
 };
 
-const HOVER_TUBE_RADIUS = 0.008;
-const HOVER_BOUNDARY_SCALE = 1.006;
+const RENDER_ORDER = {
+  other: 1,
+  china: 2,
+  visited: 3,
+  highlight: 4,
+};
+
+const SEGMENT_QUANTIZE_DEG = 0.5;
 
 const stageRef = ref<HTMLElement | null>(null);
 const loading = ref(true);
@@ -239,11 +243,10 @@ const createBoundaryScene = (
     Raycaster: ThreeRaycaster,
     Group: ThreeGroup,
     BufferGeometry: ThreeBufferGeometry,
-    CatmullRomCurve3: ThreeCatmullRomCurve3,
+    Float32BufferAttribute: ThreeFloat32BufferAttribute,
     LineBasicMaterial: ThreeLineBasicMaterial,
-    Line: ThreeLine,
+    LineSegments: ThreeLineSegments,
     FrontSide: ThreeFrontSide,
-    TubeGeometry: ThreeTubeGeometry,
   } = three;
 
   const { width, height } = readStageSize(container);
@@ -298,12 +301,39 @@ const createBoundaryScene = (
   const countryToLines = new Map<string, Line[]>();
   const visitedCountryNames = new Set<string>();
   const countryGroup = new ThreeGroup();
-  const highlightGroup = new ThreeGroup();
-  highlightGroup.renderOrder = 40;
   earth.add(countryGroup);
-  earth.add(highlightGroup);
 
   const boundaryLines = geoProcessor.get_boundary_lines();
+
+  const resolveRegionPriority = (regionName: string, isVisited: boolean) => {
+    if (isVisited) return RENDER_ORDER.visited;
+    if (regionName === '中国' || regionName.startsWith('中国-')) return RENDER_ORDER.china;
+    return RENDER_ORDER.other;
+  };
+
+  const quantize = (value: number) => Math.round(value / SEGMENT_QUANTIZE_DEG);
+  const pointKey = (lng: number, lat: number) => `${quantize(lng)},${quantize(lat)}`;
+  const segmentKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+  const segmentPriority = new Map<string, number>();
+  for (const boundaryLine of boundaryLines) {
+    const points = Array.isArray(boundaryLine.points) ? boundaryLine.points : [];
+    if (points.length <= 1) continue;
+
+    const priority = resolveRegionPriority(boundaryLine.region_name, boundaryLine.is_visited);
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i];
+      const b = points[i + 1];
+      const llA = vectorToLngLat(a.x, a.y, a.z);
+      const llB = vectorToLngLat(b.x, b.y, b.z);
+      const key = segmentKey(pointKey(llA.lng, llA.lat), pointKey(llB.lng, llB.lat));
+      const existing = segmentPriority.get(key);
+      if (existing === undefined || priority > existing) {
+        segmentPriority.set(key, priority);
+      }
+    }
+  }
+
   for (const boundaryLine of boundaryLines) {
     const points = Array.isArray(boundaryLine.points) ? boundaryLine.points : [];
     if (points.length <= 1) continue;
@@ -311,18 +341,38 @@ const createBoundaryScene = (
     const regionName = boundaryLine.region_name;
     const isVisited = boundaryLine.is_visited;
     const isChina = regionName === '中国' || regionName.startsWith('中国-');
+    const priority = resolveRegionPriority(regionName, isVisited);
+
+    const positions: number[] = [];
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i];
+      const b = points[i + 1];
+      const llA = vectorToLngLat(a.x, a.y, a.z);
+      const llB = vectorToLngLat(b.x, b.y, b.z);
+      const key = segmentKey(pointKey(llA.lng, llA.lat), pointKey(llB.lng, llB.lat));
+      if (segmentPriority.get(key) !== priority) continue;
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    }
+    if (positions.length === 0) {
+      if (isVisited) visitedCountryNames.add(regionName);
+      continue;
+    }
+
     let borderColor = COLORS.border;
+    let baseRenderOrder = RENDER_ORDER.other;
 
     if (isVisited) {
       borderColor = COLORS.visitedBorder;
+      baseRenderOrder = RENDER_ORDER.visited;
       visitedCountryNames.add(regionName);
     } else if (isChina) {
       borderColor = COLORS.chinaBorder;
+      baseRenderOrder = RENDER_ORDER.china;
     }
 
-    const lineGeometry = new ThreeBufferGeometry().setFromPoints(
-      points.map((point) => new ThreeVector3(point.x, point.y, point.z)),
-    );
+    const lineGeometry = new ThreeBufferGeometry();
+    lineGeometry.setAttribute('position', new ThreeFloat32BufferAttribute(positions, 3));
+
     const lineMaterial = new ThreeLineBasicMaterial({
       color: borderColor,
       linewidth: isVisited ? 1.8 : 1.2,
@@ -331,17 +381,17 @@ const createBoundaryScene = (
       depthTest: false,
       depthWrite: false,
     });
-    const line = new ThreeLine(lineGeometry, lineMaterial) as Line;
+    const line = new ThreeLineSegments(lineGeometry, lineMaterial) as unknown as Line;
     line.frustumCulled = false;
     line.userData = {
       name: regionName,
       isVisited,
       originalColor: borderColor,
       originalOpacity: lineMaterial.opacity,
-      originalRenderOrder: isVisited ? 3 : 2,
+      originalRenderOrder: baseRenderOrder,
       highlightColor: COLORS.highlight,
     };
-    line.renderOrder = isVisited ? 3 : 2;
+    line.renderOrder = baseRenderOrder;
     countryGroup.add(line);
 
     const lines = countryToLines.get(regionName);
@@ -355,54 +405,6 @@ const createBoundaryScene = (
   const raycaster = new ThreeRaycaster();
   const mouse = new ThreeVector2();
   let lastHighlightedCountry: string | null = null;
-
-  const clearHighlightOverlay = () => {
-    disposeObject(highlightGroup);
-    highlightGroup.clear();
-  };
-
-  const readLinePoints = (line: Line) => {
-    const position = line.geometry.getAttribute('position');
-    const points = [];
-
-    for (let index = 0; index < position.count; index += 1) {
-      points.push(
-        new ThreeVector3(
-          position.getX(index),
-          position.getY(index),
-          position.getZ(index),
-        ).multiplyScalar(HOVER_BOUNDARY_SCALE),
-      );
-    }
-
-    return points;
-  };
-
-  const addHighlightTube = (line: Line) => {
-    const points = readLinePoints(line);
-    if (points.length < 2) return;
-
-    const curve = new ThreeCatmullRomCurve3(points, false, 'centripetal');
-    const tubeSegments = Math.max(24, Math.min(points.length * 2, 960));
-    const geometry = new ThreeTubeGeometry(
-      curve,
-      tubeSegments,
-      HOVER_TUBE_RADIUS,
-      4,
-      false,
-    );
-    const material = new ThreeMeshBasicMaterial({
-      color: COLORS.highlight,
-      transparent: true,
-      opacity: 1,
-      depthTest: false,
-      depthWrite: false,
-    });
-    const tube = new ThreeMesh(geometry, material);
-    tube.renderOrder = 80;
-    tube.frustumCulled = false;
-    highlightGroup.add(tube);
-  };
 
   const resetCountryHighlight = (countryName: string | null) => {
     if (!countryName) return;
@@ -429,20 +431,18 @@ const createBoundaryScene = (
 
     for (const line of lines) {
       if (line.material instanceof ThreeLineBasicMaterial) {
-        line.material.color.set(line.userData.originalColor);
-        line.material.opacity = 0.12;
+        line.material.color.set(line.userData.highlightColor);
+        line.material.opacity = line.userData.originalOpacity;
         line.material.needsUpdate = true;
       }
 
-      line.renderOrder = 4;
-      addHighlightTube(line);
+      line.renderOrder = RENDER_ORDER.highlight;
     }
   };
 
   const updateHighlight = (countryName: string | null) => {
     if (countryName === lastHighlightedCountry) return;
 
-    clearHighlightOverlay();
     resetCountryHighlight(lastHighlightedCountry);
     applyCountryHighlight(countryName);
     lastHighlightedCountry = countryName;
@@ -494,9 +494,10 @@ const createBoundaryScene = (
     if (!sceneState || sceneState.hoverFrame) return;
 
     sceneState.hoverFrame = requestAnimationFrame(() => {
-      if (!sceneState || !lastMouseEvent) return;
-
+      if (!sceneState) return;
       sceneState.hoverFrame = 0;
+      if (!lastMouseEvent) return;
+
       const countryName = findCountryFromMouse(lastMouseEvent);
       updateHighlight(countryName);
       hoveredCountry.value = countryName;
@@ -506,6 +507,10 @@ const createBoundaryScene = (
   };
 
   handleMouseLeave = () => {
+    if (sceneState?.hoverFrame) {
+      cancelAnimationFrame(sceneState.hoverFrame);
+      sceneState.hoverFrame = 0;
+    }
     updateHighlight(null);
     hoveredCountry.value = null;
     lastMouseEvent = null;
@@ -540,7 +545,6 @@ const createBoundaryScene = (
     animationId: 0,
     hoverFrame: 0,
     countryToLines,
-    highlightGroup,
     visitedCountryNames,
     lastHighlightedCountry,
     resizeObserver,
