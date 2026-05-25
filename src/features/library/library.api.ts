@@ -22,6 +22,12 @@ interface MoveResponse {
   folder_id: string | null;
 }
 
+interface DeleteImagesResponse {
+  ok: boolean;
+  deleted: number;
+  missing: string[];
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   if (!response.ok) {
@@ -62,6 +68,14 @@ export function deleteFolder(id: string): Promise<void> {
 
 export function moveImages(payload: { keys: string[]; folder_id: string | null }): Promise<MoveResponse> {
   return jsonFetch<MoveResponse>('/api/admin/images/move', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteImages(payload: { keys: string[] }): Promise<DeleteImagesResponse> {
+  return jsonFetch<DeleteImagesResponse>('/api/admin/images/delete', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),

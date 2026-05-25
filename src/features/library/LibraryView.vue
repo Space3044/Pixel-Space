@@ -6,6 +6,7 @@ import { listImages } from '@/features/images/images.api';
 import {
   createFolder,
   deleteFolder,
+  deleteImages,
   fetchFolders,
   moveImages,
   updateFolder,
@@ -14,13 +15,30 @@ import {
 
 const ImageLightbox = defineAsyncComponent(() => import('@/features/images/ImageLightbox.vue'));
 
+const VIRTUAL_HIDDEN_IMAGES = '__hidden_images__';
+const VIRTUAL_HIDDEN_LOCATIONS = '__hidden_locations__';
+
+interface VirtualFolder {
+  id: typeof VIRTUAL_HIDDEN_IMAGES | typeof VIRTUAL_HIDDEN_LOCATIONS;
+  name: string;
+  description: string;
+}
+
+const virtualFolders: VirtualFolder[] = [
+  { id: VIRTUAL_HIDDEN_IMAGES, name: '未公开图片', description: '仅管理员可见的私有图片' },
+  { id: VIRTUAL_HIDDEN_LOCATIONS, name: '未公开位置', description: '位置对访客隐藏的图片' },
+];
+
+const isVirtualId = (id: string | null): id is VirtualFolder['id'] =>
+  id === VIRTUAL_HIDDEN_IMAGES || id === VIRTUAL_HIDDEN_LOCATIONS;
+
 const folders = ref<FolderRecord[]>([]);
 const images = ref<ImageRecord[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const actionMessage = ref<string | null>(null);
 
-// null 表示「根 / 未分类」。
+// null 表示「根 / 未分类」；虚拟 ID 表示按图片属性筛选的智能目录。
 const currentFolderId = ref<string | null>(null);
 const selectedKeys = ref<Set<string>>(new Set());
 const moveTarget = ref<string>('__none__');
@@ -47,18 +65,43 @@ const foldersByParent = computed(() => {
   return map;
 });
 
-const subfolders = computed<FolderRecord[]>(() => foldersByParent.value.get(currentFolderId.value) ?? []);
+const subfolders = computed<FolderRecord[]>(() => {
+  if (isVirtualId(currentFolderId.value)) return [];
+  return foldersByParent.value.get(currentFolderId.value) ?? [];
+});
 
-const currentImages = computed<ImageRecord[]>(() =>
-  images.value.filter((img) => (img.folder_id ?? null) === currentFolderId.value),
-);
+const virtualCounts = computed(() => ({
+  [VIRTUAL_HIDDEN_IMAGES]: images.value.filter((img) => Number(img.is_public) === 0).length,
+  [VIRTUAL_HIDDEN_LOCATIONS]: images.value.filter((img) => Number(img.location_public) === 0).length,
+}));
+
+const currentImages = computed<ImageRecord[]>(() => {
+  const cur = currentFolderId.value;
+  if (cur === VIRTUAL_HIDDEN_IMAGES) return images.value.filter((img) => Number(img.is_public) === 0);
+  if (cur === VIRTUAL_HIDDEN_LOCATIONS) return images.value.filter((img) => Number(img.location_public) === 0);
+  return images.value.filter((img) => (img.folder_id ?? null) === cur);
+});
 
 const currentFolder = computed<FolderRecord | null>(() =>
-  currentFolderId.value ? foldersById.value.get(currentFolderId.value) ?? null : null,
+  currentFolderId.value && !isVirtualId(currentFolderId.value)
+    ? foldersById.value.get(currentFolderId.value) ?? null
+    : null,
 );
+
+const currentVirtual = computed<VirtualFolder | null>(() => {
+  const cur = currentFolderId.value;
+  if (!isVirtualId(cur)) return null;
+  return virtualFolders.find((v) => v.id === cur) ?? null;
+});
+
+const currentReadonly = computed(() => currentVirtual.value !== null);
 
 const breadcrumb = computed<Array<{ id: string | null; name: string }>>(() => {
   const trail: Array<{ id: string | null; name: string }> = [{ id: null, name: '根目录' }];
+  if (currentVirtual.value) {
+    trail.push({ id: currentVirtual.value.id, name: currentVirtual.value.name });
+    return trail;
+  }
   let cursor: string | null = currentFolderId.value;
   const stack: FolderRecord[] = [];
   while (cursor) {
@@ -117,6 +160,7 @@ const enterFolder = (id: string | null) => {
 };
 
 const toggleSelection = (key: string) => {
+  if (currentReadonly.value) return;
   const next = new Set(selectedKeys.value);
   if (next.has(key)) next.delete(key);
   else next.add(key);
@@ -124,6 +168,7 @@ const toggleSelection = (key: string) => {
 };
 
 const selectAllCurrent = () => {
+  if (currentReadonly.value) return;
   selectedKeys.value = new Set(currentImages.value.map((img) => img.key));
 };
 
@@ -190,6 +235,7 @@ const handleMove = async () => {
   }
   try {
     const keys = Array.from(selectedKeys.value);
+    const previousById = new Map(images.value.map((img) => [img.key, img.folder_id ?? null]));
     await moveImages({ keys, folder_id: targetId });
     images.value = images.value.map((img) =>
       selectedKeys.value.has(img.key) ? { ...img, folder_id: targetId } : img,
@@ -202,12 +248,43 @@ const handleMove = async () => {
         folder.id === folderId ? { ...folder, image_count: Math.max(0, folder.image_count + delta) } : folder,
       );
     };
-    updateCount(currentFolderId.value, -movedCount);
+    if (isVirtualId(currentFolderId.value)) {
+      // 虚拟目录里图片各自的真实 folder_id 不同，逐张回扣。
+      for (const key of keys) updateCount(previousById.get(key) ?? null, -1);
+    } else {
+      updateCount(currentFolderId.value, -movedCount);
+    }
     updateCount(targetId, movedCount);
     selectedKeys.value = new Set();
     actionMessage.value = `已移动 ${movedCount} 张到 ${targetId ? folderOptions.value.find((o) => o.id === targetId)?.label ?? '目标文件夹' : '根目录'}`;
   } catch (error) {
     actionMessage.value = `移动失败：${(error as Error).message}`;
+  }
+};
+
+const handleBatchDelete = async () => {
+  if (selectedKeys.value.size === 0) return;
+  const count = selectedKeys.value.size;
+  if (!window.confirm(`确定删除选中的 ${count} 张图片？此操作不可恢复。`)) return;
+  try {
+    const keys = Array.from(selectedKeys.value);
+    const previousById = new Map(images.value.map((img) => [img.key, img.folder_id ?? null]));
+    const result = await deleteImages({ keys });
+    const deletedSet = new Set(keys.filter((k) => !result.missing.includes(k)));
+    images.value = images.value.filter((img) => !deletedSet.has(img.key));
+    const updateCount = (folderId: string | null, delta: number) => {
+      if (!folderId) return;
+      folders.value = folders.value.map((folder) =>
+        folder.id === folderId ? { ...folder, image_count: Math.max(0, folder.image_count + delta) } : folder,
+      );
+    };
+    for (const key of deletedSet) updateCount(previousById.get(key) ?? null, -1);
+    selectedKeys.value = new Set();
+    actionMessage.value = result.missing.length
+      ? `已删除 ${result.deleted} 张，${result.missing.length} 张未找到`
+      : `已删除 ${result.deleted} 张`;
+  } catch (error) {
+    actionMessage.value = `删除失败：${(error as Error).message}`;
   }
 };
 
@@ -236,7 +313,6 @@ onMounted(refreshAll);
       <header class="library-header">
         <div class="library-title">
           <h1>文件库</h1>
-          <p>把图片归到层级文件夹里，只对管理员可见</p>
         </div>
 
         <nav class="breadcrumb" aria-label="当前路径">
@@ -254,7 +330,14 @@ onMounted(refreshAll);
         </nav>
 
         <div class="library-actions">
-          <button type="button" class="library-btn" @click="handleCreateFolder">新建文件夹</button>
+          <button
+            type="button"
+            class="library-btn"
+            :disabled="!!currentVirtual"
+            @click="handleCreateFolder"
+          >
+            新建文件夹
+          </button>
           <button
             type="button"
             class="library-btn"
@@ -272,6 +355,32 @@ onMounted(refreshAll);
             删除当前
           </button>
           <button type="button" class="library-btn" @click="refreshAll">刷新</button>
+        </div>
+
+        <div class="library-shortcuts" role="group" aria-label="智能目录">
+          <button
+            v-for="vf in virtualFolders"
+            :key="vf.id"
+            type="button"
+            class="shortcut-btn"
+            :class="{ 'is-active': currentFolderId === vf.id }"
+            :title="vf.description"
+            @click="enterFolder(vf.id)"
+          >
+            <svg v-if="vf.id === VIRTUAL_HIDDEN_IMAGES" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+              <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+              <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+              <line x1="2" y1="2" x2="22" y2="22" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+              <line x1="3" y1="3" x2="21" y2="21" />
+            </svg>
+            <span class="shortcut-name">{{ vf.name }}</span>
+            <span class="shortcut-count">{{ virtualCounts[vf.id] }}</span>
+          </button>
         </div>
       </header>
 
@@ -311,6 +420,7 @@ onMounted(refreshAll);
           <header class="image-section-header">
             <span class="section-label">本目录图片 · {{ currentImages.length }}</span>
             <button
+              v-if="!currentReadonly"
               type="button"
               class="library-btn small"
               :disabled="selectedKeys.size === currentImages.length"
@@ -319,6 +429,7 @@ onMounted(refreshAll);
               全选
             </button>
             <button
+              v-if="!currentReadonly"
               type="button"
               class="library-btn small"
               :disabled="selectedKeys.size === 0"
@@ -342,6 +453,7 @@ onMounted(refreshAll);
               <img :src="img.public_url" :alt="img.title" loading="lazy" />
               <span class="image-caption">{{ img.title || img.original_filename }}</span>
               <button
+                v-if="!currentReadonly"
                 type="button"
                 class="select-toggle"
                 :class="{ 'is-on': selectedKeys.has(img.key) }"
@@ -360,7 +472,8 @@ onMounted(refreshAll);
           v-if="subfolders.length === 0 && currentImages.length === 0"
           class="state-card"
         >
-          这个文件夹是空的。可以新建子文件夹，或回到上一级把图片移进来。
+          <template v-if="currentVirtual">没有符合「{{ currentVirtual.name }}」条件的图片。</template>
+          <template v-else>这个文件夹是空的。可以新建子文件夹，或回到上一级把图片移进来。</template>
         </p>
       </template>
 
@@ -382,6 +495,7 @@ onMounted(refreshAll);
             </select>
           </label>
           <button type="button" class="library-btn primary" @click="handleMove">移动</button>
+          <button type="button" class="library-btn danger" @click="handleBatchDelete">删除</button>
           <button type="button" class="library-btn ghost" @click="clearSelection">取消</button>
         </div>
       </Transition>
@@ -597,6 +711,63 @@ onMounted(refreshAll);
 .folder-icon svg {
   width: 18px;
   height: 18px;
+}
+
+.library-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.shortcut-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 30px;
+  padding: 0 0.65rem 0 0.55rem;
+  border: 1px solid rgba(255, 79, 216, 0.22);
+  border-radius: 999px;
+  background: rgba(7, 7, 19, 0.55);
+  color: rgba(248, 207, 233, 0.78);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.shortcut-btn:hover {
+  border-color: rgba(255, 79, 216, 0.55);
+  color: rgb(255, 209, 236);
+  background: rgba(255, 79, 216, 0.08);
+}
+
+.shortcut-btn.is-active {
+  background: rgba(255, 79, 216, 0.16);
+  color: rgb(255, 209, 236);
+  border-color: rgba(255, 79, 216, 0.6);
+}
+
+.shortcut-btn svg {
+  width: 13px;
+  height: 13px;
+  opacity: 0.85;
+}
+
+.shortcut-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 79, 216, 0.18);
+  color: rgb(255, 209, 236);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.shortcut-btn.is-active .shortcut-count {
+  background: rgba(255, 79, 216, 0.32);
 }
 
 .folder-name {
