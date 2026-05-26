@@ -2,17 +2,17 @@ import type { Env } from '../../../types';
 import { badRequest, json, notFound, serverError, unauthorized } from '../../../_shared/http';
 import { resolveAdmin } from '../../../_shared/auth';
 import type { ImageRow } from '../../../_shared/images';
-import { normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../../../_shared/images';
+import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../../../_shared/images';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 
 const DETAIL_SQL = `
-SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public, folder_id
+SELECT ${IMAGE_SELECT_COLUMNS}
 FROM images
 WHERE key = ?
 `;
 
 const DELETE_DETAIL_SQL = `
-SELECT key, r2_key, tg_chat_id, tg_message_id
+SELECT key, tg_chat_id, tg_message_id
 FROM images
 WHERE key = ?
 `;
@@ -38,7 +38,6 @@ const DELETE_SQL = 'DELETE FROM images WHERE key = ?';
 
 interface DeleteRow {
   key: string;
-  r2_key: string;
   tg_chat_id: string | null;
   tg_message_id: number | null;
 }
@@ -161,7 +160,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, params, request
     const row = await env.DB.prepare(DELETE_DETAIL_SQL).bind(key).first<DeleteRow>();
     if (!row) return notFound();
 
-    await env.BUCKET.delete(row.r2_key);
+    await env.BUCKET.delete(row.key);
 
     if (row.tg_chat_id && row.tg_message_id) {
       try {

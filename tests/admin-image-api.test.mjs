@@ -66,7 +66,6 @@ const imageRow = {
   key: 'img-key',
   title: '旧标题',
   caption: '旧描述',
-  r2_key: 'img-key',
   original_filename: 'cat.jpg',
   width: 1200,
   height: 800,
@@ -86,9 +85,11 @@ const imageRow = {
   color_palette_json: '["#0F172A","#F59E0B"]',
   composition: '中心构图',
   ai_status: 'pending',
-  ai_error: null,
-  ai_attempts: 0,
-  ai_finished_at: null,
+  created_at: '2026-05-20 10:11:12',
+  updated_at: '2026-05-21 12:13:14',
+  is_public: 1,
+  location_public: 1,
+  folder_id: null,
   tg_chat_id: '-100123',
   tg_message_id: 88,
 };
@@ -106,7 +107,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   const response = await onRequestPatch({
     env,
     params: { key: 'img-key' },
-    request: new Request('http://x/api/admin/image/img-key', {
+    request: new Request('http://localhost/api/admin/image/img-key', {
       method: 'PATCH',
       body: JSON.stringify({
         title: '新标题',
@@ -133,11 +134,19 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.equal(data.original_filename, 'cat.jpg');
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
+  assert.equal(data.created_at, '2026-05-20 10:11:12');
+  assert.equal(data.updated_at, '2026-05-21 12:13:14');
+  assert.equal(data.is_public, 1);
+  assert.equal(data.location_public, 1);
+  assert.equal(data.folder_id, null);
   assert.equal(data.dominant_color, '深蓝色 #0F172A');
   assert.equal(data.color_palette_json, '["#0F172A","#F59E0B"]');
   assert.equal(data.composition, '中心构图');
   assert.equal('ai_proxy_url' in data, false);
   assert.equal('ai_model' in data, false);
+  assert.equal('ai_error' in data, false);
+  assert.equal('ai_attempts' in data, false);
+  assert.equal('ai_finished_at' in data, false);
   assert.equal(calls.updates.length, 1);
   assert.match(calls.updates[0].sql, /\btitle\b/i);
   assert.match(calls.updates[0].sql, /\blocation_lat\b/i);
@@ -167,7 +176,7 @@ await test('PATCH /api/admin/image/:key rejects invalid coordinates before updat
   const response = await onRequestPatch({
     env,
     params: { key: 'img-key' },
-    request: new Request('http://x/api/admin/image/img-key', {
+    request: new Request('http://localhost/api/admin/image/img-key', {
       method: 'PATCH',
       body: JSON.stringify({
         title: '新标题',
@@ -200,7 +209,7 @@ await test('DELETE /api/admin/image/:key removes R2 object, tries Telegram clean
       onRequestDelete({
         env,
         params: { key: 'img-key' },
-        request: new Request('http://x/api/admin/image/img-key', { method: 'DELETE' }),
+        request: new Request('http://localhost/api/admin/image/img-key', { method: 'DELETE' }),
       }),
   );
 
@@ -226,7 +235,7 @@ await test('DELETE /api/admin/image/:key keeps deleting D1 when Telegram cleanup
         onRequestDelete({
           env,
           params: { key: 'img-key' },
-          request: new Request('http://x/api/admin/image/img-key', { method: 'DELETE' }),
+          request: new Request('http://localhost/api/admin/image/img-key', { method: 'DELETE' }),
         }),
     );
 
@@ -244,7 +253,7 @@ await test('DELETE /api/admin/image/:key returns 404 when image is missing', asy
   const response = await onRequestDelete({
     env,
     params: { key: 'missing' },
-    request: new Request('http://x/api/admin/image/missing', { method: 'DELETE' }),
+    request: new Request('http://localhost/api/admin/image/missing', { method: 'DELETE' }),
   });
 
   assert.equal(response.status, 404);

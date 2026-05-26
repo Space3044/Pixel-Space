@@ -3,13 +3,10 @@ import { json, serverError } from '../_shared/http';
 import { resolveAdmin } from '../_shared/auth';
 import { collectDescendantIds } from '../_shared/folders';
 import type { ImageRow } from '../_shared/images';
-import { rowToRecord, scrubRecordForVisitor } from '../_shared/images';
+import { IMAGE_SELECT_COLUMNS, rowToRecord, scrubRecordForVisitor } from '../_shared/images';
 
 // 列表与搜索共用一套动态拼接的 SQL：根据 isAdmin / 是否带搜索 / 是否带 folder 参数决定 WHERE。
 // 访客视角强制 is_public=1，并把 location_name 搜索包在 location_public=1 守卫里。
-
-const SELECT_COLUMNS =
-  'key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public, folder_id';
 
 const normalizeSearch = (request: Request): string => {
   const value = new URL(request.url).searchParams.get('q') ?? '';
@@ -94,7 +91,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const sql = `SELECT ${SELECT_COLUMNS} FROM images ${whereClause} ORDER BY created_at DESC`;
+    const sql = `SELECT ${IMAGE_SELECT_COLUMNS} FROM images ${whereClause} ORDER BY created_at DESC`;
 
     const result = await env.DB.prepare(sql).bind(...binds).all<ImageRow>();
     const records = (result.results ?? []).map((row) => {

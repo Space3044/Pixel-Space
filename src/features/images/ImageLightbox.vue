@@ -50,7 +50,7 @@ const origin = typeof window !== 'undefined' ? window.location.origin : '';
 const detailsOpen = ref(false);
 
 const ZOOM_MIN = 1;
-const ZOOM_MAX = 8;
+const ZOOM_MAX = 2;
 const ZOOM_STEP = 1.25;
 
 const zoomScale = ref(1);
@@ -173,7 +173,7 @@ const formatBytes = (bytes: number): string => {
   return `${value.toFixed(unit === 0 ? 0 : 2)} ${units[unit]}`;
 };
 
-const formatExifTakenAt = (value: string | null): string => {
+const formatDateTime = (value: string | null | undefined): string => {
   if (!value) return '未记录';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -187,6 +187,9 @@ const formatExifTakenAt = (value: string | null): string => {
     hour12: false,
   }).format(date);
 };
+
+const formatExifTakenAt = formatDateTime;
+const formatImageTimestamp = formatDateTime;
 
 const exifRows = computed(() => {
   const image = props.image;
@@ -1028,11 +1031,11 @@ onBeforeUnmount(() => {
                   <div class="detail-items">
                     <div class="detail-item">
                       <span class="item-label">创建时间</span>
-                      <span class="item-value text-muted">后续接入</span>
+                      <span class="item-value">{{ formatImageTimestamp(image.created_at) }}</span>
                     </div>
                     <div class="detail-item">
                       <span class="item-label">更新时间</span>
-                      <span class="item-value text-muted">后续接入</span>
+                      <span class="item-value">{{ formatImageTimestamp(image.updated_at) }}</span>
                     </div>
                   </div>
                 </section>

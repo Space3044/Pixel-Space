@@ -2,10 +2,10 @@ import type { Env } from '../types';
 import { badRequest, json, notFound, serverError, unauthorized } from '../_shared/http';
 import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
-import { rowToRecord } from '../_shared/images';
+import { IMAGE_SELECT_COLUMNS, rowToRecord } from '../_shared/images';
 
 const SELECT_BY_HASH_SQL =
-  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public, folder_id FROM images WHERE hash = ? LIMIT 1';
+  `SELECT ${IMAGE_SELECT_COLUMNS} FROM images WHERE hash = ? LIMIT 1`;
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 

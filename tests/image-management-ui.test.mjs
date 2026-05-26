@@ -18,7 +18,7 @@ const test = (name, fn) => {
 
 test('GalleryView wires the search box to listImages(query)', () => {
   assert.match(gallery, /const searchQuery = ref/);
-  assert.match(gallery, /listImages\(searchQuery\.value\)/);
+  assert.match(gallery, /listImages\(searchQuery\.value,\s*\{ folderId \}\)/);
   assert.match(gallery, /@submit\.prevent="loadImages"/);
   assert.match(gallery, /placeholder="搜索标题、描述或位置"/);
   assert.match(gallery, /class="explore-header"/);
@@ -31,7 +31,7 @@ test('GalleryView wires the search box to listImages(query)', () => {
 });
 
 test('images.api exposes admin update and delete helpers', () => {
-  assert.match(imagesApi, /export function listImages\(query = ''\)/);
+  assert.match(imagesApi, /export function listImages\(query = '', options: ListImagesOptions = \{\}\)/);
   assert.match(imagesApi, /URLSearchParams/);
   assert.match(imagesApi, /export function updateImage/);
   assert.match(imagesApi, /method: 'PATCH'/);
@@ -46,6 +46,9 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /deleteImage/);
   assert.match(lightbox, /defineEmits<\{ close: \[\]; prev: \[\]; next: \[\]; updated:/);
   assert.match(lightbox, /formatBytes\(image\.bytes_compressed\)/);
+  assert.match(lightbox, /formatImageTimestamp\(image\.created_at\)/);
+  assert.match(lightbox, /formatImageTimestamp\(image\.updated_at\)/);
+  assert.doesNotMatch(lightbox, /后续接入/);
   assert.match(lightbox, /image\.original_filename \|\| image\.key/);
   assert.doesNotMatch(lightbox, /<span class="item-label">文件名<\/span>\s*<span class="item-value text-truncate">\{\{ image\.title/s);
   assert.doesNotMatch(lightbox, /存储时长/);

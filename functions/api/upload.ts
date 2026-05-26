@@ -2,7 +2,7 @@ import type { Env } from '../types';
 import { badRequest, json, serverError, unauthorized } from '../_shared/http';
 import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
-import { normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../_shared/images';
+import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../_shared/images';
 import { archiveOriginalToTelegram } from '../_shared/telegram';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
@@ -12,13 +12,11 @@ INSERT INTO images (
   key,
   title,
   caption,
-  r2_key,
   original_filename,
   width,
   height,
   format,
   bytes_compressed,
-  bytes_original,
   hash,
   location_name,
   location_lat,
@@ -39,14 +37,14 @@ INSERT INTO images (
   is_public,
   location_public,
   folder_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
-  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public, folder_id FROM images WHERE key = ?';
+  `SELECT ${IMAGE_SELECT_COLUMNS} FROM images WHERE key = ?`;
 
 const SELECT_BY_HASH_SQL =
-  'SELECT key, title, caption, r2_key, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, ai_error, ai_attempts, ai_finished_at, is_public, location_public, folder_id FROM images WHERE hash = ? LIMIT 1';
+  `SELECT ${IMAGE_SELECT_COLUMNS} FROM images WHERE hash = ? LIMIT 1`;
 
 const UPDATE_TG_DONE_SQL = `
 UPDATE images
@@ -222,7 +220,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const meta = normalizeMeta(rawMeta);
   const exif = normalizeExif(rawExif);
   const key = crypto.randomUUID();
-  const r2Key = key;
   const originalFilename = original.name.trim() || key;
   const hash = await sha256Hex(original);
 
@@ -240,7 +237,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json(rowToRecord(existing, env.PUBLIC_BASE_URL), 200);
     }
 
-    await env.BUCKET.put(r2Key, compressed, {
+    await env.BUCKET.put(key, compressed, {
       httpMetadata: {
         contentType: compressed.type,
       },
@@ -251,13 +248,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         key,
         meta.title,
         meta.caption,
-        r2Key,
         originalFilename,
         dimensions.width,
         dimensions.height,
         'webp',
         compressed.size,
-        original.size,
         hash,
         meta.location_name,
         meta.location_lat,

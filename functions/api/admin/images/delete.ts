@@ -12,7 +12,6 @@ interface DeletePayload {
 
 interface ImageRow {
   key: string;
-  r2_key: string;
   tg_chat_id: string | null;
   tg_message_id: number | null;
 }
@@ -51,9 +50,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const placeholders = payload.keys.map(() => '?').join(',');
     const rowsResult = await env.DB
-      .prepare(
-        `SELECT key, r2_key, tg_chat_id, tg_message_id FROM images WHERE key IN (${placeholders})`,
-      )
+      .prepare(`SELECT key, tg_chat_id, tg_message_id FROM images WHERE key IN (${placeholders})`)
       .bind(...payload.keys)
       .all<ImageRow>();
 
@@ -66,7 +63,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await Promise.all(
       rows.map(async (row) => {
         try {
-          await env.BUCKET.delete(row.r2_key);
+          await env.BUCKET.delete(row.key);
         } catch (error) {
           console.error(`R2 delete failed for ${row.key}`, error);
         }

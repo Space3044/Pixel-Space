@@ -78,7 +78,7 @@ const makeUploadRequest = (overrides = {}) => {
     }),
   );
   formData.append('dimensions', JSON.stringify(overrides.dimensions ?? { width: 1280, height: 853 }));
-  return new Request('http://x/api/upload', { method: 'POST', body: formData });
+  return new Request('http://localhost/api/upload', { method: 'POST', body: formData });
 };
 
 const makeEnv = () => {
@@ -118,35 +118,37 @@ const makeEnv = () => {
                 return { success: true, meta: {} };
               },
               first: async () => {
+                if (/where\s+hash\s*=/i.test(sql)) return null;
                 calls.selectedKey = values[0];
                 const inserted = calls.insert?.values;
                 return {
                   key: values[0],
                   title: inserted?.[1] ?? '',
                   caption: inserted?.[2] ?? null,
-                  r2_key: inserted?.[3] ?? values[0],
-                  original_filename: inserted?.[4] ?? '',
-                  width: inserted?.[5] ?? 0,
-                  height: inserted?.[6] ?? 0,
-                  format: inserted?.[7] ?? 'webp',
-                  bytes_compressed: inserted?.[8] ?? 0,
-                  location_name: inserted?.[11] ?? null,
-                  location_lat: inserted?.[12] ?? null,
-                  location_lng: inserted?.[13] ?? null,
-                  exif_taken_at: inserted?.[14] ?? null,
-                  exif_camera: inserted?.[15] ?? null,
-                  exif_iso: inserted?.[16] ?? null,
-                  exif_aperture: inserted?.[17] ?? null,
-                  exif_shutter: inserted?.[18] ?? null,
-                  exif_focal_length: inserted?.[19] ?? null,
-                  tags_json: inserted?.[20] ?? null,
-                  dominant_color: inserted?.[22] ?? null,
-                  color_palette_json: inserted?.[23] ?? null,
-                  composition: inserted?.[24] ?? null,
-                  ai_status: inserted?.[25] ?? 'pending',
-                  ai_error: null,
-                  ai_attempts: 0,
-                  ai_finished_at: null,
+                  original_filename: inserted?.[3] ?? '',
+                  width: inserted?.[4] ?? 0,
+                  height: inserted?.[5] ?? 0,
+                  format: inserted?.[6] ?? 'webp',
+                  bytes_compressed: inserted?.[7] ?? 0,
+                  location_name: inserted?.[9] ?? null,
+                  location_lat: inserted?.[10] ?? null,
+                  location_lng: inserted?.[11] ?? null,
+                  exif_taken_at: inserted?.[12] ?? null,
+                  exif_camera: inserted?.[13] ?? null,
+                  exif_iso: inserted?.[14] ?? null,
+                  exif_aperture: inserted?.[15] ?? null,
+                  exif_shutter: inserted?.[16] ?? null,
+                  exif_focal_length: inserted?.[17] ?? null,
+                  tags_json: inserted?.[18] ?? null,
+                  dominant_color: inserted?.[20] ?? null,
+                  color_palette_json: inserted?.[21] ?? null,
+                  composition: inserted?.[22] ?? null,
+                  ai_status: inserted?.[23] ?? 'pending',
+                  created_at: '2026-05-20 10:11:12',
+                  updated_at: '2026-05-20 10:11:12',
+                  is_public: inserted?.[25] ?? 1,
+                  location_public: inserted?.[26] ?? 1,
+                  folder_id: inserted?.[27] ?? null,
                 };
               },
             };
@@ -175,8 +177,8 @@ const telegramSuccessFetch = (calls) => async (url, init) => {
 await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, and returns ImageRecord', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest();
-  const compressed = await request.clone().formData().then((data) => data.get('compressed'));
-  const expectedHash = await sha256Hex(compressed);
+  const original = await request.clone().formData().then((data) => data.get('original'));
+  const expectedHash = await sha256Hex(original);
 
   const response = await withMockedFetch(telegramSuccessFetch(calls), () =>
     uploadPost({ env, request, params: {} }),
@@ -185,14 +187,12 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(response.status, 201);
   const data = await response.json();
   assert.deepEqual(Object.keys(data).sort(), [
-    'ai_attempts',
-    'ai_error',
-    'ai_finished_at',
     'ai_status',
     'bytes_compressed',
     'caption',
     'color_palette_json',
     'composition',
+    'created_at',
     'dominant_color',
     'exif_aperture',
     'exif_camera',
@@ -200,16 +200,20 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
     'exif_iso',
     'exif_shutter',
     'exif_taken_at',
+    'folder_id',
     'format',
     'height',
+    'is_public',
     'key',
     'location_lat',
     'location_lng',
     'location_name',
+    'location_public',
     'original_filename',
     'public_url',
     'tags_json',
     'title',
+    'updated_at',
     'width',
   ]);
   assert.equal(data.title, '猫猫');
@@ -222,6 +226,11 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
   assert.equal(data.ai_status, 'done');
+  assert.equal(data.created_at, '2026-05-20 10:11:12');
+  assert.equal(data.updated_at, '2026-05-20 10:11:12');
+  assert.equal(data.is_public, 1);
+  assert.equal(data.location_public, 1);
+  assert.equal(data.folder_id, null);
   assert.equal(data.dominant_color, '深蓝色 #0F172A');
   assert.equal(data.color_palette_json, '["#0F172A","#F59E0B"]');
   assert.equal(data.composition, '主体居中，暗色背景突出轮廓。');
@@ -244,24 +253,25 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.match(calls.insert.sql, /\bcolor_palette_json\b/i);
   assert.match(calls.insert.sql, /\bcomposition\b/i);
   assert.match(calls.insert.sql, /\boriginal_filename\b/i);
+  assert.doesNotMatch(calls.insert.sql, /\br2_key\b/i);
+  assert.doesNotMatch(calls.insert.sql, /\bbytes_original\b/i);
+  assert.doesNotMatch(calls.insert.sql, /\bai_error\b|\bai_attempts\b|\bai_finished_at\b/i);
   assert.doesNotMatch(calls.insert.sql, /\bocr_text\b/i);
   assert.doesNotMatch(calls.insert.sql, /\bai_proxy_url\b|\bai_model\b/i);
   assert.equal(calls.insert.values[0], data.key);
-  assert.equal(calls.insert.values[3], data.key);
-  assert.equal(calls.insert.values[4], 'cat.jpg');
-  assert.equal(calls.insert.values[5], 1280);
-  assert.equal(calls.insert.values[6], 853);
-  assert.equal(calls.insert.values[7], 'webp');
-  assert.equal(calls.insert.values[9], 14);
-  assert.equal(calls.insert.values[10], expectedHash);
-  assert.equal(calls.insert.values[19], 40);
-  assert.equal(calls.insert.values[20], '["猫","夜景"]');
-  assert.equal(calls.insert.values[21], '猫 夜景 HELLO');
-  assert.equal(calls.insert.values[22], '深蓝色 #0F172A');
-  assert.equal(calls.insert.values[23], '["#0F172A","#F59E0B"]');
-  assert.equal(calls.insert.values[24], '主体居中，暗色背景突出轮廓。');
-  assert.equal(calls.insert.values[25], 'done');
-  assert.equal(calls.insert.values[26], 'pending');
+  assert.equal(calls.insert.values[3], 'cat.jpg');
+  assert.equal(calls.insert.values[4], 1280);
+  assert.equal(calls.insert.values[5], 853);
+  assert.equal(calls.insert.values[6], 'webp');
+  assert.equal(calls.insert.values[8], expectedHash);
+  assert.equal(calls.insert.values[17], 40);
+  assert.equal(calls.insert.values[18], '["猫","夜景"]');
+  assert.equal(calls.insert.values[19], '猫 夜景 HELLO');
+  assert.equal(calls.insert.values[20], '深蓝色 #0F172A');
+  assert.equal(calls.insert.values[21], '["#0F172A","#F59E0B"]');
+  assert.equal(calls.insert.values[22], '主体居中，暗色背景突出轮廓。');
+  assert.equal(calls.insert.values[23], 'done');
+  assert.equal(calls.insert.values[24], 'pending');
   assert.equal(calls.selectedKey, data.key);
 });
 

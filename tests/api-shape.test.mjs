@@ -13,14 +13,12 @@ const test = async (name, fn) => {
 };
 
 const EXPECTED_RECORD_KEYS = [
-  'ai_attempts',
-  'ai_error',
-  'ai_finished_at',
   'ai_status',
   'bytes_compressed',
   'caption',
   'color_palette_json',
   'composition',
+  'created_at',
   'dominant_color',
   'exif_aperture',
   'exif_camera',
@@ -28,16 +26,20 @@ const EXPECTED_RECORD_KEYS = [
   'exif_iso',
   'exif_shutter',
   'exif_taken_at',
+  'folder_id',
   'format',
   'height',
+  'is_public',
   'key',
   'location_lat',
   'location_lng',
   'location_name',
+  'location_public',
   'original_filename',
   'public_url',
   'tags_json',
   'title',
+  'updated_at',
   'width',
 ];
 
@@ -45,7 +47,6 @@ const sampleRow = {
   key: 'abc',
   title: 'Sample',
   caption: null,
-  r2_key: 'abc.webp',
   original_filename: 'DSC_7983.NEF',
   width: 1024,
   height: 768,
@@ -66,9 +67,11 @@ const sampleRow = {
   composition: '中心构图',
   search_content: null,
   ai_status: 'pending',
-  ai_error: null,
-  ai_attempts: 0,
-  ai_finished_at: null,
+  created_at: '2026-05-20 10:11:12',
+  updated_at: '2026-05-21 12:13:14',
+  is_public: 1,
+  location_public: 1,
+  folder_id: null,
 };
 
 const makeEnv = (oneRow, manyRows) => {
@@ -108,7 +111,7 @@ await test('GET /api/list returns ImageRecord[] with expected field set', async 
   assert.ok(Array.isArray(data));
   assert.equal(data.length, 2);
   assert.deepEqual(Object.keys(data[0]).sort(), EXPECTED_RECORD_KEYS);
-  assert.equal(data[0].public_url, 'https://cdn.test/abc.webp');
+  assert.equal(data[0].public_url, 'https://cdn.test/abc');
   assert.equal(data[0].location_name, '上海');
   assert.equal(data[0].location_lat, 31.2304);
   assert.equal(data[0].location_lng, 121.4737);
@@ -117,8 +120,16 @@ await test('GET /api/list returns ImageRecord[] with expected field set', async 
   assert.equal(data[0].exif_camera, 'Nikon Zf');
   assert.equal(data[0].exif_focal_length, 40);
   assert.equal(data[0].ai_status, 'pending');
+  assert.equal(data[0].created_at, '2026-05-20 10:11:12');
+  assert.equal(data[0].updated_at, '2026-05-21 12:13:14');
+  assert.equal(data[0].is_public, 1);
+  assert.equal(data[0].location_public, 1);
+  assert.equal(data[0].folder_id, null);
   assert.equal('ai_proxy_url' in data[0], false);
   assert.equal('ai_model' in data[0], false);
+  assert.equal('ai_error' in data[0], false);
+  assert.equal('ai_attempts' in data[0], false);
+  assert.equal('ai_finished_at' in data[0], false);
   assert.equal(data[0].tags_json, null);
   assert.equal(data[0].dominant_color, '暖橙色 #F59E0B');
   assert.equal(data[0].color_palette_json, '["#F59E0B","#0F172A"]');
@@ -163,13 +174,15 @@ await test('GET /api/image/:key returns single ImageRecord', async () => {
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.deepEqual(Object.keys(data).sort(), EXPECTED_RECORD_KEYS);
-  assert.equal(data.public_url, 'https://cdn.test/abc.webp');
+  assert.equal(data.public_url, 'https://cdn.test/abc');
   assert.equal(data.location_lat, 31.2304);
   assert.equal(data.location_lng, 121.4737);
   assert.equal(data.bytes_compressed, 123456);
   assert.equal(data.original_filename, 'DSC_7983.NEF');
   assert.equal(data.exif_taken_at, '2025-08-26T02:08:37.000Z');
   assert.equal(data.exif_iso, 400);
+  assert.equal(data.created_at, '2026-05-20 10:11:12');
+  assert.equal(data.updated_at, '2026-05-21 12:13:14');
 });
 
 await test('GET /api/image/:key returns 404 when row missing', async () => {
