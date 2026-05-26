@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
@@ -15,9 +15,75 @@ const copiedLabel = ref<string | null>(null);
 const origin = typeof window !== 'undefined' ? window.location.origin : '';
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-const ROTATE = { vb: '0 0 512 512', d: 'M105.1 202.6c7.7-21.8 20.2-42.3 37.8-59.8c62.5-62.5 163.8-62.5 226.3 0L386.3 160H352c-17.7 0-32 14.3-32 32s14.3 32 32 32H463.5c0 0 0 0 0 0h.4c17.7 0 32-14.3 32-32V80c0-17.7-14.3-32-32-32s-32 14.3-32 32v35.2L414.4 97.6c-87.5-87.5-229.3-87.5-316.8 0C73.2 122 55.6 150.7 44.8 181.4c-5.9 16.7 2.9 34.9 19.5 40.8s34.9-2.9 40.8-19.5zM39 289.3c-5 1.5-9.8 4.2-13.7 8.2c-4 4-6.7 8.8-8.1 14c-.3 1.2-.6 2.5-.8 3.8c-.3 1.7-.4 3.4-.4 5.1V432c0 17.7 14.3 32 32 32s32-14.3 32-32V396.9l17.6 17.5 0 0c87.5 87.4 229.3 87.4 316.7 0c24.4-24.4 42.1-53.1 52.9-83.7c5.9-16.7-2.9-34.9-19.5-40.8s-34.9 2.9-40.8 19.5c-7.7 21.8-20.2 42.3-37.8 59.8c-62.5 62.5-163.8 62.5-226.3 0l-.1-.1L125.6 352H160c17.7 0 32-14.3 32-32s-14.3-32-32-32H48.4c-1.6 0-3.2 .1-4.8 .3s-3.1 .5-4.6 1z' };
 const COPY_ICON = { vb: '0 0 448 512', d: 'M208 0H332.1c12.7 0 24.9 5.1 33.9 14.1l67.9 67.9c9 9 14.1 21.2 14.1 33.9V336c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V48c0-26.5 21.5-48 48-48zM48 128h80v64H64V448H256V416h64v48c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V176c0-26.5 21.5-48 48-48z' };
 const CHECK_ICON = { vb: '0 0 448 512', d: 'M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z' };
+
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 1.25;
+
+const zoomScale = ref(1);
+const zoomX = ref(0);
+const zoomY = ref(0);
+const isPanning = ref(false);
+let panStart = { x: 0, y: 0, px: 0, py: 0 };
+
+const zoomTransform = computed(
+  () => `translate(${zoomX.value}px, ${zoomY.value}px) scale(${zoomScale.value})`,
+);
+const zoomPercent = computed(() => Math.round(zoomScale.value * 100));
+const canZoomIn = computed(() => zoomScale.value < ZOOM_MAX - 1e-3);
+const canZoomOut = computed(() => zoomScale.value > ZOOM_MIN + 1e-3);
+
+const resetZoom = () => {
+  zoomScale.value = 1;
+  zoomX.value = 0;
+  zoomY.value = 0;
+};
+
+const setZoom = (next: number) => {
+  zoomScale.value = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+  if (zoomScale.value <= 1) {
+    zoomX.value = 0;
+    zoomY.value = 0;
+  }
+};
+
+const zoomBy = (factor: number) => setZoom(zoomScale.value * factor);
+
+const onImageWheel = (event: WheelEvent) => {
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+  setZoom(zoomScale.value * factor);
+};
+
+const onImagePointerDown = (event: PointerEvent) => {
+  if (event.button !== 0 || zoomScale.value <= 1) return;
+  isPanning.value = true;
+  panStart = { x: event.clientX, y: event.clientY, px: zoomX.value, py: zoomY.value };
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+};
+
+const onImagePointerMove = (event: PointerEvent) => {
+  if (!isPanning.value) return;
+  zoomX.value = panStart.px + (event.clientX - panStart.x);
+  zoomY.value = panStart.py + (event.clientY - panStart.y);
+};
+
+const onImagePointerUp = (event: PointerEvent) => {
+  if (!isPanning.value) return;
+  isPanning.value = false;
+  try {
+    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+  } catch {
+    /* noop */
+  }
+};
+
+const onImageDoubleClick = (event: MouseEvent) => {
+  event.preventDefault();
+  setZoom(zoomScale.value > 1 ? 1 : 2);
+};
 
 const tagsFromImage = (record: ImageRecord | null): string[] => {
   if (!record?.tags_json) return [];
@@ -127,12 +193,14 @@ const copyLink = async (label: string, value: string) => {
 
 const handleKey = (e: KeyboardEvent) => {
   const tag = (document.activeElement?.tagName || '').toUpperCase();
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON') return;
   if (e.key === ' ' || e.key === 'Enter') {
     e.preventDefault();
     void refresh();
   }
 };
+
+watch(image, () => resetZoom());
 
 onMounted(() => {
   window.addEventListener('keydown', handleKey);
@@ -155,12 +223,76 @@ onUnmounted(() => {
             :src="image.public_url"
             :alt="image.title"
             class="random-main-image"
+            :class="{ 'is-panning': isPanning, 'is-zoomed': zoomScale > 1 }"
+            :style="{ transform: zoomTransform }"
+            draggable="false"
+            @wheel.prevent="onImageWheel"
+            @pointerdown="onImagePointerDown"
+            @pointermove="onImagePointerMove"
+            @pointerup="onImagePointerUp"
+            @pointercancel="onImagePointerUp"
+            @dblclick.prevent="onImageDoubleClick"
+            @dragstart.prevent
           />
           <div v-else class="random-empty">
             <p class="text-xl font-black text-white">暂无图片</p>
             <p class="mt-2 text-sm text-slate-400">上传图片后，随机页会从图库里抽取一张展示。</p>
           </div>
           <div class="random-image-grid" aria-hidden="true" />
+
+          <div v-if="image" class="image-controls" @dblclick.stop>
+            <button
+              type="button"
+              class="image-ctrl-btn"
+              :disabled="!canZoomOut"
+              aria-label="缩小"
+              title="缩小"
+              @click="zoomBy(1 / ZOOM_STEP)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+                <path d="M8 11h6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="image-ctrl-btn ctrl-percent"
+              :title="`重置（当前 ${zoomPercent}%）`"
+              @click="resetZoom"
+            >
+              {{ zoomPercent }}%
+            </button>
+            <button
+              type="button"
+              class="image-ctrl-btn"
+              :disabled="!canZoomIn"
+              aria-label="放大"
+              title="放大"
+              @click="zoomBy(ZOOM_STEP)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+                <path d="M8 11h6" />
+                <path d="M11 8v6" />
+              </svg>
+            </button>
+            <span class="ctrl-divider" aria-hidden="true" />
+            <button
+              type="button"
+              class="image-ctrl-btn"
+              :disabled="loading"
+              aria-label="换一张"
+              title="换一张 (Space)"
+              @click="refresh"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" :class="{ 'animate-spin': loading }">
+                <path d="M21 12a9 9 0 1 1-3.51-7.13" />
+                <path d="M21 4v6h-6" />
+              </svg>
+            </button>
+          </div>
         </figure>
         <p v-if="loadError" class="mt-3 text-sm font-semibold text-rose-300">加载失败：{{ loadError }}</p>
       </section>
@@ -275,16 +407,6 @@ onUnmounted(() => {
       </section>
     </div>
 
-    <button
-      type="button"
-      class="refresh-btn"
-      :disabled="loading"
-      :aria-label="loading ? '加载中' : '再来一张'"
-      @click="refresh"
-    >
-      <svg :viewBox="ROTATE.vb" fill="currentColor" class="h-4 w-4" :class="{ 'animate-spin': loading }" aria-hidden="true"><path :d="ROTATE.d" /></svg>
-    </button>
-
     <aside class="hint-card" aria-label="键盘提示">
       <span class="text-[11px] font-medium text-slate-300">键盘快捷键</span>
       <span class="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
@@ -334,6 +456,81 @@ onUnmounted(() => {
   max-width: calc(100% - 2rem);
   max-height: calc(100svh - 4rem);
   object-fit: contain;
+  user-select: none;
+  transform-origin: center center;
+  transition: transform 200ms ease;
+  will-change: transform;
+  touch-action: none;
+}
+
+.random-main-image.is-zoomed {
+  cursor: grab;
+}
+
+.random-main-image.is-panning {
+  cursor: grabbing;
+  transition: none;
+}
+
+.image-controls {
+  position: absolute;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(53, 243, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(7, 7, 19, 0.78);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+.image-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 30px;
+  padding: 0 0.55rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.image-ctrl-btn:hover:not(:disabled) {
+  background: rgba(53, 243, 255, 0.14);
+  color: rgb(165, 243, 252);
+}
+
+.image-ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.image-ctrl-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.image-ctrl-btn.ctrl-percent {
+  min-width: 48px;
+}
+
+.ctrl-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(53, 243, 255, 0.18);
+  margin: 0 2px;
 }
 
 .random-empty {
@@ -666,36 +863,6 @@ onUnmounted(() => {
   color: rgb(221, 214, 254);
 }
 
-.refresh-btn {
-  position: fixed;
-  right: 1.5rem;
-  bottom: 1.5rem;
-  z-index: 30;
-  display: flex;
-  width: 44px;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(53, 243, 255, 0.3);
-  border-radius: 6px;
-  background: rgba(53, 243, 255, 0.1);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  color: rgb(53, 243, 255);
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: all 0.2s ease;
-}
-
-.refresh-btn:hover:not(:disabled) {
-  border-color: rgba(53, 243, 255, 0.55);
-  background: rgba(53, 243, 255, 0.18);
-}
-
-.refresh-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
 .hint-card {
   position: fixed;
   bottom: 1.5rem;
@@ -742,13 +909,6 @@ onUnmounted(() => {
   .random-main-image {
     max-width: calc(100% - 1rem);
     max-height: calc(100svh - 4rem);
-  }
-
-  .refresh-btn {
-    right: 1rem;
-    bottom: 1rem;
-    width: 40px;
-    height: 40px;
   }
 
   .hint-card {
