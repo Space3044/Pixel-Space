@@ -3,6 +3,7 @@ import type { Env } from '../types';
 export interface AiSettings {
   proxy_url: string;
   model: string;
+  prompt: string;
 }
 
 export interface AiPreviewResult {
@@ -20,9 +21,9 @@ interface AnalyzeImageInput {
   image: File;
 }
 
-const SETTINGS_SQL = 'SELECT proxy_url, model FROM ai_settings WHERE id = 1';
+const SETTINGS_SQL = 'SELECT * FROM ai_settings WHERE id = 1';
 
-const AI_SYSTEM_PROMPT = `# 图片结构化分析专家
+export const DEFAULT_AI_SYSTEM_PROMPT = `# 图片结构化分析专家
 
 你是一个图片分析专家。你的任务是分析用户提供的图片，严格按照指定的 JSON Schema 输出结构化结果，不要添加任何额外解释、注释或前缀。
 
@@ -91,10 +92,11 @@ const AI_SYSTEM_PROMPT = `# 图片结构化分析专家
 const AI_USER_PROMPT = '请分析这张图片，直接输出符合上述 Schema 的 JSON 对象。';
 
 export const getAiSettings = async (env: Pick<Env, 'DB'>): Promise<AiSettings> => {
-  const row = await env.DB.prepare(SETTINGS_SQL).first<AiSettings>();
+  const row = await env.DB.prepare(SETTINGS_SQL).first<Partial<AiSettings>>();
   return {
     proxy_url: row?.proxy_url?.trim() ?? '',
     model: row?.model?.trim() ?? '',
+    prompt: row?.prompt?.trim() || DEFAULT_AI_SYSTEM_PROMPT,
   };
 };
 
@@ -207,7 +209,7 @@ export const analyzeImageWithAi = async ({ env, image }: AnalyzeImageInput): Pro
       messages: [
         {
           role: 'system',
-          content: AI_SYSTEM_PROMPT,
+          content: settings.prompt,
         },
         {
           role: 'user',

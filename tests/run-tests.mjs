@@ -15,6 +15,7 @@ for (const path of [
   './ai-preview-api.test.mjs',
   './admin-image-api.test.mjs',
   './image-management-ui.test.mjs',
+  './library-view.test.mjs',
   './public-image-view.test.mjs',
   './image-object.test.mjs',
   './random-view.test.mjs',

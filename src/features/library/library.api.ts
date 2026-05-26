@@ -28,6 +28,12 @@ interface DeleteImagesResponse {
   missing: string[];
 }
 
+export interface AiSettings {
+  proxy_url: string;
+  model: string;
+  prompt: string;
+}
+
 async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   if (!response.ok) {
@@ -39,6 +45,18 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchFolders(): Promise<FolderRecord[]> {
   return jsonFetch<FoldersResponse>('/api/folders').then((data) => data.folders);
+}
+
+export function fetchAiSettings(): Promise<AiSettings> {
+  return jsonFetch<AiSettings>('/api/admin/ai-settings');
+}
+
+export function updateAiSettings(payload: AiSettings): Promise<AiSettings> {
+  return jsonFetch<AiSettings>('/api/admin/ai-settings', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function createFolder(payload: { name: string; parent_id: string | null }): Promise<FolderRecord> {

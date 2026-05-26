@@ -68,7 +68,7 @@ const router = createRouter({
       name: 'library',
       component: () => import('@/features/library/LibraryView.vue'),
       meta: {
-        title: '文件库',
+        title: '控制台',
         requiresAdmin: true,
       },
     },

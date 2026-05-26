@@ -5,7 +5,7 @@ import { devRole as currentDevRole, isAdmin, isDev, setDevRole } from '@/shared/
 
 defineProps<{ fluid?: boolean }>();
 
-type IconName = 'home' | 'images' | 'random' | 'upload' | 'hive' | 'folder' | 'language' | 'moon' | 'github' | 'plug';
+type IconName = 'home' | 'images' | 'random' | 'upload' | 'hive' | 'sliders' | 'language' | 'moon' | 'github' | 'plug';
 
 const ICONS: Record<IconName, { vb: string; d: string }> = {
   home: {
@@ -28,9 +28,9 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
     vb: '0 0 512 512',
     d: 'M64 32C28.7 32 0 60.7 0 96V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64H64zm88 64v64H64V96h88zm56 0h88v64H208V96zm240 0v64H360V96h88zM64 224h88v64H64V224zm232 0v64H208V224h88zm64 0h88v64H360V224zM152 352v64H64V352h88zm56 0h88v64H208V352zm240 0v64H360V352h88z',
   },
-  folder: {
+  sliders: {
     vb: '0 0 512 512',
-    d: 'M64 480H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H288c-10.1 0-19.6-4.7-25.6-12.8L243.2 57.6C231.1 41.5 212.1 32 192 32H64C28.7 32 0 60.7 0 96V416c0 35.3 28.7 64 64 64z',
+    d: 'M0 416c0 17.7 14.3 32 32 32H86.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H233.3c-12.3-28.3-40.5-48-73.3-48s-61 19.7-73.3 48H32c-17.7 0-32 14.3-32 32zm128 0a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zM320 256a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zm32-80c-32.8 0-61 19.7-73.3 48H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H278.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H425.3c-12.3-28.3-40.5-48-73.3-48zM192 128a32 32 0 1 1 0-64 32 32 0 1 1 0 64zm73.3-32C253 67.7 224.8 48 192 48s-61 19.7-73.3 48H32C14.3 96 0 110.3 0 128s14.3 32 32 32h86.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H265.3z',
   },
   language: {
     vb: '0 0 640 512',
@@ -59,7 +59,7 @@ const navLinks: { to: string; label: string; icon: IconName }[] = [
 ];
 
 const adminNavLinks: { to: string; label: string; icon: IconName }[] = [
-  { to: '/library', label: '文件库', icon: 'folder' },
+  { to: '/library', label: '控制台', icon: 'sliders' },
 ];
 
 const route = useRoute();

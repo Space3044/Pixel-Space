@@ -24,7 +24,7 @@ const withMockedFetch = async (fetchImpl, fn) => {
 const makeRequest = (file = new File(['webp-bytes'], 'cat.webp', { type: 'image/webp' })) => {
   const formData = new FormData();
   formData.append('image', file);
-  return new Request('http://x/api/ai/preview', { method: 'POST', body: formData });
+  return new Request('http://localhost/api/ai/preview', { method: 'POST', body: formData });
 };
 
 const makeEnv = (settings = { proxy_url: 'https://cpa.test/v1/chat/completions', model: 'image-tagger' }) => {
@@ -128,4 +128,41 @@ await test('POST /api/ai/preview rejects missing AI settings before calling CPA'
   assert.equal(response.status, 400);
   assert.equal(called, false);
   assert.deepEqual(await response.json(), { error: 'missing_ai_settings' });
+});
+
+await test('POST /api/ai/preview uses the editable prompt from ai_settings', async () => {
+  const { env } = makeEnv({
+    proxy_url: 'https://cpa.test/v1/chat/completions',
+    model: 'image-tagger',
+    prompt: '自定义系统提示词：只输出 JSON',
+  });
+  const proxyRequests = [];
+
+  const response = await withMockedFetch(
+    async (url, init) => {
+      proxyRequests.push({ url: String(url), init });
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: '夜色猫猫',
+                caption: '一只猫站在夜色里。',
+                tags: ['猫', '夜景'],
+                search_content: '猫 夜景',
+                dominant_color: '深蓝色 #0F172A',
+                palette: ['#0F172A', '#F59E0B', '#F8FAFC'],
+                composition: '主体居中。',
+              }),
+            },
+          },
+        ],
+      });
+    },
+    () => onRequestPost({ env, params: {}, request: makeRequest() }),
+  );
+
+  assert.equal(response.status, 200);
+  const body = JSON.parse(proxyRequests[0].init.body);
+  assert.equal(body.messages[0].content, '自定义系统提示词：只输出 JSON');
 });

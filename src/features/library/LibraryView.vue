@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { listImages } from '@/features/images/images.api';
@@ -7,9 +7,12 @@ import {
   createFolder,
   deleteFolder,
   deleteImages,
+  fetchAiSettings,
   fetchFolders,
   moveImages,
+  updateAiSettings,
   updateFolder,
+  type AiSettings,
   type FolderRecord,
 } from './library.api';
 
@@ -37,6 +40,12 @@ const images = ref<ImageRecord[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const actionMessage = ref<string | null>(null);
+const aiSettingsForm = reactive<AiSettings>({
+  proxy_url: '',
+  model: '',
+  prompt: '',
+});
+const aiSettingsSaving = ref(false);
 
 // null 表示「根 / 未分类」；虚拟 ID 表示按图片属性筛选的智能目录。
 const currentFolderId = ref<string | null>(null);
@@ -143,9 +152,16 @@ const refreshAll = async () => {
   loading.value = true;
   loadError.value = null;
   try {
-    const [folderList, imageList] = await Promise.all([fetchFolders(), listImages()]);
+    const [folderList, imageList, aiSettings] = await Promise.all([
+      fetchFolders(),
+      listImages(),
+      fetchAiSettings(),
+    ]);
     folders.value = folderList;
     images.value = imageList;
+    aiSettingsForm.proxy_url = aiSettings.proxy_url;
+    aiSettingsForm.model = aiSettings.model;
+    aiSettingsForm.prompt = aiSettings.prompt;
   } catch (error) {
     loadError.value = (error as Error).message;
   } finally {
@@ -288,6 +304,26 @@ const handleBatchDelete = async () => {
   }
 };
 
+const saveAiSettings = async () => {
+  aiSettingsSaving.value = true;
+  actionMessage.value = null;
+  try {
+    const saved = await updateAiSettings({
+      proxy_url: aiSettingsForm.proxy_url,
+      model: aiSettingsForm.model,
+      prompt: aiSettingsForm.prompt,
+    });
+    aiSettingsForm.proxy_url = saved.proxy_url;
+    aiSettingsForm.model = saved.model;
+    aiSettingsForm.prompt = saved.prompt;
+    actionMessage.value = 'AI 配置已保存';
+  } catch (error) {
+    actionMessage.value = `AI 配置保存失败：${(error as Error).message}`;
+  } finally {
+    aiSettingsSaving.value = false;
+  }
+};
+
 const openLightbox = (img: ImageRecord) => {
   lightboxImage.value = img;
   lightboxOpen.value = true;
@@ -311,77 +347,128 @@ onMounted(refreshAll);
   <AppShell fluid>
     <section class="library-page">
       <header class="library-header">
-        <div class="library-title">
-          <h1>文件库</h1>
+        <div class="library-main">
+          <div class="library-title">
+            <h1>控制台</h1>
+          </div>
+
+          <nav class="breadcrumb" aria-label="当前路径">
+            <button
+              v-for="(crumb, index) in breadcrumb"
+              :key="crumb.id ?? '__root__'"
+              type="button"
+              class="crumb"
+              :class="{ 'is-current': index === breadcrumb.length - 1 }"
+              :disabled="index === breadcrumb.length - 1"
+              @click="enterFolder(crumb.id)"
+            >
+              {{ crumb.name }}
+            </button>
+          </nav>
+
+          <div class="library-actions">
+            <button
+              type="button"
+              class="library-btn"
+              :disabled="!!currentVirtual"
+              @click="handleCreateFolder"
+            >
+              新建文件夹
+            </button>
+            <button
+              type="button"
+              class="library-btn"
+              :disabled="!currentFolder"
+              @click="handleRenameCurrent"
+            >
+              重命名当前
+            </button>
+            <button
+              type="button"
+              class="library-btn danger"
+              :disabled="!currentFolder"
+              @click="handleDeleteCurrent"
+            >
+              删除当前
+            </button>
+            <button type="button" class="library-btn" @click="refreshAll">刷新</button>
+          </div>
+
+          <section class="folder-grid shortcut-grid" aria-label="智能目录">
+            <button
+              v-for="vf in virtualFolders"
+              :key="vf.id"
+              type="button"
+              class="folder-card shortcut-card"
+              :class="{ 'is-active': currentFolderId === vf.id }"
+              :title="vf.description"
+              @click="enterFolder(vf.id)"
+            >
+              <div class="folder-icon shortcut-icon" aria-hidden="true">
+                <svg v-if="vf.id === VIRTUAL_HIDDEN_IMAGES" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                  <line x1="2" y1="2" x2="22" y2="22" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                  <line x1="3" y1="3" x2="21" y2="21" />
+                </svg>
+              </div>
+              <div class="folder-body">
+                <p class="folder-name shortcut-name">{{ vf.name }}</p>
+                <p class="folder-meta shortcut-meta">
+                  {{ virtualCounts[vf.id] }} 张图片
+                </p>
+              </div>
+            </button>
+          </section>
         </div>
 
-        <nav class="breadcrumb" aria-label="当前路径">
-          <button
-            v-for="(crumb, index) in breadcrumb"
-            :key="crumb.id ?? '__root__'"
-            type="button"
-            class="crumb"
-            :class="{ 'is-current': index === breadcrumb.length - 1 }"
-            :disabled="index === breadcrumb.length - 1"
-            @click="enterFolder(crumb.id)"
-          >
-            {{ crumb.name }}
-          </button>
-        </nav>
-
-        <div class="library-actions">
-          <button
-            type="button"
-            class="library-btn"
-            :disabled="!!currentVirtual"
-            @click="handleCreateFolder"
-          >
-            新建文件夹
-          </button>
-          <button
-            type="button"
-            class="library-btn"
-            :disabled="!currentFolder"
-            @click="handleRenameCurrent"
-          >
-            重命名当前
-          </button>
-          <button
-            type="button"
-            class="library-btn danger"
-            :disabled="!currentFolder"
-            @click="handleDeleteCurrent"
-          >
-            删除当前
-          </button>
-          <button type="button" class="library-btn" @click="refreshAll">刷新</button>
-        </div>
-
-        <div class="library-shortcuts" role="group" aria-label="智能目录">
-          <button
-            v-for="vf in virtualFolders"
-            :key="vf.id"
-            type="button"
-            class="shortcut-btn"
-            :class="{ 'is-active': currentFolderId === vf.id }"
-            :title="vf.description"
-            @click="enterFolder(vf.id)"
-          >
-            <svg v-if="vf.id === VIRTUAL_HIDDEN_IMAGES" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-              <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-              <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-              <line x1="2" y1="2" x2="22" y2="22" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-              <line x1="3" y1="3" x2="21" y2="21" />
-            </svg>
-            <span class="shortcut-name">{{ vf.name }}</span>
-            <span class="shortcut-count">{{ virtualCounts[vf.id] }}</span>
-          </button>
-        </div>
+        <aside class="ai-settings-panel" aria-labelledby="ai-settings-title">
+          <form class="ai-settings-form" @submit.prevent="saveAiSettings">
+            <div class="ai-settings-heading">
+              <h2 id="ai-settings-title">AI 配置</h2>
+              <button type="submit" class="library-btn primary" :disabled="aiSettingsSaving">
+                {{ aiSettingsSaving ? '保存中…' : '保存' }}
+              </button>
+            </div>
+            <div class="settings-grid">
+              <label class="settings-field">
+                <span>Proxy URL</span>
+                <input
+                  v-model="aiSettingsForm.proxy_url"
+                  class="settings-input"
+                  type="url"
+                  autocomplete="off"
+                  placeholder="https://example.test/v1/chat/completions"
+                />
+              </label>
+              <label class="settings-field">
+                <span>Model</span>
+                <input
+                  v-model="aiSettingsForm.model"
+                  class="settings-input"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="gpt-4.1-mini"
+                />
+              </label>
+            </div>
+            <label class="settings-field settings-prompt-field">
+              <span>Prompt</span>
+              <textarea
+                v-model="aiSettingsForm.prompt"
+                class="settings-input settings-textarea"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="编辑图片分析系统提示词"
+              />
+            </label>
+          </form>
+        </aside>
       </header>
 
       <p v-if="actionMessage" class="action-toast">{{ actionMessage }}</p>
@@ -390,7 +477,7 @@ onMounted(refreshAll);
       <div v-else-if="loadError" class="state-card is-error">加载失败：{{ loadError }}</div>
 
       <template v-else>
-        <section v-if="subfolders.length > 0" class="folder-grid">
+        <section v-if="subfolders.length > 0" class="folder-grid" aria-label="文件夹">
           <article
             v-for="folder in subfolders"
             :key="folder.id"
@@ -521,8 +608,9 @@ onMounted(refreshAll);
 
 .library-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.85rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
   padding: 1rem 1.25rem;
   border: 1px solid rgba(53, 243, 255, 0.16);
   border-radius: 8px;
@@ -530,6 +618,36 @@ onMounted(refreshAll);
     linear-gradient(135deg, rgba(53, 243, 255, 0.08), transparent 36%),
     rgba(7, 7, 19, 0.62);
   backdrop-filter: blur(16px);
+}
+
+.library-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.ai-settings-panel {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 0.6rem;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(53, 243, 255, 0.18);
+}
+
+.ai-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ai-settings-heading h2 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 900;
+  color: white;
 }
 
 .library-title h1 {
@@ -543,6 +661,64 @@ onMounted(refreshAll);
   margin: 0.2rem 0 0;
   font-size: 0.78rem;
   color: rgba(203, 213, 225, 0.78);
+}
+
+.ai-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(7rem, 0.8fr);
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: rgba(165, 243, 252, 0.86);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.settings-prompt-field {
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-input {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid rgba(53, 243, 255, 0.22);
+  border-radius: 6px;
+  background: rgba(9, 14, 28, 0.72);
+  color: rgb(226, 232, 240);
+  padding: 0 0.6rem;
+  font: inherit;
+}
+
+.settings-textarea {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  resize: none;
+  overflow: auto;
+  padding-block: 0.5rem;
+  line-height: 1.45;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: rgba(53, 243, 255, 0.62);
+  box-shadow: 0 0 0 2px rgba(53, 243, 255, 0.12);
 }
 
 .breadcrumb {
@@ -713,61 +889,40 @@ onMounted(refreshAll);
   height: 18px;
 }
 
-.library-shortcuts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.shortcut-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  height: 30px;
-  padding: 0 0.65rem 0 0.55rem;
+.shortcut-card {
   border: 1px solid rgba(255, 79, 216, 0.22);
-  border-radius: 999px;
   background: rgba(7, 7, 19, 0.55);
   color: rgba(248, 207, 233, 0.78);
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
 }
 
-.shortcut-btn:hover {
+.shortcut-card:hover,
+.shortcut-card:focus-visible {
   border-color: rgba(255, 79, 216, 0.55);
   color: rgb(255, 209, 236);
   background: rgba(255, 79, 216, 0.08);
 }
 
-.shortcut-btn.is-active {
+.shortcut-card.is-active {
   background: rgba(255, 79, 216, 0.16);
   color: rgb(255, 209, 236);
   border-color: rgba(255, 79, 216, 0.6);
 }
 
-.shortcut-btn svg {
-  width: 13px;
-  height: 13px;
-  opacity: 0.85;
+.shortcut-icon {
+  background: rgba(255, 79, 216, 0.14);
+  color: inherit;
 }
 
-.shortcut-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: rgba(255, 79, 216, 0.18);
+.shortcut-card.is-active .shortcut-icon {
+  background: rgba(255, 79, 216, 0.24);
+}
+
+.shortcut-name {
+  color: inherit;
+}
+
+.shortcut-meta {
   color: rgb(255, 209, 236);
-  font-size: 0.66rem;
-  font-weight: 800;
-}
-
-.shortcut-btn.is-active .shortcut-count {
-  background: rgba(255, 79, 216, 0.32);
 }
 
 .folder-name {
@@ -939,6 +1094,21 @@ onMounted(refreshAll);
 }
 
 @media (max-width: 720px) {
+  .library-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-settings-panel {
+    padding-top: 0.85rem;
+    padding-left: 0;
+    border-top: 1px solid rgba(53, 243, 255, 0.18);
+    border-left: 0;
+  }
+
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .move-bar {
     flex-wrap: wrap;
     width: calc(100% - 1.5rem);

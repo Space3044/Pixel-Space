@@ -11,7 +11,11 @@ const test = async (name, fn) => {
   }
 };
 
-const makeEnv = (row = { proxy_url: 'https://cpa.test/v1/chat/completions', model: 'image-tagger' }) => {
+const makeEnv = (row = {
+  proxy_url: 'https://cpa.test/v1/chat/completions',
+  model: 'image-tagger',
+  prompt: '自定义图片分析提示词',
+}) => {
   const calls = {
     prepared: [],
     binds: [],
@@ -39,29 +43,35 @@ const makeEnv = (row = { proxy_url: 'https://cpa.test/v1/chat/completions', mode
   return { env, calls };
 };
 
-await test('GET /api/admin/ai-settings returns proxy URL and model without leaking key', async () => {
+await test('GET /api/admin/ai-settings returns proxy URL, model and prompt without leaking key', async () => {
   const { env } = makeEnv();
-  const response = await onRequestGet({ env, params: {}, request: new Request('http://x/api/admin/ai-settings') });
+  const response = await onRequestGet({ env, params: {}, request: new Request('http://localhost/api/admin/ai-settings') });
 
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.deepEqual(data, {
     proxy_url: 'https://cpa.test/v1/chat/completions',
     model: 'image-tagger',
+    prompt: '自定义图片分析提示词',
   });
   assert.equal('proxy_key' in data, false);
 });
 
-await test('PATCH /api/admin/ai-settings upserts proxy URL and model only', async () => {
-  const { env, calls } = makeEnv({ proxy_url: 'https://new-cpa.test/v1/chat/completions', model: 'new-model' });
+await test('PATCH /api/admin/ai-settings upserts proxy URL, model and prompt only', async () => {
+  const { env, calls } = makeEnv({
+    proxy_url: 'https://new-cpa.test/v1/chat/completions',
+    model: 'new-model',
+    prompt: '新的图片分析提示词',
+  });
   const response = await onRequestPatch({
     env,
     params: {},
-    request: new Request('http://x/api/admin/ai-settings', {
+    request: new Request('http://localhost/api/admin/ai-settings', {
       method: 'PATCH',
       body: JSON.stringify({
         proxy_url: 'https://new-cpa.test/v1/chat/completions',
         model: 'new-model',
+        prompt: '新的图片分析提示词',
         proxy_key: 'must-not-save',
       }),
     }),
@@ -72,9 +82,15 @@ await test('PATCH /api/admin/ai-settings upserts proxy URL and model only', asyn
   assert.deepEqual(data, {
     proxy_url: 'https://new-cpa.test/v1/chat/completions',
     model: 'new-model',
+    prompt: '新的图片分析提示词',
   });
   assert.match(calls.prepared[0], /INSERT INTO ai_settings/i);
   assert.match(calls.prepared[0], /ON CONFLICT/i);
+  assert.match(calls.prepared[0], /\bprompt\b/i);
   assert.doesNotMatch(calls.prepared[0], /proxy_key/i);
-  assert.deepEqual(calls.binds[0], ['https://new-cpa.test/v1/chat/completions', 'new-model']);
+  assert.deepEqual(calls.binds[0], [
+    'https://new-cpa.test/v1/chat/completions',
+    'new-model',
+    '新的图片分析提示词',
+  ]);
 });

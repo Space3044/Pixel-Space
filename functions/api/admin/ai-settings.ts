@@ -5,11 +5,12 @@ import { getAiSettings } from '../../_shared/ai';
 import { resolveAdmin } from '../../_shared/auth';
 
 const UPSERT_SQL = `
-INSERT INTO ai_settings (id, proxy_url, model, updated_at)
-VALUES (1, ?, ?, datetime('now'))
+INSERT INTO ai_settings (id, proxy_url, model, prompt, updated_at)
+VALUES (1, ?, ?, ?, datetime('now'))
 ON CONFLICT(id) DO UPDATE SET
   proxy_url = excluded.proxy_url,
   model = excluded.model,
+  prompt = excluded.prompt,
   updated_at = datetime('now')
 `;
 
@@ -26,6 +27,7 @@ const payloadFromRequest = async (request: Request): Promise<AiSettings | null> 
     return {
       proxy_url: stringOrEmpty(raw.proxy_url),
       model: stringOrEmpty(raw.model),
+      prompt: stringOrEmpty(raw.prompt),
     };
   } catch {
     return null;
@@ -50,7 +52,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
   if (!payload) return badRequest('invalid_ai_settings_payload');
 
   try {
-    await env.DB.prepare(UPSERT_SQL).bind(payload.proxy_url, payload.model).run();
+    await env.DB.prepare(UPSERT_SQL).bind(payload.proxy_url, payload.model, payload.prompt).run();
     return json(payload);
   } catch (error) {
     console.error('PATCH /api/admin/ai-settings failed', error);
