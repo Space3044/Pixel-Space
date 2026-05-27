@@ -328,10 +328,8 @@ const onSliderPointerMove = (event: PointerEvent) => {
 const onSliderPointerUp = (event: PointerEvent) => {
   if (!sliderEl.value) return;
   dragging.value = false;
-  try {
+  if (sliderEl.value.hasPointerCapture(event.pointerId)) {
     sliderEl.value.releasePointerCapture(event.pointerId);
-  } catch {
-    /* noop */
   }
 };
 

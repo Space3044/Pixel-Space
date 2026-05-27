@@ -77,9 +77,15 @@ test('WorldBoundaryGlobe applies original boundary color and render-order semant
   assert.match(component, /chinaBorder:\s*'#f87171'/);
   assert.match(component, /border:\s*'#6b7280'/);
   assert.match(component, /highlight:\s*'#fcd34d'/);
+  assert.match(component, /const RENDER_ORDER = \{\s*other:\s*1,\s*china:\s*2,\s*visited:\s*3,\s*highlight:\s*4,/s);
+  assert.match(component, /const resolveRegionPriority = \(regionName: string, isVisited: boolean\) => \{/);
+  assert.match(component, /if \(isVisited\) return RENDER_ORDER\.visited/);
+  assert.match(component, /if \(regionName === '中国' \|\| regionName\.startsWith\('中国-'\)\) return RENDER_ORDER\.china/);
   assert.match(component, /const isChina = regionName === '中国' \|\| regionName\.startsWith\('中国-'\)/);
   assert.match(component, /if \(isVisited\) \{\s*borderColor = COLORS\.visitedBorder;/s);
-  assert.match(component, /line\.renderOrder = isVisited \? 3 : 2/);
+  assert.match(component, /baseRenderOrder = RENDER_ORDER\.visited/);
+  assert.match(component, /baseRenderOrder = RENDER_ORDER\.china/);
+  assert.match(component, /line\.renderOrder = baseRenderOrder/);
   assert.match(component, /linewidth:\s*isVisited \? 1\.8 : 1\.2/);
   assert.match(component, /opacity:\s*isVisited \? 0\.95 : 0\.85/);
 });
@@ -101,19 +107,12 @@ test('WorldBoundaryGlobe uses exact GeoJSON hover before WASM nearest fallback a
   assert.match(component, /尚未去过/);
 });
 
-test('WorldBoundaryGlobe uses a raised tube overlay for crisp yellow hover boundaries', () => {
-  assert.match(component, /const HOVER_TUBE_RADIUS = 0\.008/);
-  assert.match(component, /const HOVER_BOUNDARY_SCALE = 1\.006/);
-  assert.match(component, /const highlightGroup = new ThreeGroup\(\)/);
-  assert.match(component, /highlightGroup\.renderOrder = 40/);
-  assert.match(component, /const clearHighlightOverlay = \(\) =>/);
-  assert.match(component, /new ThreeCatmullRomCurve3\(points,\s*false,\s*'centripetal'\)/);
-  assert.match(component, /new ThreeTubeGeometry\(/);
-  assert.match(component, /new ThreeMeshBasicMaterial\(\{\s*color: COLORS\.highlight/s);
-  assert.match(component, /depthTest:\s*false,\s*depthWrite:\s*false/s);
-  assert.match(component, /tube\.renderOrder = 80/);
+test('WorldBoundaryGlobe highlights hovered boundaries through existing line materials', () => {
+  assert.match(component, /const resetCountryHighlight/);
+  assert.match(component, /const applyCountryHighlight/);
   assert.match(component, /line\.userData\.originalOpacity/);
-  assert.match(component, /line\.material\.opacity = 0\.12/);
+  assert.match(component, /line\.material\.color\.set\(line\.userData\.highlightColor\)/);
+  assert.match(component, /line\.renderOrder = RENDER_ORDER\.highlight/);
   assert.match(component, /line\.material\.opacity = line\.userData\.originalOpacity/);
 });
 

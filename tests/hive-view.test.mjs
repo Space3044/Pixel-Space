@@ -47,7 +47,7 @@ test('HiveView removes redundant hero title and active footprint copy', () => {
   assert.doesNotMatch(view, /这里收录了\s*\{\{\s*activeFootprint\.images\.length\s*\}\}\s*张图片，平面地图会定位到这个地点。/);
   assert.doesNotMatch(view, /\.footprint-hero h1/);
   assert.doesNotMatch(view, /\.hero-copy/);
-  assert.match(view, /\.footprint-hero\s*\{[^}]*align-items:\s*flex-start;/s);
+  assert.match(view, /\.footprint-hero\s*\{[^}]*align-items:\s*center;[^}]*min-height:\s*0;/s);
 });
 
 test('HiveView derives lit locations from image coordinates', () => {

@@ -6,9 +6,7 @@ import { buildAbsoluteImageUrl } from './image-links';
 import { fetchImage } from './images.api';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 
-// og:image 注入位置占位
-// 阶段 10 拿到 image 后在 onMounted 中通过 document.head 动态写入
-// og:image / og:title / og:description（路由级 meta，不在 index.html 全局加）
+// 图片加载后写入路由级 og:image / og:title / og:description，不在 index.html 全局加。
 
 const route = useRoute();
 const image = ref<ImageRecord | null>(null);
@@ -116,7 +114,10 @@ const exifRows = computed(() => {
               </dl>
             </section>
 
-            <section class="public-info-card cyber-panel">
+            <section
+              v-if="image.location_public === 0 || (image.location_lat !== null && image.location_lng !== null)"
+              class="public-info-card cyber-panel"
+            >
               <p class="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Location</p>
               <ReadOnlyMap
                 :lat="image.location_public === 0 ? null : image.location_lat"

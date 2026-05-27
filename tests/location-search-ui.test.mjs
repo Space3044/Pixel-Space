@@ -49,7 +49,7 @@ test('UploadView applies selected geocode result to location name and marker coo
   assert.match(upload, /import type \{ GeocodeResult \} from '@\/features\/images\/geocode\.api'/);
   assert.match(upload, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
   assert.match(upload, /meta\.location_name = result\.name/);
-  assert.match(upload, /setCoordinates\(result\.lat, result\.lng\)/);
+  assert.match(upload, /setEntryCoordinates\(entry, result\.lat, result\.lng, true\)/);
   assert.match(upload, /<LocationSearch class="location-search" @select="applyLocationSearchResult" \/>/);
 });
 
