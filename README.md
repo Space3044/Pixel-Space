@@ -26,7 +26,7 @@ src/                          Vue 前端 SPA
     upload/       /upload      多文件上传 + EXIF + AI 预览 + 批量目录
     library/      /library     管理员控制台（文件管理 + AI 配置）
     auth/         /login       Cloudflare Access 引导
-  shared/     auth/useAdmin.ts + ui/AppShell|SearchModal|SelectPopover
+  shared/     auth/useAdmin.ts + ui/AppShell|SelectPopover
   styles/     全局 token
 
 functions/                    Cloudflare Workers (Pages Functions)

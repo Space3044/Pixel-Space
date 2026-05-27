@@ -5,7 +5,7 @@ import { devRole as currentDevRole, isAdmin, isDev, setDevRole } from '@/shared/
 
 defineProps<{ fluid?: boolean }>();
 
-type IconName = 'home' | 'images' | 'random' | 'upload' | 'hive' | 'sliders' | 'moon' | 'github' | 'plug';
+type IconName = 'home' | 'images' | 'random' | 'upload' | 'hive' | 'sliders' | 'github' | 'plug';
 
 interface NavLink {
   to: string;
@@ -37,10 +37,6 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
   sliders: {
     vb: '0 0 512 512',
     d: 'M0 416c0 17.7 14.3 32 32 32H86.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H233.3c-12.3-28.3-40.5-48-73.3-48s-61 19.7-73.3 48H32c-17.7 0-32 14.3-32 32zm128 0a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zM320 256a32 32 0 1 1 64 0 32 32 0 1 1 -64 0zm32-80c-32.8 0-61 19.7-73.3 48H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H278.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H425.3c-12.3-28.3-40.5-48-73.3-48zM192 128a32 32 0 1 1 0-64 32 32 0 1 1 0 64zm73.3-32C253 67.7 224.8 48 192 48s-61 19.7-73.3 48H32C14.3 96 0 110.3 0 128s14.3 32 32 32h86.7c12.3 28.3 40.5 48 73.3 48s61-19.7 73.3-48H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H265.3z',
-  },
-  moon: {
-    vb: '0 0 384 512',
-    d: 'M223.5 32C100 32 0 132.3 0 256S100 480 223.5 480c60.6 0 115.5-24.2 155.8-63.4c5-4.9 6.3-12.5 3.1-18.7s-10.1-9.7-17-8.5c-9.8 1.7-19.8 2.6-30.1 2.6c-96.9 0-175.5-78.8-175.5-176c0-65.8 36-123.1 89.3-153.3c6.1-3.5 9.2-10.5 7.7-17.3s-7.3-11.9-14.3-12.5c-6.3-.5-12.6-.8-19-.8z',
   },
   github: {
     vb: '0 0 496 512',
@@ -152,17 +148,6 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
               访客
             </button>
           </div>
-
-          <button
-            type="button"
-            class="tool-btn"
-            aria-label="切换主题（阶段 12 接入）"
-            disabled
-          >
-            <svg :viewBox="ICONS.moon.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true">
-              <path :d="ICONS.moon.d" />
-            </svg>
-          </button>
 
           <a
             href="https://github.com/Space3044/imgbed"

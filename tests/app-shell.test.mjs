@@ -62,3 +62,7 @@ test('language switch code and entry are not kept', () => {
   assert.doesNotMatch(shell, /from '@\/shared\/i18n\/useLanguage'/);
   assert.doesNotMatch(router, /titleKey|setPageTitle|useLanguage/);
 });
+
+test('future placeholder tool buttons are not rendered', () => {
+  assert.doesNotMatch(shell, /切换主题（阶段|ICONS\.moon|type IconName = [^;]*'moon'/);
+});

@@ -34,7 +34,6 @@ src/
   shared/
     ui/
       AppShell.vue
-      SearchModal.vue
   styles/
     main.css
 
@@ -180,7 +179,7 @@ npm run build
 - [x] 公开图片页写出单图展示结构
 - [x] 随机页：参考 PixelPunk 沉浸式设计——首屏占满一张随机大图、向下滚动展开详情卡（作者、AI、文件信息）、右下浮动刷新按钮（loading 时 spin）、左下键盘提示（Space 换一张）；阶段 5 接 `GET /api/random` 真实数据
 - [x] 蜂巢页：参考 PixelPunk 蜂窝马赛克设计——pointy-top 六边形 clip-path 密铺、奇偶行错位、深色渐变背景、浮动六边形装饰、左上角浮动提示卡（含收起按钮）；阶段 12 接入拖动浏览、全屏、滚动加载更多
-- [x] 全局搜索弹窗骨架（`SearchModal.vue`）已写好，阶段 10 搜索接入时再挂载入口
+- [x] 未接入的全局搜索弹窗不保留，后续需要搜索时再按实际入口实现
 - [x] 在 `index.html` 写入基础 SEO 元信息（`description`、`og:title`、`og:type` 等）
 - [x] 公开图片页路由层面预留 `og:image` 注入位置，当前阶段先留空
 - [x] 样式只写当前页面用到的 class，不做主题系统
