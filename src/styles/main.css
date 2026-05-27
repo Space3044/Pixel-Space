@@ -2,16 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===================================================================
+ * 主题 token：所有颜色用 RGB 三元组存储，Tailwind 的 alpha 变体
+ * （`bg-void/60`）通过 `rgb(var(--c-xxx) / <alpha-value>)` 自动消费。
+ * =================================================================== */
+
 :root {
   color-scheme: dark;
-  --color-bg: #070713;
-  --color-panel: rgba(16, 20, 38, 0.78);
-  --color-border: rgba(148, 163, 184, 0.22);
-  --color-text: #f8fafc;
-  --color-muted: #94a3b8;
-  --color-cyan: #35f3ff;
-  --color-pink: #ff4fd8;
+
+  /* 背景层 */
+  --c-bg: 7 7 19;
+  --c-bg-aura-cyan: 53 243 255;
+  --c-bg-aura-pink: 255 79 216;
+  --c-bg-aura-cyan-alpha: 0.18;
+  --c-bg-aura-pink-alpha: 0.16;
+  --c-grid-line: 53 243 255;
+  --c-grid-line-alpha: 0.08;
+
+  /* 面板 / 卡片 / overlay */
+  --c-panel: 16 20 38;
+  --c-panel-strong: 7 7 19;
+  --c-overlay: 9 14 28;
+
+  /* 文字 */
+  --c-text-primary: 248 250 252;
+  --c-text-soft: 226 232 240;
+  --c-text-muted: 148 163 184;
+  --c-text-dim: 100 116 139;
+
+  /* 边框 */
+  --c-border: 148 163 184;
+  --c-border-strong: 53 243 255;
+
+  /* 品牌霓虹 */
+  --c-cyan: 53 243 255;
+  --c-pink: 255 79 216;
+  --c-violet: 139 92 246;
+  --c-lime: 163 255 18;
+
+  /* 工具色 */
+  --c-danger: 251 113 133;
+  --c-warning: 251 191 36;
+  --c-success: 132 247 153;
+
+  /* 阴影 */
+  --c-shadow: 0 0 0;
+  --c-shadow-strong-alpha: 0.45;
+  --c-shadow-soft-alpha: 0.35;
 }
+
+/* ===================================================================
+ * 基础元素
+ * =================================================================== */
 
 * {
   box-sizing: border-box;
@@ -19,20 +61,29 @@
 
 html {
   min-width: 320px;
-  background: var(--color-bg);
+  background: rgb(var(--c-bg));
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  color: var(--color-text);
+  color: rgb(var(--c-text-primary));
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.6;
   background:
-    radial-gradient(circle at 20% 10%, rgba(53, 243, 255, 0.18), transparent 30rem),
-    radial-gradient(circle at 80% 0%, rgba(255, 79, 216, 0.16), transparent 28rem),
-    #070713;
+    radial-gradient(
+      circle at 20% 10%,
+      rgb(var(--c-bg-aura-cyan) / var(--c-bg-aura-cyan-alpha)),
+      transparent 30rem
+    ),
+    radial-gradient(
+      circle at 80% 0%,
+      rgb(var(--c-bg-aura-pink) / var(--c-bg-aura-pink-alpha)),
+      transparent 28rem
+    ),
+    rgb(var(--c-bg));
+  transition: background-color 240ms ease, color 240ms ease;
 }
 
 button,
@@ -48,7 +99,7 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-cyan);
+  outline: 3px solid rgb(var(--c-cyan));
   outline-offset: 3px;
 }
 
@@ -63,11 +114,15 @@ a {
   }
 }
 
+/* ===================================================================
+ * 自定义组件类
+ * =================================================================== */
+
 @layer components {
   .cyber-panel {
-    border: 1px solid var(--color-border);
-    background: var(--color-panel);
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgb(var(--c-border) / 0.22);
+    background: rgb(var(--c-panel) / 0.78);
+    box-shadow: 0 24px 80px rgb(var(--c-shadow) / var(--c-shadow-soft-alpha));
     backdrop-filter: blur(18px);
   }
 
@@ -75,10 +130,14 @@ a {
     min-height: 44px;
     cursor: pointer;
     border-radius: 999px;
-    border: 1px solid rgba(53, 243, 255, 0.55);
-    background: linear-gradient(135deg, rgba(53, 243, 255, 0.22), rgba(255, 79, 216, 0.18));
+    border: 1px solid rgb(var(--c-cyan) / 0.55);
+    background: linear-gradient(
+      135deg,
+      rgb(var(--c-cyan) / 0.22),
+      rgb(var(--c-pink) / 0.18)
+    );
     padding: 0.75rem 1.25rem;
-    color: white;
+    color: rgb(var(--c-text-primary));
     font-weight: 700;
     transition:
       border-color 180ms ease,
@@ -87,8 +146,8 @@ a {
   }
 
   .cyber-button:hover {
-    border-color: rgba(53, 243, 255, 0.95);
-    box-shadow: 0 0 28px rgba(53, 243, 255, 0.2);
+    border-color: rgb(var(--c-cyan) / 0.95);
+    box-shadow: 0 0 28px rgb(var(--c-cyan) / 0.2);
   }
 
   .cyber-button:disabled {
@@ -100,9 +159,9 @@ a {
     min-height: 44px;
     width: 100%;
     border-radius: 1rem;
-    border: 1px solid var(--color-border);
-    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid rgb(var(--c-border) / 0.22);
+    background: rgb(var(--c-panel) / 0.6);
     padding: 0.75rem 1rem;
-    color: white;
+    color: rgb(var(--c-text-primary));
   }
 }

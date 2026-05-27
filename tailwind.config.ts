@@ -5,18 +5,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        void: '#070713',
-        panel: '#101426',
+        // 全部走 CSS 变量，让 `bg-void/90` / `text-neon-cyan/60` 等 alpha 变体
+        // 在 light/dark 两套主题下自动切换。
+        void: 'rgb(var(--c-bg) / <alpha-value>)',
+        panel: 'rgb(var(--c-panel) / <alpha-value>)',
+        overlay: 'rgb(var(--c-overlay) / <alpha-value>)',
         neon: {
-          cyan: '#35f3ff',
-          pink: '#ff4fd8',
-          violet: '#8b5cf6',
-          lime: '#a3ff12',
+          cyan: 'rgb(var(--c-cyan) / <alpha-value>)',
+          pink: 'rgb(var(--c-pink) / <alpha-value>)',
+          violet: 'rgb(var(--c-violet) / <alpha-value>)',
+          lime: 'rgb(var(--c-lime) / <alpha-value>)',
         },
       },
       boxShadow: {
-        neon: '0 0 32px rgba(53, 243, 255, 0.22)',
-        panel: '0 24px 80px rgba(0, 0, 0, 0.35)',
+        neon: '0 0 32px rgb(var(--c-cyan) / 0.22)',
+        panel: '0 24px 80px rgb(var(--c-shadow) / var(--c-shadow-soft-alpha))',
       },
       fontFamily: {
         display: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
@@ -24,7 +27,7 @@ export default {
       },
       backgroundImage: {
         grid:
-          'linear-gradient(rgba(53, 243, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(53, 243, 255, 0.08) 1px, transparent 1px)',
+          'linear-gradient(rgb(var(--c-grid-line) / var(--c-grid-line-alpha)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--c-grid-line) / var(--c-grid-line-alpha)) 1px, transparent 1px)',
       },
     },
   },

@@ -205,7 +205,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(53, 243, 255, 0.05);
+  background: rgb(var(--c-cyan) / 0.05);
   opacity: 0;
   transition: opacity 0.25s ease;
   border-radius: inherit;
@@ -218,23 +218,23 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
 .nav-item:hover .nav-icon {
   opacity: 1;
   transform: scale(1.05);
-  color: rgb(53, 243, 255);
+  color: rgb(var(--c-cyan));
 }
 
 .nav-item.is-active {
-  color: rgb(53, 243, 255);
-  text-shadow: 0 0 8px rgba(53, 243, 255, 0.4);
+  color: rgb(var(--c-cyan));
+  text-shadow: 0 0 8px rgb(var(--c-cyan) / 0.4);
 }
 
 .nav-item.is-active::after {
   opacity: 1;
-  background: rgba(53, 243, 255, 0.08);
+  background: rgb(var(--c-cyan) / 0.08);
 }
 
 .nav-item.is-active .nav-icon {
-  color: rgb(53, 243, 255);
+  color: rgb(var(--c-cyan));
   opacity: 1;
-  filter: drop-shadow(0 0 4px rgba(53, 243, 255, 0.6));
+  filter: drop-shadow(0 0 4px rgb(var(--c-cyan) / 0.6));
 }
 
 .tool-btn {
@@ -244,7 +244,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
   width: 32px;
   height: 32px;
   border-radius: 0.25rem;
-  color: rgb(203, 213, 225);
+  color: rgb(var(--c-text-soft));
   background: transparent;
   border: none;
   cursor: pointer;
@@ -252,8 +252,8 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
 }
 
 .tool-btn:hover:not(:disabled) {
-  background: rgba(53, 243, 255, 0.08);
-  color: rgb(53, 243, 255);
+  background: rgb(var(--c-cyan) / 0.08);
+  color: rgb(var(--c-cyan));
   transform: translateY(-1px);
 }
 
@@ -267,19 +267,19 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border: 1px solid rgba(53, 243, 255, 0.2);
+  border: 1px solid rgb(var(--c-cyan) / 0.2);
   border-radius: 4px;
-  background: rgba(7, 7, 19, 0.55);
+  background: rgb(var(--c-bg) / 0.55);
 }
 .dev-role-switch.is-visitor {
-  border-color: rgba(255, 79, 216, 0.32);
+  border-color: rgb(var(--c-pink) / 0.32);
 }
 .dev-role-btn {
   padding: 3px 8px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: rgb(148, 163, 184);
+  color: rgb(var(--c-text-muted));
   background: transparent;
   border: none;
   border-radius: 3px;
@@ -287,15 +287,15 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
   transition: color 160ms ease, background-color 160ms ease;
 }
 .dev-role-btn:hover {
-  color: rgb(226, 232, 240);
+  color: rgb(var(--c-text-soft));
 }
 .dev-role-btn.is-on {
-  background: rgba(53, 243, 255, 0.16);
-  color: rgb(165, 243, 252);
+  background: rgb(var(--c-cyan) / 0.16);
+  color: rgb(var(--c-cyan));
 }
 .dev-role-switch.is-visitor .dev-role-btn.is-on {
-  background: rgba(255, 79, 216, 0.14);
-  color: rgb(251, 182, 232);
+  background: rgb(var(--c-pink) / 0.14);
+  color: rgb(var(--c-pink));
 }
 
 .login-btn {
@@ -303,7 +303,7 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
 }
 
 .scan-line {
-  background: linear-gradient(90deg, transparent, rgb(53, 243, 255), transparent);
+  background: linear-gradient(90deg, transparent, rgb(var(--c-cyan)), transparent);
   animation: scan-across 3s infinite;
 }
 
