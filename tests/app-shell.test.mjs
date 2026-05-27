@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const shell = readFileSync('src/shared/ui/AppShell.vue', 'utf8');
 const router = readFileSync('src/app/router.ts', 'utf8');
+const i18nPath = 'src/shared/i18n/useLanguage.ts';
 
 const extractNavLinks = (name) => {
   const match = shell.match(new RegExp(`const ${name}: [^=]+ = \\[([\\s\\S]*?)\\];`));
@@ -27,6 +28,7 @@ test('AppShell renames the hive nav entry to footprints', () => {
 
 test('router title matches the footprints page', () => {
   assert.match(router, /path:\s*'\/hive'[\s\S]*title:\s*'足迹'/);
+  assert.doesNotMatch(router, /path:\s*'\/hive'[\s\S]*titleKey/);
   assert.doesNotMatch(router, /path:\s*'\/hive'[\s\S]*title:\s*'蜂巢'/);
 });
 
@@ -51,4 +53,12 @@ test('AppShell shows upload only in the admin nav before console', () => {
 test('router keeps /library but titles it as console', () => {
   assert.match(router, /path:\s*'\/library'[\s\S]*title:\s*'控制台'[\s\S]*requiresAdmin:\s*true/);
   assert.doesNotMatch(router, /path:\s*'\/library'[\s\S]*title:\s*'文件库'/);
+});
+
+test('language switch code and entry are not kept', () => {
+  assert.equal(existsSync(i18nPath), false);
+  assert.doesNotMatch(shell, /@click="toggleLanguage"|languageButtonLabel|languageButtonAriaLabel/);
+  assert.doesNotMatch(shell, /ICONS\.language|type IconName = [^;]*'language'/);
+  assert.doesNotMatch(shell, /from '@\/shared\/i18n\/useLanguage'/);
+  assert.doesNotMatch(router, /titleKey|setPageTitle|useLanguage/);
 });
