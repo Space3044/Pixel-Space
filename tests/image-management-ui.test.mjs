@@ -164,6 +164,16 @@ test('ImageLightbox uses the PixelPunk-style viewer scale and icon controls', ()
   assert.doesNotMatch(lightbox, /bg-grid/);
 });
 
+test('ImageLightbox toggles the bottom zoom controls from image clicks', () => {
+  assert.match(lightbox, /const imageControlsHidden = ref\(false\)/);
+  assert.match(lightbox, /const toggleImageControls = \(\) => \{/);
+  assert.match(lightbox, /imageControlsHidden\.value = !imageControlsHidden\.value/);
+  assert.match(lightbox, /@click\.stop="toggleImageControls"/);
+  assert.match(lightbox, /v-if="image && !imageControlsHidden" class="image-controls"/);
+  assert.match(lightbox, /imageControlsHidden\.value = false/);
+  assert.doesNotMatch(lightbox, /previewHidden|togglePreview|preview-hidden-state|隐藏图片预览|预览已隐藏/);
+});
+
 test('ReadOnlyMap supports empty coordinates and interactive coordinate picking', () => {
   assert.match(readOnlyMap, /const DEFAULT_CENTER/);
   assert.match(readOnlyMap, /lat\?: number \| null/);

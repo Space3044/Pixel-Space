@@ -47,6 +47,7 @@ let copyTimer: ReturnType<typeof setTimeout> | null = null;
 const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
 const detailsOpen = ref(false);
+const imageControlsHidden = ref(false);
 
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 2;
@@ -401,6 +402,10 @@ const toggleDetails = () => {
   detailsOpen.value = !detailsOpen.value;
 };
 
+const toggleImageControls = () => {
+  imageControlsHidden.value = !imageControlsHidden.value;
+};
+
 const handleViewerSurfaceClick = () => {
   if (detailsOpen.value) {
     detailsOpen.value = false;
@@ -433,6 +438,7 @@ watch(
       document.body.style.overflow = '';
       copied.value = false;
       detailsOpen.value = false;
+      imageControlsHidden.value = false;
       aiEditOpen.value = false;
       locationEditOpen.value = false;
       resetZoom();
@@ -450,6 +456,7 @@ watch(
   (image) => {
     resetForm(image);
     resetZoom();
+    imageControlsHidden.value = false;
   },
   { immediate: true },
 );
@@ -539,7 +546,7 @@ onBeforeUnmount(() => {
                   :class="{ 'is-panning': isPanning, 'is-zoomed': zoomScale > 1 }"
                   :style="{ transform: zoomTransform }"
                   draggable="false"
-                  @click.stop
+                  @click.stop="toggleImageControls"
                   @wheel.prevent="onImageWheel"
                   @pointerdown="onImagePointerDown"
                   @pointermove="onImagePointerMove"
@@ -552,7 +559,7 @@ onBeforeUnmount(() => {
                   {{ image ? `${image.title} 预览` : '未选中图片，请从图库点击进入' }}
                 </figcaption>
 
-                <div v-if="image" class="image-controls" @click.stop @dblclick.stop>
+                <div v-if="image && !imageControlsHidden" class="image-controls" @click.stop @dblclick.stop>
                   <button
                     type="button"
                     class="image-ctrl-btn"
