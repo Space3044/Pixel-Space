@@ -41,7 +41,6 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/styles/main.css',
     'docs/PLAN.md',
     'db/migrations/0001_init.sql',
-    'db/migrations/0003_add_tg_columns.sql',
     'README.md',
     'functions/types.ts',
     'functions/_shared/http.ts',

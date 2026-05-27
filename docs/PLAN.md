@@ -51,7 +51,7 @@ tests/
 
 - 每个阶段只完成当前阶段的任务
 - 不提前写后续阶段需要的函数、字段、接口
-- D1 schema 随阶段渐进扩展，新增字段一律用 `ALTER TABLE ADD COLUMN`
+- D1 schema 以 `db/migrations/0001_init.sql` 为当前新库基准，字段变更先回写这份初始化迁移
 - 不写本地 sqlite3 替代实现，运行时代码只认 D1
 - 不做多用户、角色表、权限矩阵
 - 上传时若 EXIF 含 GPS 坐标，前端解析后作为默认值 pre-fill 到地图与表单；最终是否落库由管理员在提交前确认或调整，避免无意泄露敏感坐标
@@ -106,7 +106,7 @@ tests/
 
 **内容可见性模型**。在身份判定之外，每张图自带两个独立的可见性开关，分别控制"是否进入公开聚合"和"是否对外暴露位置"。管理员视角不受任何开关影响，看到的永远是真实数据；开关只决定访客视角看到什么。
 
-两个开关都落在 `images` 表，需要新增迁移 `0008_add_visibility_columns.sql`：
+两个开关都落在 `images` 表，由 `db/migrations/0001_init.sql` 直接创建：
 
 - `is_public INTEGER NOT NULL DEFAULT 1`：是否公开到图库/探索/随机/蜂巢/足迹等任何聚合视图。`0` 表示"私藏"，访客在所有列表型接口里都看不到这张图，但只要拿到 `key` 仍可通过 `GET /api/image/:key` 与 `/p/:key` 直接访问（key 是 UUID 不可枚举，等同"凭直链可见"）。
 - `location_public INTEGER NOT NULL DEFAULT 1`：是否对访客暴露位置。`0` 表示访客拿不到 `location_lat`、`location_lng`、`location_name`；详情页的地图区块仍然渲染，但是是一张**没有标记的空地图**，明确传达"作者保留了位置但选择不公开"的语义。无位置数据的图（lat/lng/name 全空）不渲染地图区块，与"有位置但不公开"在视觉上有别。
@@ -133,7 +133,7 @@ tests/
 
 **Telegram 归档边界**。Bot API 单文件上传上限 50MB，当前阶段超过 50MB 直接拒绝上传，错误信息明确告诉用户。原图只存这一份，没有冗余备份，频道或 Bot 不可用就等于原图丢失，这一点写进 README。
 
-**数据库迁移**。本地用 `wrangler d1 migrations apply imgbed --local` 跑，生产用 `wrangler d1 migrations apply imgbed --remote`。迁移文件按阶段编号，不修改已发布的迁移，新需求一律新增迁移。
+**数据库迁移**。本地用 `wrangler d1 migrations apply imgbed --local` 跑，生产用 `wrangler d1 migrations apply imgbed --remote`。当前为了全新测试，迁移已整合为单一 `0001_init.sql`，作为新库基准。
 
 **图库布局策略**。图库页用 Justified Rows 算法（Flickr/Unsplash 风格）：按行布局、每行图片高度统一、按原始宽高比横向拼接、行末等比缩放刚好填满容器宽度。不裁切原图、视觉密度高、阅读顺序自然。算法依赖每张图的 `width`/`height` 字段，因此到阶段 5 拿到真实数据后才能接入，候选实现是 [`justified-layout`](https://www.npmjs.com/package/justified-layout) 这个 Flickr 团队官方包，约 4 KB，框架无关。阶段 1 期间用 CSS columns 多列瀑布流 + 多种 aspect ratio 的骨架占位演示视觉密度，等阶段 5 替换为真算法。图库页通过 `AppShell` 的 `fluid` prop 跳出 `max-w-7xl` 限宽，撑满视口宽度。
 
@@ -227,9 +227,9 @@ npm run build
 任务：
 
 - [x] 新建 `db/migrations/0001_init.sql`
-- [x] 创建 `images` 表，字段：`key TEXT PK`、`title`、`caption`、`r2_key`、`width`、`height`、`format`、`bytes_compressed`、`bytes_original`、`hash`、`location_name`、`location_lat`、`location_lng`、`exif_taken_at`、`exif_camera`、`exif_iso`、`exif_aperture`、`exif_shutter`、`created_at`、`updated_at`
+- [x] 创建最终 `images` 表，字段以 `db/migrations/0001_init.sql` 为准；对象 key 与图片 `key` 共用，不再保留 `r2_key`、`bytes_original` 等冗余列
 - [x] schema 不放 EXIF GPS 专属列：`location_lat` / `location_lng` 是通用坐标列，由阶段 7 上传链路提供值（EXIF 默认值经管理员确认，或地图手动拾取）
-- [x] 不创建 AI 字段，不创建 Telegram 字段，等阶段 9、11 加列
+- [x] 初始化迁移已包含当前需要的 Telegram、AI、可见性和文件夹字段
 - [x] 添加公开列表查询所需索引（按 `created_at DESC`）
 - [x] 新建 `tests/migration.test.mjs`，校验迁移文件不含 `gps`、`latitude_exif`、`longitude_exif` 等关键字
 
@@ -374,7 +374,7 @@ Access 配置记录（控制台配置完成后回填）：
 
 - [x] 在 `wrangler.toml` 增加 R2 bucket binding `BUCKET`
 - [x] `Env` 类型增加 `BUCKET: R2Bucket`
-- [x] 确认 `r2_key` 列已在 `0001_init.sql` 可写；新增 `0002_add_exif_focal_length.sql` 保存焦距
+- [x] 使用图片 `key` 作为 R2 对象 key，`0001_init.sql` 直接包含 EXIF 焦距字段
 - [x] 实现 `POST /api/upload`
 - [x] 接收 `multipart/form-data`，校验 MIME 是图片
 - [x] 用 `crypto.randomUUID()` 生成 `key`

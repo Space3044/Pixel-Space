@@ -48,7 +48,7 @@ functions/                    Cloudflare Workers (Pages Functions)
     ai/preview.ts           代理一次 AI 推理
     geocode.ts              高德反向地理编码
 
-db/migrations/                D1 增量迁移 0001~0009
+db/migrations/                D1 初始化迁移
 docs/PLAN.md                  阶段交付计划
 tests/                        API 形状 / 文件结构 / 迁移 / UI 标记
 ```
@@ -68,13 +68,13 @@ tests/                        API 形状 / 文件结构 / 迁移 / UI 标记
 
 - **压缩 WebP → R2**：访问统一走 `PUBLIC_BASE_URL`（本地默认 `/api/public` 通过 Function 回吐，线上可换 R2 公开域）。
 - **原图 → Telegram 私有频道**：D1 只保存 `tg_file_id / tg_chat_id / tg_message_id` 凭据，原图下载走受 Cloudflare Access 保护的 `/api/original/:key`，由 Function 调 Telegram getFile 拉回。
-- **元数据 → D1**：39 列覆盖 EXIF / 位置 / AI 标注 / 可见性 / 文件夹归属 / Telegram 索引。
+- **元数据 → D1**：34 列覆盖 EXIF / 位置 / AI 标注 / 可见性 / 文件夹归属 / Telegram 索引。
 
 原图是单副本归档：频道、Bot、Telegram 文件不可用时原图下载会不可用，公开页面只展示压缩图，不暴露原图入口。
 
 ### 可见性双轨
 
-[`0008_add_visibility_columns.sql`](db/migrations/0008_add_visibility_columns.sql)：
+[`0001_init.sql`](db/migrations/0001_init.sql)：
 
 - `is_public`：是否进入聚合视图（列表 / 搜索 / 随机 / 足迹）。私藏图片仍可凭 key 直链访问，但不会被列出。
 - `location_public`：访客是否能拿到 `location_lat / location_lng / location_name`。详情页地图仍渲染但无标记。
@@ -91,7 +91,7 @@ tests/                        API 形状 / 文件结构 / 迁移 / UI 标记
 - `folders`（5 列）：`id / parent_id / name`，`UNIQUE(COALESCE(parent_id,''), name)` 防同级重名，自引用 FK
 - `ai_settings`（5 列，单行 `id = 1`）：代理 URL + 模型名 + 系统提示词
 
-完整字段清单见 [`db/migrations/`](db/migrations/) 下的迁移文件。
+完整字段清单见单一初始化迁移 [`0001_init.sql`](db/migrations/0001_init.sql)。
 
 ## 开发与部署
 
@@ -113,6 +113,7 @@ pnpm dev:pages            # Wrangler Pages 本地全栈：前端 + Functions + D
 pnpm typecheck            # 三套 tsconfig 都跑（app / node / functions）
 pnpm test                 # 跑 tests/*.test.mjs
 pnpm build                # typecheck + vite build → dist/
+pnpm db:migrate:local     # 应用本地迁移
 pnpm db:migrate:remote    # 应用线上迁移
 ```
 

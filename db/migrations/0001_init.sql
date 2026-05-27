@@ -1,30 +1,132 @@
 -- 0001_init.sql
--- 阶段 3：MVP 列表 / 详情 / 上传链路所需的最小字段。
--- AI 字段（tags_json/search_content/ai_*）等到阶段 11 再 ALTER TABLE ADD COLUMN。
--- Telegram 字段（tg_file_id/tg_message_id/tg_chat_id）等到阶段 9 再加。
--- 位置只接受管理员手动填写的 location_lat / location_lng，不从 EXIF GPS 提取。
+-- Fresh schema for Pixel Space.
+
+CREATE TABLE folders (
+  id         TEXT PRIMARY KEY NOT NULL,
+  parent_id  TEXT,
+  name       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (parent_id) REFERENCES folders(id)
+);
+
+CREATE UNIQUE INDEX idx_folders_parent_name ON folders (
+  COALESCE(parent_id, ''),
+  name
+);
 
 CREATE TABLE images (
-  key              TEXT    PRIMARY KEY NOT NULL,
-  title            TEXT    NOT NULL DEFAULT '',
-  caption          TEXT,
-  r2_key           TEXT    NOT NULL,
-  width            INTEGER NOT NULL,
-  height           INTEGER NOT NULL,
-  format           TEXT    NOT NULL,
-  bytes_compressed INTEGER NOT NULL,
-  bytes_original   INTEGER NOT NULL,
-  hash             TEXT    NOT NULL,
-  location_name    TEXT,
-  location_lat     REAL,
-  location_lng     REAL,
-  exif_taken_at    TEXT,
-  exif_camera      TEXT,
-  exif_iso         INTEGER,
-  exif_aperture    REAL,
-  exif_shutter     TEXT,
-  created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
-  updated_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+  key                TEXT    PRIMARY KEY NOT NULL,
+  title              TEXT    NOT NULL DEFAULT '',
+  caption            TEXT,
+  original_filename  TEXT    NOT NULL DEFAULT '',
+  width              INTEGER NOT NULL,
+  height             INTEGER NOT NULL,
+  format             TEXT    NOT NULL,
+  bytes_compressed   INTEGER NOT NULL,
+  hash               TEXT    NOT NULL,
+  location_name      TEXT,
+  location_lat       REAL,
+  location_lng       REAL,
+  exif_taken_at      TEXT,
+  exif_camera        TEXT,
+  exif_iso           INTEGER,
+  exif_aperture      REAL,
+  exif_shutter       TEXT,
+  exif_focal_length  REAL,
+  tg_file_id         TEXT,
+  tg_message_id      INTEGER,
+  tg_chat_id         TEXT,
+  tg_status          TEXT    NOT NULL DEFAULT 'pending',
+  tg_error           TEXT,
+  tags_json          TEXT,
+  search_content     TEXT,
+  ai_status          TEXT    NOT NULL DEFAULT 'pending',
+  created_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+  dominant_color     TEXT,
+  color_palette_json TEXT,
+  composition        TEXT,
+  is_public          INTEGER NOT NULL DEFAULT 1,
+  location_public    INTEGER NOT NULL DEFAULT 1,
+  folder_id          TEXT REFERENCES folders(id)
 );
 
 CREATE INDEX idx_images_created_at ON images (created_at DESC);
+CREATE INDEX idx_images_hash ON images (hash);
+CREATE INDEX idx_images_is_public_created_at ON images (is_public, created_at DESC);
+CREATE INDEX idx_images_folder_id ON images (folder_id);
+
+CREATE TABLE ai_settings (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  proxy_url  TEXT    NOT NULL DEFAULT '',
+  model      TEXT    NOT NULL DEFAULT '',
+  prompt     TEXT    NOT NULL DEFAULT '',
+  updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+INSERT INTO ai_settings (id, proxy_url, model, prompt) VALUES (1, '', '', '# 图片结构化分析专家
+
+你是一个图片分析专家。你的任务是分析用户提供的图片，严格按照指定的 JSON Schema 输出结构化结果，不要添加任何额外解释、注释或前缀。
+
+## 必须覆盖的分析维度（内部完成，不输出）
+
+在生成最终 JSON 之前，你必须在内部完成以下 7 个维度的分析：
+
+1. **主体识别**：图片中最核心的视觉对象是什么（物、人、场景）？
+2. **场景与环境**：背景、空间逻辑、前景 / 中景 / 背景关系。
+3. **视觉风格与颜色**：整体色调、主色调、辅助色、饱和度、冷暖、光影、构图和情绪氛围。
+4. **标题与描述构思**：从画面可见信息里提炼一个有画面感的摄影作品标题，并写出自然、具体、不空泛的描述。
+5. **可检索特征**：适合作为标签和搜索词的关键词，覆盖主体、场景、色彩、风格、情绪、构图、材质等。
+6. **构图判断**：概括画面构图方式，例如三分法、中心构图、对称构图、引导线、前景框架、留白、俯拍或仰拍等。
+7. **搜索用词**：将上述特征转化为空格分隔的关键词集合，包含必要同义词、上位词和相关风格词。
+
+## 输出 Schema（严格遵守）
+
+```json
+{
+  "title": "string",
+  "caption": "string",
+  "tags": ["string"],
+  "search_content": "string",
+  "dominant_color": "string",
+  "palette": ["string"],
+  "composition": "string"
+}
+```
+
+## 字段要求
+
+- **title**：4 到 10 个中文，像摄影作品标题，要有画面感和审美感。优先使用“主体 + 氛围 / 光影 / 色彩 / 场景”的组合，例如“雾色山脊”“窗边暖光”。避免“图片”“照片”“一只猫”这类直白标题。禁止使用文件名、URL、地点名、人名或品牌，除非画面中明确可见。
+- **caption**：1 到 2 句，约 35 到 90 个中文。描述主体、环境、构图、光线、色彩和情绪，可以有轻微审美表达，但必须来自画面可见信息，不编造具体地点、人物身份、事件或未显示细节。
+- **tags**：6 到 10 个中文短标签，覆盖主体、场景、色彩、风格、情绪、构图 / 材质等维度。标签要具体、可搜索、少重复，避免只写“好看”“照片”“图片”这类泛词。示例：["蓝天", "山脉", "风景摄影", "冷色调", "宁静", "远景构图"]。
+- **search_content**：用于搜索引擎的关键词合集，空格分隔，不要写成句子。包含标题核心词、主体词、同义词（如“女孩”→“少女”）、上位词（如“橘猫”→“猫 动物 宠物”）、场景词、色彩词、风格词、情绪词和构图词。关键词去重，不要使用逗号、句号或换行。
+- **dominant_color**：主色调，使用“中文色名 + HEX”的形式，例如“暮光橙 #F59E0B”。HEX 必须是 6 位大写格式。
+- **palette**：3 到 6 个代表性色板 HEX，从画面主要颜色中提取，按视觉占比从高到低排列。每项必须是 6 位大写 HEX，例如 ["#0F172A", "#F59E0B", "#F8FAFC"]。
+- **composition**：一句中文概括构图，不超过 40 个中文。说明主体位置、空间关系或构图方式，不编造画面外信息。
+
+## 输出要求（绝对禁止违反）
+
+1. **只输出一个合法的 JSON 对象**，不要包含 markdown 代码块标记（如 ```json 或 ```），不要输出任何其他文字。
+2. 不要输出“好的”、“以下是分析结果”等前缀或后缀。
+3. 不要输出分析过程、不要解释你的选择。
+4. 确保字符串中的双引号、换行符正确转义。
+5. 如果图片中没有清晰的主体，仍需尽力提取风格和氛围信息。
+
+## 工作流程
+
+- 用户附上图片后，你在内部完成 7 个维度的分析（不输出）。
+- 直接输出符合上述 Schema 的 JSON 对象。
+- 结束。
+
+## 常见错误（避免）
+
+- ❌ 输出 JSON 前加任何说明文字。
+- ❌ 使用 markdown 代码块包裹 JSON。
+- ❌ title 太直白、超过 10 字或使用文件名。
+- ❌ caption 只有几个词，或包含编造的细节。
+- ❌ tags 数量少于 6 或多于 10，或不覆盖要求维度。
+- ❌ search_content 写成完整句子、包含标点、重复堆词。
+- ❌ dominant_color 缺少中文色名或 HEX。
+- ❌ palette 少于 3 个颜色，或输出非 HEX 颜色。
+- ❌ composition 写成泛泛评价，没有说明构图。');
