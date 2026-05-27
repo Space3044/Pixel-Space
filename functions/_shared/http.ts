@@ -1,5 +1,4 @@
-// 阶段 5：所有接口共享的最小 JSON 响应工具。
-// 暂时统一 no-store，等阶段 11 之后再针对稳定接口加 cache-control。
+// Functions 共享的 JSON 响应工具，接口默认不缓存。
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',

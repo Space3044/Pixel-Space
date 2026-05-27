@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const view = readFileSync('src/features/upload/UploadView.vue', 'utf8');
+const view = readFileSync('src/features/upload/UploadView.vue', 'utf8').replace(/\r\n/g, '\n');
 const plan = readFileSync('docs/PLAN.md', 'utf8');
 
 const test = (name, fn) => {
@@ -33,8 +33,8 @@ test('upload queue count uses a compact status label instead of raw zero count',
 });
 
 test('upload queue rail is wide enough and scrolls inside the fixed workbench on desktop', () => {
-  assert.match(view, /grid-template-columns:\s*8rem minmax\(0,\s*1fr\) 24rem/);
-  assert.match(view, /height:\s*clamp\(32rem,\s*calc\(100svh - 13rem\),\s*43rem\)/);
+  assert.match(view, /grid-template-columns:\s*8\.5rem minmax\(0,\s*1fr\) 24rem/);
+  assert.match(view, /height:\s*clamp\(32rem,\s*calc\(100svh - 13rem\),\s*46rem\)/);
 
   const desktopQueueList = extract('@media (min-width: 1024px) {\n  .queue-list', '\n  }\n}\n\n.thumb-cell');
   assert.match(desktopQueueList, /overflow-y:\s*auto/);
@@ -44,7 +44,7 @@ test('upload queue rail is wide enough and scrolls inside the fixed workbench on
 
 test('upload workbench keeps the preview fixed while side panels scroll with styled scrollbars', () => {
   const desktopWorkbench = extract('@media (min-width: 1024px) {\n  .workbench', '\n  }\n}\n\n.queue-rail');
-  assert.match(desktopWorkbench, /height:\s*clamp\(32rem,\s*calc\(100svh - 13rem\),\s*43rem\)/);
+  assert.match(desktopWorkbench, /height:\s*clamp\(32rem,\s*calc\(100svh - 13rem\),\s*46rem\)/);
 
   const desktopPreview = extract('@media (min-width: 1024px) {\n  .preview-stage', '\n  }\n}\n\n.meta-sidebar');
   assert.match(desktopPreview, /height:\s*100%/);
@@ -101,40 +101,49 @@ test('upload page calls the real upload API instead of console-only FormData log
   assert.doesNotMatch(view, /console\.group|console\.log|console\.groupEnd/);
 });
 
-test('upload page stays on the upload screen and shows share actions after success', () => {
+test('upload page stays on the upload screen and stores results on each queue entry', () => {
   assert.doesNotMatch(view, /useRouter|router\.push/);
-  assert.match(view, /uploadResult\s*=\s*ref/);
-  assert.match(view, /uploadResult\.value\s*=\s*record/);
-  assert.match(view, /class="upload-result/);
-  assert.match(view, /查看公开页/);
-  assert.match(view, /继续上传/);
-  assert.match(view, /复制/);
-  assert.match(view, /buildMarkdown|buildHtml|buildPublicPageUrl/);
+  assert.match(view, /uploadResult:\s*ImageRecord\s*\|\s*null/);
+  assert.match(view, /entry\.uploadResult\s*=\s*record/);
+  assert.match(view, /entry\.uploadResult\s*=\s*existing/);
+  assert.match(view, /doneEntries\s*=\s*computed/);
 });
 
 test('upload page submits compressed image dimensions with the form data', () => {
-  assert.match(view, /compressedDimensions\s*=\s*ref/);
   assert.match(view, /readImageDimensions\(nextCompressed\)/);
-  assert.match(view, /const\s+dimensions\s*=\s*compressedDimensions\.value/);
-  assert.match(view, /\bdimensions,/);
+  assert.match(view, /entry\.compressedDimensions\s*=\s*nextDimensions/);
+  assert.match(view, /buildUploadFormData\(\{\s*original:\s*entry\.file,[\s\S]*dimensions:\s*entry\.compressedDimensions,/);
 });
 
 test('upload page runs AI preview after compression and keeps fields editable', () => {
   assert.match(view, /import\s+\{\s*previewAiAnnotation\s*\}\s+from\s+'\.\/ai-preview\.api'/);
-  assert.match(view, /const\s+aiProcessing\s*=\s*ref\(false\)/);
-  assert.match(view, /runAiPreview\(nextCompressed\)/);
+  assert.match(view, /aiRequestId:\s*number/);
+  assert.match(view, /const\s+runAiPreview\s*=\s*async\s*\(entry:\s*UploadEntry\)/);
+  assert.match(view, /const\s+requestId\s*=\s*\+\+entry\.aiRequestId/);
+  assert.match(view, /enqueueAi\(entry\)/);
+  assert.match(view, /triggerAiForCurrent/);
   assert.match(view, /重新 AI 分析/);
-  assert.match(view, /v-model="meta\.tags"/);
-  assert.match(view, /v-model="meta\.search_content"/);
-  assert.match(view, /v-model="meta\.dominant_color"/);
-  assert.match(view, /v-model="meta\.palette"/);
-  assert.match(view, /v-model="meta\.composition"/);
-  assert.match(view, /meta\.dominant_color\s*=\s*result\.dominant_color/);
-  assert.match(view, /meta\.palette\s*=\s*result\.palette\.join\(', '\)/);
-  assert.match(view, /meta\.composition\s*=\s*result\.composition/);
+  assert.match(view, /v-model="displayEntry\.meta\.tags"/);
+  assert.match(view, /v-model="displayEntry\.meta\.search_content"/);
+  assert.match(view, /v-model="displayEntry\.meta\.dominant_color"/);
+  assert.match(view, /v-model="displayEntry\.meta\.palette"/);
+  assert.match(view, /v-model="displayEntry\.meta\.composition"/);
+  assert.match(view, /entry\.meta\.dominant_color\s*=\s*result\.dominant_color/);
+  assert.match(view, /entry\.meta\.palette\s*=\s*result\.palette\.join\(', '\)/);
+  assert.match(view, /entry\.meta\.composition\s*=\s*result\.composition/);
   assert.doesNotMatch(view, /v-model="meta\.ocr_text"/);
   assert.doesNotMatch(view, /<span class="field-label">OCR<\/span>/);
-  assert.match(view, /meta\.ai_status\s*=\s*'done'/);
+  assert.match(view, /entry\.meta\.ai_status\s*=\s*'done'/);
+});
+
+test('upload duplicate check failure is not silently treated as a new image', () => {
+  assert.doesNotMatch(view, /checkImageHash\(hash\)\.catch\(\(\)\s*=>\s*null\)/);
+  assert.match(view, /const existing = await checkImageHash\(hash\)/);
+});
+
+test('upload folder loading errors are visible instead of silently falling back', () => {
+  assert.match(view, /globalError\.value = `文件夹加载失败：\$\{\(error as Error\)\.message\}`/);
+  assert.doesNotMatch(view, /拉不到不阻塞上传/);
 });
 
 test('upload exif date and camera each span a full row', () => {

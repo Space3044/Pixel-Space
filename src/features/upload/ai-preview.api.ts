@@ -1,3 +1,5 @@
+import { readHttpError } from '@/shared/api/http';
+
 export interface AiPreviewResult {
   title: string;
   caption: string;
@@ -18,15 +20,7 @@ export async function previewAiAnnotation(image: File): Promise<AiPreviewResult>
   });
 
   if (!response.ok) {
-    let message = `HTTP ${response.status}`;
-    try {
-      const data = (await response.json()) as { error?: unknown };
-      if (typeof data.error === 'string') message = data.error;
-    } catch {
-      const text = await response.text().catch(() => '');
-      if (text) message = text;
-    }
-    throw new Error(`AI 分析失败：${message}`);
+    throw new Error(`AI 分析失败：${await readHttpError(response)}`);
   }
 
   return (await response.json()) as AiPreviewResult;

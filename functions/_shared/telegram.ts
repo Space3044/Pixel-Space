@@ -28,6 +28,14 @@ interface TelegramGetFileResponse {
 
 const API_BASE = 'https://api.telegram.org';
 
+async function readTelegramJson<T>(response: Response, failureCode: string): Promise<T> {
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new Error(`${failureCode}: invalid_json`);
+  }
+}
+
 function sanitizeTelegramError(description: unknown, token: string): string {
   const message = typeof description === 'string' && description.trim() ? description.trim() : 'request_failed';
   return message.replaceAll(token, '[redacted]').slice(0, 300);
@@ -56,10 +64,10 @@ export async function archiveOriginalToTelegram(input: {
     method: 'POST',
     body: formData,
   });
-  const data = (await response.json().catch(() => null)) as TelegramSendDocumentResponse | null;
+  const data = await readTelegramJson<TelegramSendDocumentResponse>(response, 'telegram_archive_failed');
 
-  if (!response.ok || !data?.ok) {
-    throw new Error(`telegram_archive_failed: ${sanitizeTelegramError(data?.description, input.token)}`);
+  if (!response.ok || !data.ok) {
+    throw new Error(`telegram_archive_failed: ${sanitizeTelegramError(data.description, input.token)}`);
   }
 
   const fileId = data.result?.document?.file_id;
@@ -82,10 +90,10 @@ export async function getTelegramFileUrl(token: string, fileId: string): Promise
   }
 
   const response = await fetch(`${API_BASE}/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`);
-  const data = (await response.json().catch(() => null)) as TelegramGetFileResponse | null;
+  const data = await readTelegramJson<TelegramGetFileResponse>(response, 'telegram_file_failed');
 
-  if (!response.ok || !data?.ok) {
-    throw new Error(`telegram_file_failed: ${sanitizeTelegramError(data?.description, token)}`);
+  if (!response.ok || !data.ok) {
+    throw new Error(`telegram_file_failed: ${sanitizeTelegramError(data.description, token)}`);
   }
 
   const filePath = data.result?.file_path;
@@ -113,9 +121,9 @@ export async function deleteTelegramMessage(input: {
     method: 'POST',
     body: formData,
   });
-  const data = (await response.json().catch(() => null)) as { ok?: boolean; description?: string } | null;
+  const data = await readTelegramJson<{ ok?: boolean; description?: string }>(response, 'telegram_delete_failed');
 
-  if (!response.ok || !data?.ok) {
-    throw new Error(`telegram_delete_failed: ${sanitizeTelegramError(data?.description, input.token)}`);
+  if (!response.ok || !data.ok) {
+    throw new Error(`telegram_delete_failed: ${sanitizeTelegramError(data.description, input.token)}`);
   }
 }

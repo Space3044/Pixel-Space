@@ -2,48 +2,33 @@
 import { computed, onMounted, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
+import { formatBytes } from '@/features/images/image-meta';
+import { fetchJson } from '@/shared/api/http';
 
 interface StatsResponse {
   photos: number;
   storage_bytes: number;
-  ai_tagged: number;
   places: number;
   latest: ImageRecord[];
 }
 
 const stats = ref<StatsResponse | null>(null);
-const loading = ref(true);
+const loadError = ref<string | null>(null);
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
 
-const formatBytes = (bytes: number): string => {
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let v = bytes;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i += 1;
-  }
-  return `${v.toFixed(i <= 1 ? 0 : 1)} ${units[i]}`;
-};
-
 const photosLabel = computed(() => (stats.value ? formatNumber(stats.value.photos) : '--'));
-const storageLabel = computed(() => (stats.value ? formatBytes(stats.value.storage_bytes) : '--'));
+const storageLabel = computed(() => (stats.value ? formatBytes(stats.value.storage_bytes, '0 B') : '--'));
 const placesLabel = computed(() => (stats.value ? formatNumber(stats.value.places) : '--'));
 
 const latest = computed(() => stats.value?.latest ?? []);
 
 onMounted(async () => {
+  loadError.value = null;
   try {
-    const response = await fetch('/api/stats');
-    if (response.ok) {
-      stats.value = (await response.json()) as StatsResponse;
-    }
-  } catch {
-    // 首页统计接口失败时降级显示 -- 占位，不阻塞页面渲染。
-  } finally {
-    loading.value = false;
+    stats.value = await fetchJson<StatsResponse>('/api/stats');
+  } catch (error) {
+    loadError.value = (error as Error).message;
   }
 });
 </script>
@@ -132,6 +117,9 @@ onMounted(async () => {
             <p class="stat-hint">点亮的地点</p>
           </div>
         </dl>
+        <p v-if="loadError" class="mt-4 text-sm font-semibold text-rose-300">
+          统计加载失败：{{ loadError }}
+        </p>
       </section>
 
       <section v-if="latest.length > 0" class="mx-auto max-w-7xl px-6 pb-16">

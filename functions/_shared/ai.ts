@@ -229,7 +229,7 @@ export const analyzeImageWithAi = async ({ env, image }: AnalyzeImageInput): Pro
   });
 
   if (!response.ok) {
-    const text = await response.text().catch(() => '');
+    const text = (await response.text()).trim();
     throw new Error(text || `ai_proxy_http_${response.status}`);
   }
 

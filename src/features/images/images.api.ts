@@ -1,4 +1,5 @@
 import type { ImageRecord } from './image.types';
+import { fetchJson, readHttpError } from '@/shared/api/http';
 
 const API_BASE = '/api';
 
@@ -16,14 +17,7 @@ export interface ImageUpdatePayload {
   location_public: 0 | 1;
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`fetch ${path} failed: ${response.status} ${text}`);
-  }
-  return (await response.json()) as T;
-}
+const apiPath = (path: string) => `${API_BASE}${path}`;
 
 export interface ListImagesOptions {
   // null 表示「未分类（folder_id IS NULL）」；undefined 表示不过滤。
@@ -43,25 +37,24 @@ export function listImages(query = '', options: ListImagesOptions = {}): Promise
     if (options.recursive === false) params.set('recursive', '0');
   }
   const qs = params.toString();
-  return fetchJson<ImageRecord[]>(qs ? `/list?${qs}` : '/list');
+  return fetchJson<ImageRecord[]>(apiPath(qs ? `/list?${qs}` : '/list'));
 }
 
 export function fetchImage(key: string): Promise<ImageRecord> {
-  return fetchJson<ImageRecord>(`/image/${encodeURIComponent(key)}`);
+  return fetchJson<ImageRecord>(apiPath(`/image/${encodeURIComponent(key)}`));
 }
 
 export async function checkImageHash(hash: string): Promise<ImageRecord | null> {
-  const response = await fetch(`${API_BASE}/check-hash?hash=${encodeURIComponent(hash)}`);
+  const response = await fetch(apiPath(`/check-hash?hash=${encodeURIComponent(hash)}`));
   if (response.status === 404) return null;
   if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`check-hash failed: ${response.status} ${text}`);
+    throw new Error(`check-hash failed: ${await readHttpError(response)}`);
   }
   return (await response.json()) as ImageRecord;
 }
 
 export function updateImage(key: string, payload: ImageUpdatePayload): Promise<ImageRecord> {
-  return fetchJson<ImageRecord>(`/admin/image/${encodeURIComponent(key)}`, {
+  return fetchJson<ImageRecord>(apiPath(`/admin/image/${encodeURIComponent(key)}`), {
     method: 'PATCH',
     headers: {
       'content-type': 'application/json',
@@ -71,7 +64,7 @@ export function updateImage(key: string, payload: ImageUpdatePayload): Promise<I
 }
 
 export function deleteImage(key: string): Promise<void> {
-  return fetchJson<{ ok: boolean; key: string }>(`/admin/image/${encodeURIComponent(key)}`, {
+  return fetchJson<{ ok: boolean; key: string }>(apiPath(`/admin/image/${encodeURIComponent(key)}`), {
     method: 'DELETE',
   }).then(() => undefined);
 }

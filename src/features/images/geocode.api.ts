@@ -1,3 +1,5 @@
+import { readHttpError } from '@/shared/api/http';
+
 export interface GeocodeResult {
   name: string;
   lat: number;
@@ -13,8 +15,7 @@ export async function searchLocations(query: string, region: GeocodeRegion = 'cn
   const params = new URLSearchParams({ q: trimmed, region });
   const response = await fetch(`/api/geocode?${params.toString()}`);
   if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`位置搜索失败：${response.status} ${text}`.trim());
+    throw new Error(`位置搜索失败：${await readHttpError(response)}`);
   }
 
   return (await response.json()) as GeocodeResult[];

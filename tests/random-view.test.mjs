@@ -39,6 +39,7 @@ test('RandomView detail cards are file detail, ai analysis, and copyable links',
 });
 
 test('RandomView exposes image metadata and ai fields', () => {
+  assert.match(view, /from '@\/features\/images\/image-meta'/);
   assert.match(view, /original_filename/);
   assert.match(view, /exif_iso/);
   assert.match(view, /exif_aperture/);
@@ -46,13 +47,16 @@ test('RandomView exposes image metadata and ai fields', () => {
   assert.match(view, /exif_focal_length/);
   assert.match(view, /location_lat/);
   assert.match(view, /location_lng/);
-  assert.match(view, /tags_json/);
   assert.match(view, /caption/);
   assert.match(view, /dominant_color/);
-  assert.match(view, /color_palette_json/);
   assert.match(view, /composition/);
   assert.match(view, /aiPalette/);
+  assert.match(view, /tagsFromImage\(image\.value\)/);
+  assert.match(view, /paletteFromImage\(image\.value\)/);
   assert.match(view, /parseDominantColor/);
+  assert.doesNotMatch(view, /const tagsFromImage = /);
+  assert.doesNotMatch(view, /const paletteFromImage = /);
+  assert.doesNotMatch(view, /const parseDominantColor = /);
   assert.match(view, /const dominantColor = computed/);
   assert.match(view, /class="dominant-color-value"/);
   assert.match(view, /class="palette-chip dominant-color-chip"/);

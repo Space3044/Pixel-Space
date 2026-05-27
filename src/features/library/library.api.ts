@@ -1,6 +1,7 @@
 // 文件库前端 API 封装。所有写操作都打在 /api/admin/* 之下，自动接受 useAdmin 注入的 X-Dev-Role。
 
 import type { ImageRecord } from '@/features/images/image.types';
+import { fetchJson as jsonFetch } from '@/shared/api/http';
 
 export interface FolderRecord {
   id: string;
@@ -32,15 +33,6 @@ export interface AiSettings {
   proxy_url: string;
   model: string;
   prompt: string;
-}
-
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`${path} failed: ${response.status} ${text}`);
-  }
-  return (await response.json()) as T;
 }
 
 export function fetchFolders(): Promise<FolderRecord[]> {

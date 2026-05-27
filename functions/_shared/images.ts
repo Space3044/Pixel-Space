@@ -1,6 +1,4 @@
-// 阶段 5：functions 与 src 是两个独立 tsconfig，functions 不能 import src/。
-// ImageRecord 在前后端各声明一份，字段保持一致。
-// 后续如果接口字段变化，两边一起改即可，比强行共享类型简单。
+// functions 与 src 使用独立 tsconfig，ImageRecord 在前后端各声明一份并保持字段一致。
 
 export interface ImageRecord {
   key: string;

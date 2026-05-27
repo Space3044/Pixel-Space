@@ -13,6 +13,7 @@ const ImageLightbox = defineAsyncComponent(() => import('./ImageLightbox.vue'));
 const images = ref<ImageRecord[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
+const folderLoadError = ref<string | null>(null);
 const searchQuery = ref('');
 
 const sortMode = ref<string>('created-desc');
@@ -94,11 +95,11 @@ const loadImages = async () => {
 };
 
 const loadFolders = async () => {
+  folderLoadError.value = null;
   try {
     folders.value = await fetchFolders();
-  } catch {
-    // 文件夹列表拿不到不阻塞主页面，筛选下拉就只剩「全部 / 未分类」。
-    folders.value = [];
+  } catch (error) {
+    folderLoadError.value = (error as Error).message;
   }
 };
 
@@ -228,6 +229,7 @@ const clearSearch = async () => {
         </button>
       </div>
 
+      <p v-if="folderLoadError" class="px-1 text-sm text-rose-400">文件夹加载失败：{{ folderLoadError }}</p>
       <p v-if="loading" class="px-1 text-sm text-slate-500">加载中…</p>
       <p v-else-if="loadError" class="px-1 text-sm text-rose-400">加载失败：{{ loadError }}</p>
       <p v-else-if="images.length === 0" class="px-1 text-sm text-slate-500">还没有公开图片。</p>

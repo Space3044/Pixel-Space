@@ -11,6 +11,7 @@ import FolderPickerPopover from '@/features/images/FolderPickerPopover.vue';
 import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
 import type { GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
+import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkImageHash } from '@/features/images/images.api';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from './map-style';
@@ -119,9 +120,7 @@ let usingFallbackStyle = false;
 const currentEntry = computed(() => entries.value.find((entry) => entry.id === currentEntryId.value) ?? null);
 const hasCurrent = computed(() => currentEntry.value !== null);
 
-// 侧栏在未选图时也按"未填写的表单"样式展示。这个占位 entry 不入队列，
-// 仅作为 displayEntry 的回落对象，用户的占位输入不会污染真实数据。
-const placeholderEntry = ref<UploadEntry>({
+const emptyEntry = ref<UploadEntry>({
   id: '__placeholder__',
   file: new File([], ''),
   previewUrl: null,
@@ -139,7 +138,7 @@ const placeholderEntry = ref<UploadEntry>({
   duplicate: false,
 });
 
-const displayEntry = computed<UploadEntry>(() => currentEntry.value ?? placeholderEntry.value);
+const displayEntry = computed<UploadEntry>(() => currentEntry.value ?? emptyEntry.value);
 const displayFileName = computed(() => currentEntry.value?.file.name ?? '--');
 const hasEntries = computed(() => entries.value.length > 0);
 const readyEntries = computed(() => entries.value.filter((entry) => entry.status === 'ready'));
@@ -150,18 +149,7 @@ const processingCount = computed(() => entries.value.filter((entry) => entry.sta
 const duplicateEntries = computed(() => entries.value.filter((entry) => entry.duplicate));
 const queueCountLabel = computed(() => (hasEntries.value ? `${entries.value.length} 张` : '空'));
 const canSubmit = computed(() => readyEntries.value.length > 0 && !isBatchUploading.value);
-
-const formatBytes = (bytes: number): string => {
-  if (bytes <= 0) return '--';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(unit === 0 ? 0 : 2)} ${units[unit]}`;
-};
+const formatBytes = (bytes: number): string => formatImageBytes(bytes, '--');
 
 const originalSize = computed(() => formatBytes(currentEntry.value?.file.size ?? 0));
 const compressedSize = computed(() => formatBytes(currentEntry.value?.compressedFile?.size ?? 0));
@@ -274,9 +262,8 @@ const broadcastLocationToAll = () => {
 const loadFolders = async () => {
   try {
     folders.value = await fetchFolders();
-  } catch {
-    // 拉不到不阻塞上传，文件夹选择就只有「不放入文件夹」。
-    folders.value = [];
+  } catch (error) {
+    globalError.value = `文件夹加载失败：${(error as Error).message}`;
   }
 };
 
@@ -425,7 +412,7 @@ const runAiPreview = async (entry: UploadEntry) => {
 const processEntry = async (entry: UploadEntry) => {
   try {
     const hash = await sha256HexFromFile(entry.file);
-    const existing = await checkImageHash(hash).catch(() => null);
+    const existing = await checkImageHash(hash);
     if (existing) {
       entry.uploadResult = existing;
       entry.duplicate = true;
@@ -769,11 +756,12 @@ onBeforeUnmount(() => {
             </div>
 
             <aside class="action-pill" :class="statusVariant">
-              <span class="status-dot" aria-hidden="true" />
+              <span class="state-dot" aria-hidden="true" />
               <span class="status-text">{{ statusLabel }}</span>
               <button
                 type="button"
                 class="cyber-button submit-button"
+                aria-label="上传图片"
                 :disabled="!canSubmit"
                 @click="submitUploadAll"
               >
@@ -1386,7 +1374,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   width: 1.85rem;
   height: 1rem;
-  border-radius: 999px;
+  border-radius: 0.5rem;
   background: rgba(148, 163, 184, 0.35);
   transition: background-color 160ms ease;
 }
@@ -1426,7 +1414,7 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(16px) saturate(160%);
 }
 
-.action-pill .status-dot {
+.action-pill .state-dot {
   flex-shrink: 0;
   width: 0.55rem;
   height: 0.55rem;
@@ -1434,20 +1422,20 @@ onBeforeUnmount(() => {
   background: rgba(148, 163, 184, 0.6);
   box-shadow: 0 0 8px rgba(148, 163, 184, 0.4);
 }
-.action-pill.is-busy .status-dot {
+.action-pill.is-busy .state-dot {
   background: rgb(53, 243, 255);
   box-shadow: 0 0 10px rgba(53, 243, 255, 0.55);
   animation: pulse-dot 1.4s ease-in-out infinite;
 }
-.action-pill.is-pending .status-dot {
+.action-pill.is-pending .state-dot {
   background: rgb(255, 232, 156);
   box-shadow: 0 0 10px rgba(255, 232, 156, 0.5);
 }
-.action-pill.is-ok .status-dot {
+.action-pill.is-ok .state-dot {
   background: rgb(132, 247, 153);
   box-shadow: 0 0 10px rgba(132, 247, 153, 0.5);
 }
-.action-pill.is-error .status-dot {
+.action-pill.is-error .state-dot {
   background: rgb(248, 113, 113);
   box-shadow: 0 0 10px rgba(248, 113, 113, 0.5);
 }
@@ -2085,7 +2073,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   width: 2.4rem;
   height: 1.3rem;
-  border-radius: 999px;
+  border-radius: 0.65rem;
   background: rgba(148, 163, 184, 0.35);
   transition: background-color 160ms ease;
 }
@@ -2152,7 +2140,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   width: 1.8rem;
   height: 0.95rem;
-  border-radius: 999px;
+  border-radius: 0.48rem;
   background: rgba(148, 163, 184, 0.35);
   transition: background-color 160ms ease;
 }

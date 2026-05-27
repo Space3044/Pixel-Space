@@ -24,6 +24,9 @@ test('GalleryView wires the search box to listImages(query)', () => {
   assert.match(gallery, /class="explore-header"/);
   assert.match(gallery, />探索</);
   assert.match(gallery, /发现公开图片/);
+  assert.match(gallery, /const folderLoadError = ref<string \| null>\(null\)/);
+  assert.match(gallery, /文件夹加载失败：\{\{ folderLoadError \}\}/);
+  assert.doesNotMatch(gallery, /文件夹列表拿不到不阻塞主页面/);
   assert.doesNotMatch(gallery, /to="\/upload"/);
   assert.doesNotMatch(gallery, /上传图片/);
   assert.match(gallery, /resultLabel/);
@@ -31,6 +34,7 @@ test('GalleryView wires the search box to listImages(query)', () => {
 });
 
 test('images.api exposes admin update and delete helpers', () => {
+  assert.match(imagesApi, /from '@\/shared\/api\/http'/);
   assert.match(imagesApi, /export function listImages\(query = '', options: ListImagesOptions = \{\}\)/);
   assert.match(imagesApi, /URLSearchParams/);
   assert.match(imagesApi, /export function updateImage/);
@@ -41,6 +45,7 @@ test('images.api exposes admin update and delete helpers', () => {
 
 test('ImageLightbox provides edit, delete, original download, copy links and map management UI', () => {
   assert.match(lightbox, /import \{[^}]*buildAbsoluteImageUrl[^}]*\} from '\.\/image-links'/s);
+  assert.match(lightbox, /from '\.\/image-meta'/);
   assert.match(lightbox, /import ReadOnlyMap from '\.\/ReadOnlyMap\.vue'/);
   assert.match(lightbox, /updateImage/);
   assert.match(lightbox, /deleteImage/);
@@ -72,8 +77,7 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /const aiPalette = computed/);
   assert.match(lightbox, /const dominantColor = computed/);
   assert.match(lightbox, /parseDominantColor/);
-  assert.match(lightbox, /JSON\.parse\(image\.tags_json\)/);
-  assert.match(lightbox, /JSON\.parse\(image\.color_palette_json\)/);
+  assert.doesNotMatch(lightbox, /const tagsFromImage = |const paletteFromImage = |JSON\.parse\(image\.tags_json\)|JSON\.parse\(image\.color_palette_json\)/);
   assert.match(lightbox, /v-for="tag in aiTags"/);
   assert.match(lightbox, /v-for="color in aiPalette"/);
   assert.match(lightbox, /class="dominant-color-value"/);
@@ -131,6 +135,7 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /buildHtml\(imageForCopy\)/);
   assert.match(lightbox, /confirm\('确认删除这张图片？'\)/);
   assert.doesNotMatch(lightbox, /内容安全/);
+  assert.doesNotMatch(lightbox, /阶段 11 接入 AI 描述|全屏（阶段|ICONS\.expand/);
   assert.match(lightbox, /class="image-canvas"\s+:class="\{ 'has-drawer': detailsOpen \}"/);
   assert.match(lightbox, /\.image-canvas\.has-drawer\s*\{[^}]*right:\s*420px;/s);
 });

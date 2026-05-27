@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
+import { paletteFromImage, parseDominantColor, tagsFromImage } from '@/features/images/image-meta';
 import { listImages } from '@/features/images/images.api';
 import ReadOnlyMap from '@/features/images/ReadOnlyMap.vue';
 
@@ -73,54 +74,13 @@ const onImagePointerMove = (event: PointerEvent) => {
 const onImagePointerUp = (event: PointerEvent) => {
   if (!isPanning.value) return;
   isPanning.value = false;
-  try {
-    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
-  } catch {
-    /* noop */
-  }
+  const target = event.currentTarget as HTMLElement;
+  if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
 };
 
 const onImageDoubleClick = (event: MouseEvent) => {
   event.preventDefault();
   setZoom(zoomScale.value > 1 ? 1 : 2);
-};
-
-const tagsFromImage = (record: ImageRecord | null): string[] => {
-  if (!record?.tags_json) return [];
-  try {
-    const parsed = JSON.parse(record.tags_json) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((tag): tag is string => typeof tag === 'string')
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
-
-const paletteFromImage = (record: ImageRecord | null): string[] => {
-  if (!record?.color_palette_json) return [];
-  try {
-    const parsed = JSON.parse(record.color_palette_json) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((color): color is string => typeof color === 'string')
-      .map((color) => color.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
-
-const parseDominantColor = (value: string | null | undefined): { name: string; hex: string } => {
-  const raw = value?.trim() ?? '';
-  const hex = raw.match(/#[0-9a-fA-F]{6}\b/)?.[0].toUpperCase() ?? '';
-  const name = hex ? raw.replace(new RegExp(hex, 'i'), '').trim() : raw;
-  return {
-    name: name || raw || '未记录',
-    hex,
-  };
 };
 
 const pickRandomImage = (records: ImageRecord[], currentKey: string | null): ImageRecord | null => {

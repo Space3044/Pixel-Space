@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import type { ImageRecord } from './image.types';
 import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
+import { formatBytes, paletteFromImage, parseDominantColor, tagsFromImage } from './image-meta';
 import LocationSearch from './LocationSearch.vue';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 import type { GeocodeResult } from './geocode.api';
@@ -16,7 +17,6 @@ type IconName =
   | 'chevronRight'
   | 'download'
   | 'info'
-  | 'expand'
   | 'share'
   | 'check'
   | 'fileAlt'
@@ -31,7 +31,6 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
   chevronRight: { vb: '0 0 320 512', d: 'M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z' },
   download: { vb: '0 0 512 512', d: 'M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V274.7l-73.4-73.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l128 128c12.5 12.5 32.8 12.5 45.3 0l128-128c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L288 274.7V32zM64 352c-35.3 0-64 28.7-64 64v32c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V416c0-35.3-28.7-64-64-64H346.5l-45.3 45.3c-25 25-65.5 25-90.5 0L165.5 352H64zm368 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z' },
   info: { vb: '0 0 512 512', d: 'M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-208a32 32 0 1 1 0 64 32 32 0 1 1 0-64z' },
-  expand: { vb: '0 0 512 512', d: 'M344 0H488c13.3 0 24 10.7 24 24V168c0 9.7-5.8 18.5-14.8 22.2s-19.3 1.7-26.2-5.2l-39-39-87 87c-9.4 9.4-24.6 9.4-33.9 0l-32-32c-9.4-9.4-9.4-24.6 0-33.9l87-87L327 41c-6.9-6.9-8.9-17.2-5.2-26.2S334.3 0 344 0zM168 512H24c-13.3 0-24-10.7-24-24V344c0-9.7 5.8-18.5 14.8-22.2s19.3-1.7 26.2 5.2l39 39 87-87c9.4-9.4 24.6-9.4 33.9 0l32 32c9.4 9.4 9.4 24.6 0 33.9l-87 87 39 39c6.9 6.9 8.9 17.2 5.2 26.2s-12.5 14.8-22.2 14.8z' },
   share: { vb: '0 0 448 512', d: 'M352 224c53 0 96-43 96-96s-43-96-96-96s-96 43-96 96c0 4 .2 8 .7 11.9l-94.1 47C145.4 170.2 121.9 160 96 160c-53 0-96 43-96 96s43 96 96 96c25.9 0 49.4-10.2 66.6-26.9l94.1 47c-.5 3.9-.7 7.8-.7 11.9c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-25.9 0-49.4 10.2-66.6 26.9l-94.1-47c.5-3.9 .7-7.8 .7-11.9s-.2-8-.7-11.9l94.1-47C302.6 213.8 326.1 224 352 224z' },
   check: { vb: '0 0 448 512', d: 'M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z' },
   fileAlt: { vb: '0 0 384 512', d: 'M0 64C0 28.7 28.7 0 64 0H224V128c0 17.7 14.3 32 32 32H384V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm384 64H256V0L384 128z' },
@@ -106,11 +105,8 @@ const onImagePointerMove = (event: PointerEvent) => {
 const onImagePointerUp = (event: PointerEvent) => {
   if (!isPanning.value) return;
   isPanning.value = false;
-  try {
-    (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
-  } catch {
-    /* noop */
-  }
+  const target = event.currentTarget as HTMLElement;
+  if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
 };
 
 const onImageDoubleClick = (event: MouseEvent) => {
@@ -161,18 +157,6 @@ const linkRows = computed(() => {
   ];
 });
 
-const formatBytes = (bytes: number): string => {
-  if (bytes <= 0) return '未记录';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(unit === 0 ? 0 : 2)} ${units[unit]}`;
-};
-
 const formatDateTime = (value: string | null | undefined): string => {
   if (!value) return '未记录';
   const date = new Date(value);
@@ -217,50 +201,12 @@ const exifRows = computed(() => {
   ];
 });
 
-const tagsFromImage = (image: ImageRecord | null | undefined): string[] => {
-  if (!image?.tags_json) return [];
-  try {
-    const parsed = JSON.parse(image.tags_json) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((tag): tag is string => typeof tag === 'string')
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
-
 const tagsTextFromImage = (image: ImageRecord | null | undefined): string => tagsFromImage(image).join(', ');
 
 const aiTags = computed(() => tagsFromImage(props.image));
 
-const paletteFromImage = (image: ImageRecord | null | undefined): string[] => {
-  if (!image?.color_palette_json) return [];
-  try {
-    const parsed = JSON.parse(image.color_palette_json) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((color): color is string => typeof color === 'string')
-      .map((color) => color.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
-
 const paletteTextFromImage = (image: ImageRecord | null | undefined): string =>
   paletteFromImage(image).join(', ');
-
-const parseDominantColor = (value: string | null | undefined): { name: string; hex: string } => {
-  const raw = value?.trim() ?? '';
-  const hex = raw.match(/#[0-9a-fA-F]{6}\b/)?.[0].toUpperCase() ?? '';
-  const name = hex ? raw.replace(new RegExp(hex, 'i'), '').trim() : raw;
-  return {
-    name: name || raw || '未记录',
-    hex,
-  };
-};
 
 const aiPalette = computed(() => paletteFromImage(props.image));
 const dominantColor = computed(() => parseDominantColor(props.image?.dominant_color));
@@ -569,9 +515,6 @@ onBeforeUnmount(() => {
                 <button v-else-if="isAdmin" type="button" class="viewer-action-btn" title="下载原图" aria-label="下载原图" disabled>
                   <svg :viewBox="ICONS.download.vb" fill="currentColor" class="h-4 w-4" aria-hidden="true"><path :d="ICONS.download.d" /></svg>
                 </button>
-                <button type="button" class="viewer-action-btn" title="全屏" aria-label="全屏（阶段 7 接入）" disabled>
-                  <svg :viewBox="ICONS.expand.vb" fill="currentColor" class="h-3.5 w-3.5" aria-hidden="true"><path :d="ICONS.expand.d" /></svg>
-                </button>
                 <button
                   v-if="isAdmin"
                   type="button"
@@ -786,7 +729,7 @@ onBeforeUnmount(() => {
                     <div class="detail-item is-column">
                       <span class="item-label">描述</span>
                       <p v-if="image.caption" class="item-description">{{ image.caption }}</p>
-                      <p v-else class="item-description text-muted">阶段 11 接入 AI 描述</p>
+                      <p v-else class="item-description text-muted">暂无描述</p>
                     </div>
                     <div class="detail-item is-column">
                       <span class="item-label">标签</span>

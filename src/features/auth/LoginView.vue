@@ -3,8 +3,7 @@ import { onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppShell from '@/shared/ui/AppShell.vue';
 import { isAdmin, refreshAdmin } from '@/shared/auth/useAdmin';
-// 阶段 6：Cloudflare Access 使用内置 OTP，访问 /upload 等管理路径
-// 会被边缘拦截到邮箱一次性验证码页。这页本身始终公开，作为说明入口。
+// Cloudflare Access 会把管理路径拦截到邮箱一次性验证码页；这页始终公开，作为说明入口。
 // 本地开发用 header 切换角色时，登录页要主动消费 redirect 查询，避免卡住。
 
 const route = useRoute();

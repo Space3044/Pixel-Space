@@ -91,6 +91,24 @@ await test('archiveOriginalToTelegram reports Telegram failure without leaking t
   );
 });
 
+await test('archiveOriginalToTelegram reports invalid Telegram JSON explicitly', async () => {
+  await withMockedFetch(
+    async () => new Response('not-json', { status: 502 }),
+    async () => {
+      await assert.rejects(
+        () =>
+          archiveOriginalToTelegram({
+            token: 'token-test',
+            chatId: '-100123',
+            file: new File(['original-bytes'], 'cat.jpg', { type: 'image/jpeg' }),
+            key: 'image-key',
+          }),
+        /telegram_archive_failed: invalid_json/,
+      );
+    },
+  );
+});
+
 await test('getTelegramFileUrl resolves the Telegram file download URL', async () => {
   const requests = [];
 
