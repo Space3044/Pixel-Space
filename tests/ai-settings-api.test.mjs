@@ -57,6 +57,23 @@ await test('GET /api/admin/ai-settings returns proxy URL, model and prompt witho
   assert.equal('proxy_key' in data, false);
 });
 
+await test('GET /api/admin/ai-settings returns the database prompt without backend fallback', async () => {
+  const { env } = makeEnv({
+    proxy_url: '',
+    model: '',
+    prompt: '',
+  });
+  const response = await onRequestGet({ env, params: {}, request: new Request('http://localhost/api/admin/ai-settings') });
+
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.deepEqual(data, {
+    proxy_url: '',
+    model: '',
+    prompt: '',
+  });
+});
+
 await test('PATCH /api/admin/ai-settings upserts proxy URL, model and prompt only', async () => {
   const { env, calls } = makeEnv({
     proxy_url: 'https://new-cpa.test/v1/chat/completions',

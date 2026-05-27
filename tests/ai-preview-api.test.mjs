@@ -27,7 +27,11 @@ const makeRequest = (file = new File(['webp-bytes'], 'cat.webp', { type: 'image/
   return new Request('http://localhost/api/ai/preview', { method: 'POST', body: formData });
 };
 
-const makeEnv = (settings = { proxy_url: 'https://cpa.test/v1/chat/completions', model: 'image-tagger' }) => {
+const DATABASE_PROMPT = '数据库系统提示词：只输出 JSON';
+
+const makeEnv = (
+  settings = { proxy_url: 'https://cpa.test/v1/chat/completions', model: 'image-tagger', prompt: DATABASE_PROMPT },
+) => {
   const calls = {
     prepared: [],
   };
@@ -81,20 +85,7 @@ await test('POST /api/ai/preview calls CPA with configured URL and model and ret
   const body = JSON.parse(proxyRequests[0].init.body);
   assert.equal(body.model, 'image-tagger');
   assert.equal(body.messages[0].role, 'system');
-  assert.match(body.messages[0].content, /# 图片结构化分析专家/);
-  assert.match(body.messages[0].content, /主体识别/);
-  assert.match(body.messages[0].content, /摄影作品标题/);
-  assert.match(body.messages[0].content, /画面感/);
-  assert.match(body.messages[0].content, /主体、环境、构图、光线、色彩和情绪/);
-  assert.match(body.messages[0].content, /主体、场景、色彩、风格、情绪、构图/);
-  assert.match(body.messages[0].content, /dominant_color/);
-  assert.match(body.messages[0].content, /palette/);
-  assert.match(body.messages[0].content, /composition/);
-  assert.match(body.messages[0].content, /主色调/);
-  assert.match(body.messages[0].content, /色板/);
-  assert.match(body.messages[0].content, /上位词/);
-  assert.match(body.messages[0].content, /去重/);
-  assert.match(body.messages[0].content, /只输出一个合法的 JSON 对象/);
+  assert.equal(body.messages[0].content, DATABASE_PROMPT);
   assert.doesNotMatch(body.messages[0].content, /ocr_text/i);
   assert.equal(body.messages[1].role, 'user');
   assert.match(JSON.stringify(body.messages[1]), /直接输出符合上述 Schema 的 JSON 对象/);
