@@ -120,8 +120,8 @@ await test('GET /api/list returns ImageRecord[] with expected field set', async 
   assert.equal(data[0].exif_camera, 'Nikon Zf');
   assert.equal(data[0].exif_focal_length, 40);
   assert.equal(data[0].ai_status, 'pending');
-  assert.equal(data[0].created_at, '2026-05-20 10:11:12');
-  assert.equal(data[0].updated_at, '2026-05-21 12:13:14');
+  assert.equal(data[0].created_at, '2026-05-20T10:11:12.000Z');
+  assert.equal(data[0].updated_at, '2026-05-21T12:13:14.000Z');
   assert.equal(data[0].is_public, 1);
   assert.equal(data[0].location_public, 1);
   assert.equal(data[0].folder_id, null);
@@ -181,8 +181,8 @@ await test('GET /api/image/:key returns single ImageRecord', async () => {
   assert.equal(data.original_filename, 'DSC_7983.NEF');
   assert.equal(data.exif_taken_at, '2025-08-26T02:08:37.000Z');
   assert.equal(data.exif_iso, 400);
-  assert.equal(data.created_at, '2026-05-20 10:11:12');
-  assert.equal(data.updated_at, '2026-05-21 12:13:14');
+  assert.equal(data.created_at, '2026-05-20T10:11:12.000Z');
+  assert.equal(data.updated_at, '2026-05-21T12:13:14.000Z');
 });
 
 await test('GET /api/image/:key returns 404 when row missing', async () => {

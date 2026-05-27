@@ -135,6 +135,15 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /\.image-canvas\.has-drawer\s*\{[^}]*right:\s*420px;/s);
 });
 
+test('ImageLightbox formats detail timestamps in Beijing time', () => {
+  assert.match(lightbox, /new Intl\.DateTimeFormat\('zh-CN',\s*\{[\s\S]*timeZone:\s*'Asia\/Shanghai'/);
+  assert.doesNotMatch(lightbox, /D1_UTC_DATE_TIME_PATTERN|assumeUtc/);
+  assert.match(lightbox, /const formatExifTakenAt = \(value: string \| null \| undefined\): string =>\s*formatDateTime\(value\)/);
+  assert.match(lightbox, /const formatImageTimestamp = \(value: string \| null \| undefined\): string =>\s*formatDateTime\(value\)/);
+  assert.match(lightbox, /formatImageTimestamp\(image\.created_at\)/);
+  assert.match(lightbox, /formatImageTimestamp\(image\.updated_at\)/);
+});
+
 test('ImageLightbox uses the PixelPunk-style viewer scale and icon controls', () => {
   assert.match(lightbox, /class="cyber-image-viewer"/);
   assert.match(lightbox, /class="navigation-bar"/);

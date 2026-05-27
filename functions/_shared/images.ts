@@ -99,6 +99,14 @@ export const normalizeColorPaletteJson = (value: unknown): string | null => {
   return colors.length > 0 ? JSON.stringify([...new Set(colors)]) : null;
 };
 
+const D1_UTC_DATE_TIME_PATTERN = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+
+export function normalizeD1UtcTimestamp(value: string): string {
+  const timestamp = D1_UTC_DATE_TIME_PATTERN.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
 export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
   return {
     key: row.key,
@@ -124,8 +132,8 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     color_palette_json: row.color_palette_json,
     composition: row.composition,
     ai_status: row.ai_status,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: normalizeD1UtcTimestamp(row.created_at),
+    updated_at: normalizeD1UtcTimestamp(row.updated_at),
     is_public: row.is_public,
     location_public: row.location_public,
     folder_id: row.folder_id,

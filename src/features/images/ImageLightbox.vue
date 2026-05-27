@@ -178,6 +178,7 @@ const formatDateTime = (value: string | null | undefined): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -188,8 +189,10 @@ const formatDateTime = (value: string | null | undefined): string => {
   }).format(date);
 };
 
-const formatExifTakenAt = formatDateTime;
-const formatImageTimestamp = formatDateTime;
+const formatExifTakenAt = (value: string | null | undefined): string =>
+  formatDateTime(value);
+const formatImageTimestamp = (value: string | null | undefined): string =>
+  formatDateTime(value);
 
 const exifRows = computed(() => {
   const image = props.image;

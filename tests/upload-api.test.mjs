@@ -226,8 +226,8 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
   assert.equal(data.ai_status, 'done');
-  assert.equal(data.created_at, '2026-05-20 10:11:12');
-  assert.equal(data.updated_at, '2026-05-20 10:11:12');
+  assert.equal(data.created_at, '2026-05-20T10:11:12.000Z');
+  assert.equal(data.updated_at, '2026-05-20T10:11:12.000Z');
   assert.equal(data.is_public, 1);
   assert.equal(data.location_public, 1);
   assert.equal(data.folder_id, null);

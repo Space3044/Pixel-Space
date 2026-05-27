@@ -134,8 +134,8 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.equal(data.original_filename, 'cat.jpg');
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
-  assert.equal(data.created_at, '2026-05-20 10:11:12');
-  assert.equal(data.updated_at, '2026-05-21 12:13:14');
+  assert.equal(data.created_at, '2026-05-20T10:11:12.000Z');
+  assert.equal(data.updated_at, '2026-05-21T12:13:14.000Z');
   assert.equal(data.is_public, 1);
   assert.equal(data.location_public, 1);
   assert.equal(data.folder_id, null);
