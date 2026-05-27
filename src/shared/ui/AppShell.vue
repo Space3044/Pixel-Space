@@ -54,11 +54,11 @@ const navLinks: { to: string; label: string; icon: IconName }[] = [
   { to: '/', label: '首页', icon: 'home' },
   { to: '/images', label: '探索', icon: 'images' },
   { to: '/random', label: '随机', icon: 'random' },
-  { to: '/upload', label: '上传', icon: 'upload' },
   { to: '/hive', label: '足迹', icon: 'hive' },
 ];
 
 const adminNavLinks: { to: string; label: string; icon: IconName }[] = [
+  { to: '/upload', label: '上传', icon: 'upload' },
   { to: '/library', label: '控制台', icon: 'sliders' },
 ];
 
