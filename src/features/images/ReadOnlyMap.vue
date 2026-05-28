@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from '@/features/upload/map-style';
+import {
+  mapLngLatFromStored,
+  storedLngLatFromMap,
+} from '@/features/upload/map-coordinate';
+import { loadAmap } from '@/features/upload/amap';
+import type { AMapClickEvent, AMapMap, AMapMarker, AMapNamespace } from '@/features/upload/amap';
 
 const DEFAULT_CENTER = { lat: 31.2304, lng: 121.4737 };
 
@@ -21,13 +24,17 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ pick: [coords: { lat: number; lng: number }] }>();
 
 const mapEl = ref<HTMLElement | null>(null);
-let map: MapLibreMap | null = null;
-let marker: Marker | null = null;
-let maplibre: typeof import('maplibre-gl') | null = null;
+let map: AMapMap | null = null;
+let marker: AMapMarker | null = null;
+let amap: AMapNamespace | null = null;
 
 const createMarkerElement = () => {
   const el = document.createElement('span');
-  el.className = 'readonly-map-marker';
+  el.className = 'readonly-map-marker map-location-pin';
+  el.setAttribute('aria-hidden', 'true');
+  const dot = document.createElement('span');
+  dot.className = 'map-location-pin-dot';
+  el.appendChild(dot);
   return el;
 };
 
@@ -39,60 +46,68 @@ const getCoordinates = () => {
 
 const mapCenter = (): [number, number] => {
   const coordinates = getCoordinates();
-  return coordinates
-    ? [coordinates.lng, coordinates.lat]
-    : [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat];
+  const mapCoordinate = coordinates ? mapLngLatFromStored(coordinates) : null;
+  const defaultCenter = mapLngLatFromStored(DEFAULT_CENTER);
+  return mapCoordinate
+    ? [mapCoordinate.lng, mapCoordinate.lat]
+    : [defaultCenter.lng, defaultCenter.lat];
 };
 
 const placeMarker = () => {
-  if (!map || !maplibre) return;
+  if (!map || !amap) return;
   const coordinates = getCoordinates();
-  marker?.remove();
+  marker?.setMap(null);
   marker = null;
   map.setCenter(mapCenter());
   if (!coordinates) return;
-  marker = new maplibre.Marker({ element: createMarkerElement(), anchor: 'center' })
-    .setLngLat([coordinates.lng, coordinates.lat])
-    .addTo(map);
+  const mapCoordinate = mapLngLatFromStored(coordinates);
+  marker = new amap.Marker({
+    position: [mapCoordinate.lng, mapCoordinate.lat],
+    content: createMarkerElement(),
+    anchor: 'bottom-center',
+  });
+  marker.setMap(map);
 };
 
 const setInteractionState = (enabled: boolean) => {
   if (!map) return;
-  const method = enabled ? 'enable' : 'disable';
-  map.dragPan[method]();
-  map.scrollZoom[method]();
-  map.boxZoom[method]();
-  map.dragRotate[method]();
-  map.keyboard[method]();
-  map.doubleClickZoom[method]();
-  map.touchZoomRotate[method]();
+  map.setStatus?.({
+    dragEnable: enabled,
+    zoomEnable: enabled,
+    doubleClickZoom: enabled,
+    keyboardEnable: enabled,
+  });
 };
 
-const handleMapClick = (event: MapMouseEvent) => {
+const handleMapClick = (event: AMapClickEvent) => {
   if (!props.interactive) return;
+  const storedCoordinate = storedLngLatFromMap({
+    lng: event.lnglat.getLng(),
+    lat: event.lnglat.getLat(),
+  });
   emit('pick', {
-    lat: Number(event.lngLat.lat.toFixed(6)),
-    lng: Number(event.lngLat.lng.toFixed(6)),
+    lat: Number(storedCoordinate.lat.toFixed(6)),
+    lng: Number(storedCoordinate.lng.toFixed(6)),
   });
 };
 
 const initMap = async () => {
   if (!mapEl.value || map) return;
-  maplibre = await import('maplibre-gl');
-  map = new maplibre.Map({
-    container: mapEl.value,
-    style: MAP_STYLE_URL,
+  amap = await loadAmap();
+  if (!mapEl.value || map) return;
+  map = new amap.Map(mapEl.value, {
     center: mapCenter(),
     zoom: 10,
-    attributionControl: false,
-    interactive: props.interactive,
+    lang: 'zh_cn',
+    viewMode: '2D',
+    dragEnable: props.interactive,
+    zoomEnable: props.interactive,
+    doubleClickZoom: props.interactive,
+    keyboardEnable: props.interactive,
   });
   map.on('click', handleMapClick);
   setInteractionState(props.interactive);
-  map.once('error', () => {
-    if (map) map.setStyle(RASTER_FALLBACK_STYLE);
-  });
-  map.once('load', placeMarker);
+  placeMarker();
 };
 
 onMounted(() => {
@@ -110,12 +125,12 @@ watch(
 );
 
 onBeforeUnmount(() => {
-  marker?.remove();
+  marker?.setMap(null);
   marker = null;
   map?.off('click', handleMapClick);
-  map?.remove();
+  map?.destroy();
   map = null;
-  maplibre = null;
+  amap = null;
 });
 </script>
 
@@ -144,15 +159,40 @@ onBeforeUnmount(() => {
 }
 
 :deep(.readonly-map-marker) {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: rgb(255, 79, 216);
-  border: 2px solid rgb(255, 255, 255);
-  box-shadow: 0 0 0 5px rgba(255, 79, 216, 0.25), 0 0 18px rgba(255, 79, 216, 0.8);
+  --pin-color: rgb(255, 79, 216);
+  --pin-glow: rgba(255, 79, 216, 0.48);
 }
 
-:deep(.maplibregl-canvas) {
+:deep(.map-location-pin) {
+  position: relative;
+  display: block;
+  width: 1.65rem;
+  height: 2.15rem;
+  filter: drop-shadow(0 0 12px var(--pin-glow));
+}
+
+:deep(.map-location-pin::before) {
+  position: absolute;
+  inset: 0.05rem 0.08rem 0.2rem;
+  content: '';
+  background: linear-gradient(145deg, rgb(255, 255, 255), var(--pin-color) 28%, rgb(159, 18, 120));
+  border: 2px solid rgb(255, 255, 255);
+  clip-path: polygon(50% 100%, 14% 50%, 14% 20%, 30% 4%, 70% 4%, 86% 20%, 86% 50%);
+}
+
+:deep(.map-location-pin-dot) {
+  position: absolute;
+  top: 0.48rem;
+  left: 50%;
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: rgb(255, 255, 255);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+  transform: translateX(-50%);
+}
+
+:deep(.amap-container) {
   outline: none;
 }
 </style>

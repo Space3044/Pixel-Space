@@ -8,7 +8,8 @@ export interface Env {
   TG_BOT_TOKEN: string;
   TG_CHAT_ID: string;
   PROXY_KEY: string;
-  AMAP_KEY?: string;
+  AMAP_JS_KEY?: string;
+  AMAP_SECURITY_JS_CODE?: string;
   MAPTILER_KEY?: string;
   // 仅本地开发可用。线上 (request.cf 存在) 时被强制忽略，绝不参与生产鉴权。
   // 取值: 'admin' | 'visitor'，缺省视为 'admin'。

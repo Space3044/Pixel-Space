@@ -2,8 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import imageCompression from 'browser-image-compression';
 import exifr from 'exifr';
-import type { Map as MapLibreMap, MapMouseEvent, Marker } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 
 import AppShell from '@/shared/ui/AppShell.vue';
 import LocationSearch from '@/features/images/LocationSearch.vue';
@@ -13,8 +11,10 @@ import type { GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkImageHash } from '@/features/images/images.api';
+import { mapLngLatFromStored, storedLngLatFromMap } from './map-coordinate';
 import { formatExifTakenAt, normalizeExif } from './exif';
-import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from './map-style';
+import { loadAmap } from './amap';
+import type { AMapClickEvent, AMapMap, AMapMarker, AMapNamespace } from './amap';
 import { previewAiAnnotation } from './ai-preview.api';
 import { uploadImage } from './upload.api';
 import { buildUploadFormData } from './upload-form';
@@ -23,10 +23,11 @@ import type { UploadDimensions, UploadExif, UploadMeta } from './upload.types';
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 const MAX_EDGE = 2048;
 const DEFAULT_CENTER = { lat: 31.2304, lng: 121.4737 };
+const DEFAULT_MAP_CENTER = mapLngLatFromStored(DEFAULT_CENTER);
 
 type EntryStatus = 'processing' | 'ready' | 'uploading' | 'done' | 'error';
 type AiStatus = 'idle' | 'pending' | 'done' | 'failed';
-type MapLoadState = 'loading' | 'ready' | 'fallback';
+type MapLoadState = 'loading' | 'ready';
 
 interface UploadEntry {
   id: string;
@@ -112,10 +113,9 @@ const batchFolderId = ref<string>('');
 const syncLocation = ref<boolean>(false);
 const folders = ref<FolderRecord[]>([]);
 
-let map: MapLibreMap | null = null;
-let marker: Marker | null = null;
-let maplibre: typeof import('maplibre-gl') | null = null;
-let usingFallbackStyle = false;
+let map: AMapMap | null = null;
+let marker: AMapMarker | null = null;
+let amap: AMapNamespace | null = null;
 
 const currentEntry = computed(() => entries.value.find((entry) => entry.id === currentEntryId.value) ?? null);
 const hasCurrent = computed(() => currentEntry.value !== null);
@@ -200,39 +200,46 @@ const releaseEntryPreview = (entry: UploadEntry) => {
 
 const createMapMarkerElement = (): HTMLSpanElement => {
   const element = document.createElement('span');
-  element.className = 'map-marker';
+  element.className = 'map-marker map-location-pin';
   element.setAttribute('aria-hidden', 'true');
+  const dot = document.createElement('span');
+  dot.className = 'map-location-pin-dot';
+  element.appendChild(dot);
   return element;
 };
 
-const loadMapLibre = async () => {
-  maplibre ??= await import('maplibre-gl');
-  return maplibre;
-};
-
-const updateMapMarker = (centerMap = false) => {
-  if (!map || !maplibre) return;
+const currentStoredCoordinate = () => {
   const entry = currentEntry.value;
   const lat = entry?.meta.location_lat ?? null;
   const lng = entry?.meta.location_lng ?? null;
+  return lat === null || lng === null ? null : { lng, lat };
+};
 
-  if (lat === null || lng === null) {
-    marker?.remove();
+const updateMapMarker = (centerMap = false) => {
+  if (!map || !amap) return;
+  const coordinate = currentStoredCoordinate();
+
+  if (!coordinate) {
+    marker?.setMap(null);
     marker = null;
     return;
   }
 
-  const lngLat: [number, number] = [lng, lat];
+  const mapCoordinate = mapLngLatFromStored(coordinate);
+  const lngLat: [number, number] = [mapCoordinate.lng, mapCoordinate.lat];
   if (!marker) {
-    marker = new maplibre.Marker({ element: createMapMarkerElement(), anchor: 'center' })
-      .setLngLat(lngLat)
-      .addTo(map);
+    marker = new amap.Marker({
+      position: lngLat,
+      content: createMapMarkerElement(),
+      anchor: 'bottom-center',
+    });
+    marker.setMap(map);
   } else {
-    marker.setLngLat(lngLat);
+    marker.setPosition(lngLat);
   }
 
   if (centerMap)
-    map.easeTo({ center: lngLat, zoom: Math.max(map.getZoom(), 12), duration: 350 });
+    map.setZoomAndCenter(Math.max(map.getZoom(), 12), lngLat);
 };
 
 const setEntryCoordinates = (entry: UploadEntry, lat: number | null, lng: number | null, centerMap = true) => {
@@ -267,50 +274,33 @@ const loadFolders = async () => {
   }
 };
 
-const useRasterFallbackStyle = () => {
-  if (!map || usingFallbackStyle) return;
-  usingFallbackStyle = true;
-  mapLoadState.value = 'fallback';
-  map.setStyle(RASTER_FALLBACK_STYLE);
-};
-
 const initMap = async () => {
   if (!mapRef.value || map) return;
-  const maplibreGl = await loadMapLibre();
+  amap = await loadAmap();
   if (!mapRef.value || map) return;
 
-  map = new maplibreGl.Map({
-    container: mapRef.value,
-    style: MAP_STYLE_URL,
-    center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
+  map = new amap.Map(mapRef.value, {
+    center: [DEFAULT_MAP_CENTER.lng, DEFAULT_MAP_CENTER.lat],
     zoom: 9,
-    attributionControl: false,
+    lang: 'zh_cn',
+    viewMode: '2D',
+    resizeEnable: true,
   });
-  map.addControl(
-    new maplibreGl.NavigationControl({ showCompass: true, showZoom: true }),
-    'top-right',
-  );
+  map.addControl(new amap.ToolBar({ position: 'RT' }));
+  map.addControl(new amap.Scale());
+  mapLoadState.value = 'ready';
 
-  const fallbackTimer = window.setTimeout(() => {
-    if (mapLoadState.value === 'loading') useRasterFallbackStyle();
-  }, 5000);
-
-  map.once('idle', () => {
-    window.clearTimeout(fallbackTimer);
-    if (!usingFallbackStyle) mapLoadState.value = 'ready';
-  });
-
-  map.on('error', () => {
-    useRasterFallbackStyle();
-  });
-
-  map.on('click', (event: MapMouseEvent) => {
+  map.on('click', (event: AMapClickEvent) => {
     const entry = currentEntry.value;
     if (!entry) return;
+    const storedCoordinate = storedLngLatFromMap({
+      lng: event.lnglat.getLng(),
+      lat: event.lnglat.getLat(),
+    });
     setEntryCoordinates(
       entry,
-      Number(event.lngLat.lat.toFixed(6)),
-      Number(event.lngLat.lng.toFixed(6)),
+      Number(storedCoordinate.lat.toFixed(6)),
+      Number(storedCoordinate.lng.toFixed(6)),
       false,
     );
   });
@@ -645,7 +635,7 @@ watch(currentEntryId, () => {
       return;
     }
     updateMapMarker(true);
-    map?.resize();
+    map?.resize?.();
   });
 });
 
@@ -678,11 +668,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   for (const entry of entries.value) releaseEntryPreview(entry);
-  marker?.remove();
-  map?.remove();
+  marker?.setMap(null);
+  map?.destroy();
   marker = null;
   map = null;
-  maplibre = null;
+  amap = null;
 });
 </script>
 
@@ -1084,7 +1074,7 @@ onBeforeUnmount(() => {
                 <LocationSearch class="location-search" @select="applyLocationSearchResult" />
                 <div ref="mapRef" class="map-pane" aria-label="点击地图选择图片位置"></div>
                 <p v-if="mapLoadState !== 'ready'" class="map-status">
-                  {{ mapLoadState === 'fallback' ? '矢量地图加载慢，已切到深色备用底图' : '正在加载地图' }}
+                  正在加载地图
                 </p>
                 <div class="map-coords">
                   <label class="field">
@@ -2188,11 +2178,12 @@ onBeforeUnmount(() => {
   background: rgba(7, 7, 19, 0.72);
 }
 
-.map-pane :deep(.maplibregl-canvas) {
+.map-pane :deep(.amap-container) {
   outline: none;
 }
 
-.map-pane :deep(.maplibregl-ctrl-group) {
+.map-pane :deep(.amap-toolbar),
+.map-pane :deep(.amap-scalecontrol) {
   overflow: hidden;
   border: 1px solid rgba(53, 243, 255, 0.24);
   border-radius: 0.4rem;
@@ -2200,25 +2191,46 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 18px rgba(53, 243, 255, 0.12);
 }
 
-.map-pane :deep(.maplibregl-ctrl button) {
+.map-pane :deep(.amap-toolbar button) {
   background-color: transparent;
 }
 
-.map-pane :deep(.maplibregl-ctrl button:hover) {
+.map-pane :deep(.amap-toolbar button:hover) {
   background-color: rgba(53, 243, 255, 0.16);
 }
 
-.map-pane :deep(.maplibregl-ctrl-icon) {
-  filter: invert(1) drop-shadow(0 0 4px rgba(53, 243, 255, 0.45));
+.map-pane :deep(.map-marker) {
+  --pin-color: rgb(53, 243, 255);
+  --pin-glow: rgba(53, 243, 255, 0.48);
 }
 
-.map-pane :deep(.map-marker) {
-  width: 1.1rem;
-  height: 1.1rem;
-  border-radius: 50%;
+.map-pane :deep(.map-location-pin) {
+  position: relative;
+  display: block;
+  width: 1.65rem;
+  height: 2.15rem;
+  filter: drop-shadow(0 0 12px var(--pin-glow));
+}
+
+.map-pane :deep(.map-location-pin::before) {
+  position: absolute;
+  inset: 0.05rem 0.08rem 0.2rem;
+  content: '';
+  background: linear-gradient(145deg, rgb(255, 255, 255), var(--pin-color) 28%, rgb(8, 145, 178));
   border: 2px solid rgb(255, 255, 255);
-  background: rgb(53, 243, 255);
-  box-shadow: 0 0 0 0 rgba(53, 243, 255, 0.55), 0 0 18px rgba(53, 243, 255, 0.9);
+  clip-path: polygon(50% 100%, 14% 50%, 14% 20%, 30% 4%, 70% 4%, 86% 20%, 86% 50%);
+}
+
+.map-pane :deep(.map-location-pin-dot) {
+  position: absolute;
+  top: 0.48rem;
+  left: 50%;
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: rgb(255, 255, 255);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+  transform: translateX(-50%);
 }
 
 .map-status {

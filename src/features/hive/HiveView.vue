@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { GeoJSONSource, Map as MapLibreMap, Marker } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { listImages } from '@/features/images/images.api';
-import { MAP_STYLE_URL, RASTER_FALLBACK_STYLE } from '@/features/upload/map-style';
+import { loadAmap } from '@/features/upload/amap';
+import type { AMapMap, AMapMarker, AMapNamespace } from '@/features/upload/amap';
+import { mapLngLatFromStored } from '@/features/upload/map-coordinate';
 import WorldBoundaryGlobe from './WorldBoundaryGlobe.vue';
 
 interface LocatedImage extends ImageRecord {
@@ -22,34 +22,37 @@ interface FootprintGroup {
   images: ImageRecord[];
 }
 
-const DEFAULT_CENTER: [number, number] = [104.1954, 35.8617];
+const mapPointFromStored = (lng: number, lat: number): [number, number] => {
+  const coordinate = mapLngLatFromStored({ lng, lat });
+  return [coordinate.lng, coordinate.lat];
+};
+
+const DEFAULT_CENTER_COORDINATE = mapLngLatFromStored({ lng: 104.1954, lat: 35.8617 });
+const DEFAULT_CENTER: [number, number] = [DEFAULT_CENTER_COORDINATE.lng, DEFAULT_CENTER_COORDINATE.lat];
 const FLAT_ZOOM = 3;
-const FLAT_FOCUS_ZOOM = 8;
-const FOOTPRINT_SOURCE_ID = 'footprints-source';
-const FOOTPRINT_GLOW_LAYER_ID = 'footprints-glow-layer';
-const FOOTPRINT_POINT_LAYER_ID = 'footprints-point-layer';
-const HEATMAP_FADE_START = 5;
-const HEATMAP_FADE_END = 8;
-const MARKER_FADE_IN = 6;
-const MARKER_MIN_ZOOM = MARKER_FADE_IN - 0.5;
+const FLAT_FOCUS_ZOOM = 12;
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 18;
+const TRACK_HEIGHT = 120;
+const THUMB_SIZE = 13;
 
 const flatMapEl = ref<HTMLElement | null>(null);
+const sliderEl = ref<HTMLElement | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 const images = ref<ImageRecord[]>([]);
 const activeFootprintKey = ref<string | null>(null);
 const hoveredFootprintKey = ref<string | null>(null);
 const currentZoom = ref(FLAT_ZOOM);
-const zoomMin = ref(0);
-const zoomMax = ref(22);
+const zoomMin = ref(ZOOM_MIN);
+const zoomMax = ref(ZOOM_MAX);
 const zoomReady = ref(false);
+const dragging = ref(false);
 
-let flatMap: MapLibreMap | null = null;
-let maplibre: typeof import('maplibre-gl') | null = null;
-let maplibrePromise: Promise<typeof import('maplibre-gl')> | null = null;
-let markersByKey = new Map<string, Marker>();
+let flatMap: AMapMap | null = null;
+let amap: AMapNamespace | null = null;
+let markersByKey = new Map<string, AMapMarker>();
 let flatMarkerElements = new Map<string, HTMLElement>();
-let sourceReady = false;
 
 const isLocatedImage = (image: ImageRecord): image is LocatedImage =>
   image.location_lat !== null && image.location_lng !== null
@@ -109,58 +112,10 @@ const hoveredFootprint = computed(() =>
   footprints.value.find((footprint) => footprint.key === hoveredFootprintKey.value) ?? null,
 );
 
-const loadMaplibre = async () => {
-  maplibrePromise ??= import('maplibre-gl');
-  maplibre = await maplibrePromise;
-  return maplibre;
-};
-
 const clearAllMarkers = () => {
-  for (const marker of markersByKey.values()) marker.remove();
+  for (const marker of markersByKey.values()) marker.setMap(null);
   markersByKey = new Map();
   flatMarkerElements = new Map();
-};
-
-interface PointFeatureProps {
-  footprintKey: string;
-  weight: number;
-  color: string;
-}
-
-interface RenderedFeature {
-  geometry: { coordinates: [number, number] };
-  properties: PointFeatureProps;
-}
-
-const colorForKey = (key: string): string => {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) {
-    h = ((h << 5) - h) + key.charCodeAt(i);
-    h |= 0;
-  }
-  const hue = Math.abs(h) % 360;
-  return `hsl(${hue}, 82%, 64%)`;
-};
-
-const buildGeoJSON = () => ({
-  type: 'FeatureCollection' as const,
-  features: footprints.value.map((footprint) => ({
-    type: 'Feature' as const,
-    geometry: { type: 'Point' as const, coordinates: [footprint.lng, footprint.lat] },
-    properties: {
-      footprintKey: footprint.key,
-      weight: footprint.images.length,
-      color: colorForKey(footprint.key),
-    },
-  })),
-});
-
-const getFootprintSource = (): GeoJSONSource | null => {
-  return (flatMap?.getSource(FOOTPRINT_SOURCE_ID) as GeoJSONSource | undefined) ?? null;
-};
-
-const closeFlatPopups = () => {
-  for (const marker of markersByKey.values()) marker.getPopup()?.remove();
 };
 
 const updateMarkerStyles = () => {
@@ -172,11 +127,8 @@ const updateMarkerStyles = () => {
 
 const focusFlatMapOn = (footprint: FootprintGroup, zoom = FLAT_FOCUS_ZOOM) => {
   if (!flatMap) return;
-  flatMap.flyTo({
-    center: [footprint.lng, footprint.lat],
-    zoom: Math.max(flatMap.getZoom(), zoom),
-    speed: 0.8,
-  });
+  flatMap.setZoomAndCenter(Math.max(flatMap.getZoom(), zoom), mapPointFromStored(footprint.lng, footprint.lat));
+  currentZoom.value = flatMap.getZoom();
 };
 
 const previewFootprint = (footprint: FootprintGroup | null) => {
@@ -191,9 +143,8 @@ const selectFootprint = (footprint: FootprintGroup) => {
 const resetFlatMapView = () => {
   activeFootprintKey.value = null;
   hoveredFootprintKey.value = null;
-  closeFlatPopups();
   void nextTick(() => {
-    flatMap?.resize();
+    flatMap?.resize?.();
     fitFlatMapToFootprints();
   });
 };
@@ -227,72 +178,80 @@ const createMarkerElement = (footprint: FootprintGroup) => {
   return marker;
 };
 
-const createPopupNode = (footprint: FootprintGroup) => {
-  const root = document.createElement('article');
-  root.className = 'footprint-popup';
+const renderFlatMarkers = () => {
+  if (!flatMap || !amap) return;
 
-  const image = document.createElement('img');
-  image.src = footprint.cover.public_url;
-  image.alt = footprint.cover.title || footprint.cover.original_filename || footprint.name;
-  image.className = 'footprint-popup-image';
-  root.appendChild(image);
+  const nextKeys = new Set<string>();
 
-  const body = document.createElement('div');
-  body.className = 'footprint-popup-body';
+  for (const footprint of footprints.value) {
+    const key = `point_${footprint.key}`;
+    const position = mapPointFromStored(footprint.lng, footprint.lat);
+    nextKeys.add(key);
 
-  const title = document.createElement('strong');
-  title.textContent = footprint.name;
-  body.appendChild(title);
+    const existing = markersByKey.get(key);
+    if (existing) {
+      existing.setPosition(position);
+      continue;
+    }
 
-  const count = document.createElement('span');
-  count.textContent = `${footprint.images.length} 张图片`;
-  body.appendChild(count);
+    const marker = new amap.Marker({
+      position,
+      content: createMarkerElement(footprint),
+      anchor: 'center',
+    });
+    marker.setMap(flatMap);
+    markersByKey.set(key, marker);
+  }
 
-  const link = document.createElement('a');
-  link.href = `/p/${encodeURIComponent(footprint.cover.key)}`;
-  link.textContent = '查看图片';
-  body.appendChild(link);
+  for (const [key, marker] of markersByKey) {
+    if (!nextKeys.has(key)) {
+      marker.setMap(null);
+      markersByKey.delete(key);
+      flatMarkerElements.delete(key.slice('point_'.length));
+    }
+  }
 
-  root.appendChild(body);
-  return root;
+  updateMarkerStyles();
 };
 
 const fitFlatMapToFootprints = () => {
-  if (!flatMap || !maplibre) return;
+  if (!flatMap) return;
+
+  if (activeFootprint.value) {
+    focusFlatMapOn(activeFootprint.value);
+    return;
+  }
 
   if (footprints.value.length === 0) {
     flatMap.setCenter(DEFAULT_CENTER);
     flatMap.setZoom(FLAT_ZOOM);
+    currentZoom.value = FLAT_ZOOM;
     return;
   }
+
+  renderFlatMarkers();
 
   if (footprints.value.length === 1) {
     focusFlatMapOn(footprints.value[0]);
     return;
   }
 
-  const bounds = new maplibre.LngLatBounds();
-  for (const footprint of footprints.value) {
-    bounds.extend([footprint.lng, footprint.lat]);
-  }
-  flatMap.fitBounds(bounds, { padding: 90, maxZoom: 9, duration: 700 });
+  flatMap.setFitView?.([...markersByKey.values()], false, [90, 90, 90, 90], 9);
+  currentZoom.value = flatMap.getZoom();
 };
 
 const zoomBy = (delta: number) => {
   if (!flatMap) return;
   const next = Math.max(zoomMin.value, Math.min(zoomMax.value, flatMap.getZoom() + delta));
-  flatMap.easeTo({ zoom: next, duration: 220 });
+  flatMap.setZoom(next);
+  currentZoom.value = next;
 };
 
 const resetZoom = () => {
   if (!flatMap) return;
-  flatMap.easeTo({ zoom: FLAT_ZOOM, duration: 260 });
+  flatMap.setZoom(FLAT_ZOOM);
+  currentZoom.value = FLAT_ZOOM;
 };
-
-const TRACK_HEIGHT = 120;
-const THUMB_SIZE = 13;
-const sliderEl = ref<HTMLElement | null>(null);
-const dragging = ref(false);
 
 const thumbTop = computed(() => {
   const range = zoomMax.value - zoomMin.value;
@@ -311,6 +270,7 @@ const updateFromClientY = (clientY: number) => {
   const ratio = clamped / usable;
   const value = zoomMax.value - ratio * (zoomMax.value - zoomMin.value);
   flatMap.setZoom(value);
+  currentZoom.value = value;
 };
 
 const onSliderPointerDown = (event: PointerEvent) => {
@@ -349,154 +309,41 @@ const onSliderKeyDown = (event: KeyboardEvent) => {
     zoomBy(-2);
   } else if (event.key === 'Home') {
     event.preventDefault();
-    if (flatMap) flatMap.easeTo({ zoom: zoomMax.value, duration: 200 });
+    if (flatMap) flatMap.setZoom(zoomMax.value);
   } else if (event.key === 'End') {
     event.preventDefault();
-    if (flatMap) flatMap.easeTo({ zoom: zoomMin.value, duration: 200 });
+    if (flatMap) flatMap.setZoom(zoomMin.value);
   }
-};
-
-const renderFlatMarkers = () => {
-  if (!flatMap || !maplibre || !sourceReady) return;
-
-  const nextKeys = new Set<string>();
-
-  if (flatMap.getZoom() >= MARKER_MIN_ZOOM) {
-    const features = flatMap.querySourceFeatures(FOOTPRINT_SOURCE_ID) as unknown as RenderedFeature[];
-
-    for (const feature of features) {
-      const coordinates = feature.geometry.coordinates;
-      const footprintKey = feature.properties.footprintKey;
-      const key = `point_${footprintKey}`;
-
-      if (nextKeys.has(key)) continue;
-      nextKeys.add(key);
-
-      if (markersByKey.has(key)) {
-        markersByKey.get(key)!.setLngLat(coordinates);
-        continue;
-      }
-
-      const footprint = footprints.value.find((fp) => fp.key === footprintKey);
-      if (!footprint) continue;
-
-      const element = createMarkerElement(footprint);
-      const marker = new maplibre.Marker({ element, anchor: 'center' })
-        .setLngLat(coordinates)
-        .setPopup(
-          new maplibre.Popup({ offset: 18, closeButton: false, className: 'footprint-map-popup' })
-            .setDOMContent(createPopupNode(footprint)),
-        )
-        .addTo(flatMap);
-      markersByKey.set(key, marker);
-    }
-  }
-
-  for (const [key, marker] of markersByKey) {
-    if (!nextKeys.has(key)) {
-      marker.remove();
-      markersByKey.delete(key);
-      if (key.startsWith('point_')) {
-        const footprintKey = key.slice('point_'.length);
-        flatMarkerElements.delete(footprintKey);
-      }
-    }
-  }
-
-  updateMarkerStyles();
-};
-
-const ensureFootprintLayers = () => {
-  if (!flatMap) return;
-  if (flatMap.getSource(FOOTPRINT_SOURCE_ID)) return;
-
-  flatMap.addSource(FOOTPRINT_SOURCE_ID, {
-    type: 'geojson',
-    data: buildGeoJSON(),
-  });
-
-  flatMap.addLayer({
-    id: FOOTPRINT_GLOW_LAYER_ID,
-    type: 'circle',
-    source: FOOTPRINT_SOURCE_ID,
-    maxzoom: HEATMAP_FADE_END + 0.5,
-    paint: {
-      'circle-color': ['get', 'color'],
-      'circle-blur': 1.0,
-      'circle-radius': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        0, 12,
-        4, 20,
-        HEATMAP_FADE_END, 30,
-      ],
-      'circle-opacity': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        0, 0.7,
-        HEATMAP_FADE_START, 0.6,
-        HEATMAP_FADE_END, 0,
-      ],
-      'circle-stroke-width': 0,
-    },
-  });
-
-  flatMap.addLayer({
-    id: FOOTPRINT_POINT_LAYER_ID,
-    type: 'circle',
-    source: FOOTPRINT_SOURCE_ID,
-    paint: {
-      'circle-radius': 1,
-      'circle-opacity': 0,
-    },
-  });
+  if (flatMap) currentZoom.value = flatMap.getZoom();
 };
 
 const initFlatMap = async () => {
   if (!flatMapEl.value || flatMap) return;
 
-  maplibre = await loadMaplibre();
-  flatMap = new maplibre.Map({
-    container: flatMapEl.value,
-    style: MAP_STYLE_URL,
+  amap = await loadAmap();
+  if (!flatMapEl.value || flatMap) return;
+
+  flatMap = new amap.Map(flatMapEl.value, {
     center: DEFAULT_CENTER,
     zoom: FLAT_ZOOM,
-    attributionControl: false,
-    renderWorldCopies: false,
-    minZoom: 1,
-    maxZoom: 14,
+    lang: 'zh_cn',
+    viewMode: '2D',
+    resizeEnable: true,
+    zooms: [ZOOM_MIN, ZOOM_MAX],
   });
 
-  zoomMin.value = flatMap.getMinZoom();
-  zoomMax.value = flatMap.getMaxZoom();
+  flatMap.addControl(new amap.ToolBar({ position: 'RT' }));
+  flatMap.addControl(new amap.Scale());
   currentZoom.value = flatMap.getZoom();
   zoomReady.value = true;
-  flatMap.on('zoom', () => {
-    if (flatMap) currentZoom.value = flatMap.getZoom();
-  });
-
-  const onStyleReady = () => {
+  flatMap.on('zoomend', () => {
     if (!flatMap) return;
-    ensureFootprintLayers();
-    fitFlatMapToFootprints();
-  };
-
-  flatMap.once('error', () => {
-    if (!flatMap) return;
-    flatMap.setStyle(RASTER_FALLBACK_STYLE);
-    flatMap.once('styledata', onStyleReady);
-  });
-  flatMap.once('load', onStyleReady);
-
-  flatMap.on('sourcedata', (event) => {
-    if (event.sourceId !== FOOTPRINT_SOURCE_ID || !event.isSourceLoaded) return;
-    sourceReady = true;
+    currentZoom.value = flatMap.getZoom();
     renderFlatMarkers();
   });
   flatMap.on('moveend', renderFlatMarkers);
-  flatMap.on('zoomend', renderFlatMarkers);
+  renderFlatMarkers();
+  fitFlatMapToFootprints();
 };
 
 const loadFootprints = async () => {
@@ -517,10 +364,7 @@ watch(
   footprints,
   () => {
     void nextTick(() => {
-      const source = getFootprintSource();
-      if (!source) return;
-      sourceReady = false;
-      source.setData(buildGeoJSON());
+      renderFlatMarkers();
       fitFlatMapToFootprints();
     });
   },
@@ -529,7 +373,7 @@ watch(
 
 watch([activeFootprint, hoveredFootprint], () => {
   updateMarkerStyles();
-  void nextTick(() => flatMap?.resize());
+  void nextTick(() => flatMap?.resize?.());
 });
 
 onMounted(() => {
@@ -539,11 +383,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearAllMarkers();
-  flatMap?.remove();
+  flatMap?.destroy();
   flatMap = null;
-  maplibre = null;
-  maplibrePromise = null;
-  sourceReady = false;
+  amap = null;
 });
 </script>
 
@@ -1018,7 +860,7 @@ onBeforeUnmount(() => {
   mask-image: radial-gradient(circle at 50% 52%, black, transparent 72%);
 }
 
-:deep(.maplibregl-canvas) {
+:deep(.amap-container) {
   background: transparent;
   outline: none;
 }
@@ -1075,19 +917,6 @@ onBeforeUnmount(() => {
 :deep(.footprint-marker.is-hovered .footprint-marker-ring) {
   border-color: rgba(255, 79, 216, 0.82);
   box-shadow: 0 0 18px rgba(255, 79, 216, 0.5);
-}
-
-:deep(.maplibregl-popup-content) {
-  border: 0;
-  border-radius: 6px;
-  background: rgba(7, 7, 19, 0.9);
-  padding: 0;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(14px);
-}
-
-:deep(.maplibregl-popup-tip) {
-  border-top-color: rgba(7, 7, 19, 0.9);
 }
 
 .zoom-slider {
@@ -1193,62 +1022,6 @@ onBeforeUnmount(() => {
 .zoom-thumb.is-dragging {
   transform: scale(1.2);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(53, 243, 255, 0.22);
-}
-
-:deep(.footprint-popup) {
-  display: grid;
-  grid-template-columns: 4.5rem 9rem;
-  gap: 0.7rem;
-  padding: 0.6rem;
-}
-
-:deep(.footprint-popup-image) {
-  width: 4.5rem;
-  height: 4.5rem;
-  border-radius: 4px;
-  object-fit: cover;
-}
-
-:deep(.footprint-popup-body) {
-  min-width: 0;
-}
-
-:deep(.footprint-popup-body strong),
-:deep(.footprint-popup-body span),
-:deep(.footprint-popup-body a) {
-  display: block;
-}
-
-:deep(.footprint-popup-body strong) {
-  overflow: hidden;
-  color: white;
-  font-size: 0.86rem;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-:deep(.footprint-popup-body span) {
-  margin-top: 0.35rem;
-  color: rgba(148, 163, 184, 0.86);
-  font-size: 0.74rem;
-}
-
-:deep(.footprint-popup-body a) {
-  margin-top: 0.55rem;
-  border: 0;
-  color: rgb(53, 243, 255);
-  font-size: 0.74rem;
-  font-weight: 800;
-  outline: none;
-  box-shadow: none;
-  text-decoration: none;
-}
-
-:deep(.footprint-popup-body a:focus-visible) {
-  outline: none;
-  text-decoration: underline;
-  text-underline-offset: 0.18rem;
 }
 
 @keyframes marker-pulse {

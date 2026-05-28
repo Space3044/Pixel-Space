@@ -214,7 +214,7 @@ onMounted(async () => {
               </svg>
             </div>
             <h3 class="feature-title">足迹与地图</h3>
-            <p class="feature-desc">带坐标的图自动点亮 MapLibre 热力与世界地球，旅行轨迹随上传慢慢长。</p>
+            <p class="feature-desc">带坐标的图自动点亮高德足迹与世界地球，旅行轨迹随上传慢慢长。</p>
           </article>
 
           <article class="feature-card">
