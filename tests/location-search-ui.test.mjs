@@ -26,12 +26,22 @@ test('LocationSearch searches only on submit and emits selected coordinates', ()
   assert.doesNotMatch(locationSearch, /watch\(/);
 });
 
-test('geocode.api calls the backend geocode endpoint with q parameter', () => {
+test('geocode.api uses AMap JS API for domestic search and backend only for global search', () => {
   assert.match(geocodeApi, /export interface GeocodeResult/);
   assert.match(geocodeApi, /export type GeocodeRegion = 'cn' \| 'global'/);
   assert.match(geocodeApi, /export async function searchLocations/);
+  assert.match(geocodeApi, /loadAmap/);
+  assert.match(geocodeApi, /gcj02ToWgs84/);
+  assert.match(geocodeApi, /if \(region === 'cn'\) return await searchAmapLocations\(trimmed\)/);
+  assert.match(geocodeApi, /URLSearchParams\(\{ q: keyword, region: 'global' \}\)/);
   assert.match(geocodeApi, /\/api\/geocode\?\$\{params\.toString\(\)\}/);
-  assert.match(geocodeApi, /URLSearchParams\(\{ q: trimmed, region \}\)/);
+});
+
+test('geocode.api enriches domestic POI names with reverse geocoded administrative regions', () => {
+  assert.match(geocodeApi, /getAddress/);
+  assert.match(geocodeApi, /reverseGeocodeAmapLocation/);
+  assert.match(geocodeApi, /enrichAmapPois/);
+  assert.match(geocodeApi, /normalizeAmapPoi\(row, reverse\)/);
 });
 
 test('LocationSearch lets the user choose domestic or global geocoding', () => {

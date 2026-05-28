@@ -18,11 +18,10 @@ test('HiveView stacks the flat image map above the WorldHeatmap-style globe', ()
   assert.match(view, /import\s+WorldBoundaryGlobe\s+from\s+'\.\/WorldBoundaryGlobe\.vue'/);
   assert.match(view, /import\s+\{\s*listImages\s*\}\s+from\s+'@\/features\/images\/images\.api'/);
   assert.match(view, /type\s+\{\s*ImageRecord\s*\}/);
-  assert.match(view, /import 'maplibre-gl\/dist\/maplibre-gl\.css'/);
-  assert.match(view, /MAP_STYLE_URL,\s*RASTER_FALLBACK_STYLE/);
-  assert.match(view, /new maplibre\.Map/);
-  assert.match(view, /new maplibre\.Marker/);
-  assert.match(view, /new maplibre\.Popup/);
+  assert.match(view, /import\s+\{\s*loadAmap\s*\}\s+from\s+'@\/features\/upload\/amap'/);
+  assert.match(view, /new amap\.Map/);
+  assert.match(view, /new amap\.Marker/);
+  assert.doesNotMatch(view, /maplibre-gl|primaryMapStyleForRegion|RASTER_FALLBACK_STYLE|new maplibre\.Popup/);
   assert.match(view, /class="stacked-map-layout/);
   assert.match(view, /class="flat-map-card/);
   assert.match(view, /class="globe-boundary-card/);
@@ -70,7 +69,7 @@ test('HiveView shows image positions only on the flat map', () => {
   assert.match(view, /lat:\s*footprint\.lat,\s*lng:\s*footprint\.lng/s);
   assert.doesNotMatch(view, /globeMap|renderGlobeMarkers|globeMarkers|createMarkerElement\(footprint,\s*'globe'\)|focusGlobeOn\(footprint\)/);
   assert.match(view, /footprint\.images\.length/);
-  assert.match(view, /footprint\.cover\.public_url/);
+  assert.match(view, /activeFootprint\.cover\.public_url/);
 });
 
 test('HiveView only shows the right side detail after a map point is selected', () => {
@@ -101,8 +100,12 @@ test('HiveView can reset the flat map back to the full overview', () => {
   assert.match(view, />\s*返回总览\s*</);
 });
 
+test('HiveView keeps selected places zoomed in on the AMap global base map', () => {
+  assert.match(view, /const FLAT_FOCUS_ZOOM = 12;/);
+  assert.match(view, /if \(activeFootprint\.value\) \{\s*focusFlatMapOn\(activeFootprint\.value\);\s*return;\s*\}/s);
+  assert.match(view, /flatMap\.on\('moveend', renderFlatMarkers\)/);
+});
+
 test('HiveView removes the popup and link outer frame', () => {
-  assert.match(view, /:deep\(\.maplibregl-popup-content\)\s*\{[^}]*border:\s*0;/s);
-  assert.match(view, /:deep\(\.footprint-popup-body a\)\s*\{[^}]*border:\s*0;[^}]*outline:\s*none;[^}]*box-shadow:\s*none;/s);
-  assert.match(view, /:deep\(\.footprint-popup-body a:focus-visible\)\s*\{[^}]*outline:\s*none;[^}]*text-decoration:\s*underline;/s);
+  assert.doesNotMatch(view, /new amap\.InfoWindow|createPopupNode|footprint-popup|maplibregl-popup/);
 });

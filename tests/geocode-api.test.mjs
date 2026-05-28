@@ -34,7 +34,7 @@ await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 resu
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%A4%96%E6%BB%A9'),
+        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%A4%96%E6%BB%A9&region=global'),
         env: {},
         params: {},
       }),
@@ -63,49 +63,25 @@ await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 resu
   assert.equal(headers.get('referer'), 'https://imgbed.example.com/');
 });
 
-await test('GET /api/geocode uses Amap first for domestic searches and converts GCJ-02 to WGS84', async () => {
-  const requests = [];
+await test('GET /api/geocode keeps domestic searches out of the backend', async () => {
+  let fetchCalled = false;
 
   const response = await withMockedFetch(
-    async (url, init) => {
-      requests.push({ url: String(url), init });
-      return Response.json({
-        status: '1',
-        pois: [
-          {
-            name: '清水宫',
-            pname: '福建省',
-            cityname: '厦门市',
-            adname: '湖里区',
-            address: '清水宫路',
-            location: '118.108622,24.531557',
-          },
-        ],
-      });
+    async () => {
+      fetchCalled = true;
+      return Response.json([]);
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB&region=cn'),
-        env: { AMAP_KEY: 'amap-key' },
+        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%8E%A6%E9%97%A8&region=cn'),
+        env: { MAPTILER_KEY: 'maptiler-key' },
         params: {},
       }),
   );
 
-  assert.equal(response.status, 200);
-  const results = await response.json();
-  assert.equal(results.length, 1);
-  assert.equal(results[0].name, '清水宫，福建省，厦门市，湖里区，清水宫路');
-  assert.ok(Math.abs(results[0].lat - 24.531557) > 0.001);
-  assert.ok(Math.abs(results[0].lng - 118.108622) > 0.001);
-  assert.ok(results[0].lat > 24.52 && results[0].lat < 24.54);
-  assert.ok(results[0].lng > 118.09 && results[0].lng < 118.11);
-
-  assert.equal(requests.length, 1);
-  const requestUrl = new URL(requests[0].url);
-  assert.equal(requestUrl.origin, 'https://restapi.amap.com');
-  assert.equal(requestUrl.pathname, '/v3/place/text');
-  assert.equal(requestUrl.searchParams.get('key'), 'amap-key');
-  assert.equal(requestUrl.searchParams.get('keywords'), '厦门清水宫');
+  assert.equal(response.status, 400);
+  assert.match(await response.text(), /domestic_geocode_uses_amap_js_api/);
+  assert.equal(fetchCalled, false);
 });
 
 await test('GET /api/geocode uses MapTiler first for global searches', async () => {
@@ -128,7 +104,7 @@ await test('GET /api/geocode uses MapTiler first for global searches', async () 
     () =>
       onRequestGet({
         request: new Request('https://imgbed.example.com/api/geocode?q=Tokyo%20Tower&region=global'),
-        env: { MAPTILER_KEY: 'maptiler-key', AMAP_KEY: 'amap-key' },
+        env: { MAPTILER_KEY: 'maptiler-key' },
         params: {},
       }),
   );
@@ -174,7 +150,7 @@ await test('GET /api/geocode falls back to Photon when Nominatim is unreachable'
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB'),
+        request: new Request('https://imgbed.example.com/api/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
         env: {},
         params: {},
       }),
@@ -218,7 +194,7 @@ await test('GET /api/geocode retries Photon with city-spaced Chinese query when 
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB'),
+        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
         env: {},
         params: {},
       }),

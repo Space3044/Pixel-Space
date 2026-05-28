@@ -182,7 +182,8 @@ test('ReadOnlyMap supports empty coordinates and interactive coordinate picking'
   assert.match(readOnlyMap, /defineEmits<\{ pick:/);
   assert.match(readOnlyMap, /emit\('pick'/);
   assert.match(readOnlyMap, /map\.on\('click'/);
-  assert.match(readOnlyMap, /marker\?\.remove\(\);\s*marker = null;/s);
-  assert.match(readOnlyMap, /center: mapCenter/);
-  assert.match(readOnlyMap, /interactive: props\.interactive/);
+  assert.match(readOnlyMap, /marker\?\.setMap\(null\);\s*marker = null;/s);
+  assert.match(readOnlyMap, /center: mapCenter\(\)/);
+  assert.match(readOnlyMap, /dragEnable: props\.interactive/);
+  assert.match(readOnlyMap, /storedLngLatFromMap/);
 });
