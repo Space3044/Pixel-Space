@@ -9,7 +9,7 @@
 | 前端 | Vue 3.5（`<script setup>` + Composition API）+ Vite 6 + TypeScript + TailwindCSS + vue-router 4 |
 | 边缘 | Cloudflare Pages Functions（文件路由）|
 | 数据 | D1（SQLite）+ R2（压缩 WebP）+ Telegram 私有频道（原图归档）|
-| 工具库 | maplibre-gl（平面地图）、three（旋转地球）、justified-layout（瀑布）、browser-image-compression、exifr |
+| 工具库 | 高德 JS API 2.0（平面地图）、three（旋转地球）、justified-layout（瀑布）、browser-image-compression、exifr |
 | 测试 | tsx + Node 原生 test runner（`tests/*.test.mjs`）|
 
 ## 目录结构
@@ -22,7 +22,7 @@ src/                          Vue 前端 SPA
     images/       /images      探索（瀑布 + 搜索 + 文件夹筛选 + lightbox）
     images/       /p/:key      公开分享页
     random/       /random      随机一张
-    hive/         /hive        旅行足迹（MapLibre 平面图 + Three.js 旋转地球）
+    hive/         /hive        旅行足迹（高德平面图 + Three.js 旋转地球）
     upload/       /upload      多文件上传 + EXIF + AI 预览 + 批量目录
     library/      /library     管理员控制台（文件管理 + AI 配置）
     auth/         /login       Cloudflare Access 引导
@@ -30,7 +30,7 @@ src/                          Vue 前端 SPA
   styles/     全局 token
 
 functions/                    Cloudflare Workers (Pages Functions)
-  types.ts                   Env binding 类型（DB/BUCKET/TG_*/AMAP_KEY/…）
+  types.ts                   Env binding 类型（DB/BUCKET/TG_*/AMAP_JS_KEY/…）
   _shared/                   auth / http / images / folders / ai / telegram 公共模块
   api/                       文件路由 = URL
     list.ts                 GET /api/list             分页 + 搜索
@@ -46,7 +46,8 @@ functions/                    Cloudflare Workers (Pages Functions)
       folders/              目录 CRUD
       ai-settings.ts        AI 代理配置
     ai/preview.ts           代理一次 AI 推理
-    geocode.ts              高德反向地理编码
+    amap-config.ts          高德 JS API 浏览器配置
+    geocode.ts              国外位置搜索代理
 
 db/migrations/                D1 初始化迁移
 docs/PLAN.md                  阶段交付计划
@@ -135,6 +136,17 @@ TG_CHAT_ID=
 ```
 
 线上环境用 Cloudflare Pages 的环境变量或 `wrangler secret` 配置同名变量。
+
+## 本地高德地图配置
+
+高德地图和国内位置搜索共用浏览器 JS API 配置。本地开发在 `.dev.vars` 写：
+
+```env
+AMAP_JS_KEY=
+AMAP_SECURITY_JS_CODE=
+```
+
+`AMAP_JS_KEY` 用高德控制台里的「Web端（JS API）」Key，配套 `AMAP_SECURITY_JS_CODE`。国内位置搜索走浏览器里的高德 JS API，国外位置搜索再走 `/api/geocode`。
 
 ## 上传与归档约束
 

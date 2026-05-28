@@ -89,7 +89,7 @@ tests/
 - `GET /api/list`：图库列表与搜索。
 - `GET /api/image/:key`：单图公开元数据。
 - `GET /api/public/:key`：R2 压缩图回吐（本地开发用，生产走 R2 公共域名直链）。
-- `GET /api/geocode`：地理编码代理，无破坏性，目前不锁；若后续被刷再单独做限流。
+- `GET /api/geocode`：国外位置搜索代理，无破坏性，目前不锁；国内搜索走高德 JS API。
 - 公开分享页 `/p/:key`、首页、图库 `/images`、随机 `/random`、蜂巢 `/hive` 等纯展示路由。
 
 **前端权限点**：
@@ -137,7 +137,7 @@ tests/
 
 **图库布局策略**。图库页用 Justified Rows 算法（Flickr/Unsplash 风格）：按行布局、每行图片高度统一、按原始宽高比横向拼接、行末等比缩放刚好填满容器宽度。不裁切原图、视觉密度高、阅读顺序自然。算法依赖每张图的 `width`/`height` 字段，因此到阶段 5 拿到真实数据后才能接入，候选实现是 [`justified-layout`](https://www.npmjs.com/package/justified-layout) 这个 Flickr 团队官方包，约 4 KB，框架无关。阶段 1 期间用 CSS columns 多列瀑布流 + 多种 aspect ratio 的骨架占位演示视觉密度，等阶段 5 替换为真算法。图库页通过 `AppShell` 的 `fluid` prop 跳出 `max-w-7xl` 限宽，撑满视口宽度。
 
-**地图与坐标拾取**。地图组件选 [MapLibre GL JS](https://maplibre.org/maplibre-gl-js/docs/) + [OpenFreeMap](https://openfreemap.org/) 公共样式，免费、无 token、无注册，视觉效果比栅格瓦片更贴合当前赛博暗色界面。阶段 7 上传页用交互式地图让管理员点击地图拾取 `location_lat` / `location_lng`，地名先手动输入，不接外部搜索。阶段 10 lightbox 详情面板与 `/p/:key` 公开页复用同一套 MapLibre 只读小地图配置。
+**地图与坐标拾取**。平面地图统一接入高德 JS API 2.0，由官方底图处理国内中文、国外英文的地名展示。坐标入库仍保持 WGS84，前端展示和地图点击用 GCJ-02 转换，避免高德地图上的标记偏移。阶段 7 上传页用交互式地图让管理员点击地图拾取 `location_lat` / `location_lng`，地名先手动输入。阶段 10 lightbox 详情面板与 `/p/:key` 公开页复用同一套高德只读小地图配置。
 
 ## 阶段 0：最小骨架
 
@@ -350,7 +350,7 @@ Access 配置记录（控制台配置完成后回填）：
 - [x] 用 `browser-image-compression` 压缩为 WebP，目标长边 2048
 - [x] 显示压缩后大小
 - [x] 单图大小超过 50MB 直接在前端阻断，提示当前不支持
-- [x] 安装 `maplibre-gl`，集成 OpenFreeMap 暗色矢量样式，上传表单内嵌交互式地图：EXIF 含 GPS 时自动落点作为默认值，否则等待管理员点击地图拾取 `location_lat` / `location_lng`
+- [x] 接入高德 JS API 2.0，上传表单内嵌交互式地图：EXIF 含 GPS 时自动落点作为默认值，否则等待管理员点击地图拾取 `location_lat` / `location_lng`
 - [x] 表单提供 `title`、`caption`、`location_name` 输入；`location_lat` / `location_lng` 由 EXIF / 地图拾取自动回填，可清空、可手动覆盖；提交时由管理员确认是否随图落库
 - [x] 组装 `FormData`：`original`、`compressed`、`exif`(JSON)、`meta`(JSON)
 - [x] 新建 `tests/exif.test.mjs`，覆盖典型 EXIF 数据解析
@@ -428,8 +428,8 @@ Access 配置记录（控制台配置完成后回填）：
 - [x] 实现 `DELETE /api/admin/image/:key`
 - [x] 删除流程：先删 R2 压缩图，再尝试删除 Telegram 频道消息（失败仅记录日志不阻塞），最后从 D1 物理删除
 - [x] 图库页增加关键词搜索，命中 `title`、`caption`、`location_name` 任一即可；AI 接入后再扩展到 `search_content`
-- [x] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`（坐标编辑复用上传页的 MapLibre 地图拾取组件）
-- [x] lightbox 详情面板与 `/p/:key` 公开页用只读 MapLibre 渲染坐标小地图（无坐标则不显示）
+- [x] 详情页支持编辑 `title`、`caption`、`location_name`、`location_lat`、`location_lng`（坐标编辑复用高德地图拾取组件）
+- [x] lightbox 详情面板与 `/p/:key` 公开页用只读高德地图渲染坐标小地图（无坐标则不显示）
 - [x] 详情页支持复制 Markdown、HTML、直链
 - [x] 公开页路由层注入 `og:image`、`og:title`、`og:description`
 
