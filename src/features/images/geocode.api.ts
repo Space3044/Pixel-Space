@@ -1,6 +1,6 @@
 import { readHttpError } from '@/shared/api/http';
 import { loadAmap } from '@/features/upload/amap';
-import { gcj02ToWgs84 } from '@/features/upload/map-coordinate';
+import { gcj02ToWgs84, wgs84ToGcj02 } from '@/features/upload/map-coordinate';
 import { formatLocationName } from './location-name';
 import type { AMapNamespace } from '@/features/upload/amap';
 
