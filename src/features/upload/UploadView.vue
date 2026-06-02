@@ -7,7 +7,7 @@ import AppShell from '@/shared/ui/AppShell.vue';
 import LocationSearch from '@/features/images/LocationSearch.vue';
 import FolderPickerPopover from '@/features/images/FolderPickerPopover.vue';
 import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
-import type { GeocodeResult } from '@/features/images/geocode.api';
+import { reverseGeocodeLocation, type GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkImageHash } from '@/features/images/images.api';
@@ -420,6 +420,11 @@ const processEntry = async (entry: UploadEntry) => {
     entry.compressedDimensions = nextDimensions;
     if (nextExif.location_lat !== null && nextExif.location_lng !== null) {
       setEntryCoordinates(entry, nextExif.location_lat, nextExif.location_lng, entry.id === currentEntryId.value);
+      if (!entry.meta.location_name) {
+        void reverseGeocodeLocation(nextExif.location_lat, nextExif.location_lng).then((name) => {
+          if (name && !entry.meta.location_name) entry.meta.location_name = name;
+        });
+      }
     }
     entry.status = 'ready';
     enqueueAi(entry);

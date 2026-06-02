@@ -266,3 +266,17 @@ export async function searchLocations(query: string, region: GeocodeRegion = 'cn
     throw normalizeSearchError(error);
   }
 }
+
+export async function reverseGeocodeLocation(lat: number, lng: number): Promise<string | null> {
+  const amap = await loadAmap();
+  const gcj = wgs84ToGcj02(lng, lat);
+  const geocoder = new amap.Geocoder({ city: '全国' });
+  const reverse = await reverseGeocodeAmapLocation(geocoder, gcj);
+  if (!reverse) return null;
+  const component = reverse.addressComponent;
+  return formatLocationName({
+    title: reverse.formattedAddress ?? reverse.formatted_address,
+    regionParts: [component?.province, component?.city, component?.district, component?.township],
+    detailParts: [component?.streetNumber?.street, component?.streetNumber?.number],
+  });
+}

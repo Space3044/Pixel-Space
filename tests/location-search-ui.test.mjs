@@ -56,7 +56,7 @@ test('LocationSearch lets the user choose domestic or global geocoding', () => {
 
 test('UploadView applies selected geocode result to location name and marker coordinates', () => {
   assert.match(upload, /import LocationSearch from '@\/features\/images\/LocationSearch\.vue'/);
-  assert.match(upload, /import type \{ GeocodeResult \} from '@\/features\/images\/geocode\.api'/);
+  assert.match(upload, /import \{ reverseGeocodeLocation, type GeocodeResult \} from '@\/features\/images\/geocode\.api'/);
   assert.match(upload, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
   assert.match(upload, /meta\.location_name = result\.name/);
   assert.match(upload, /setEntryCoordinates\(entry, result\.lat, result\.lng, true\)/);
