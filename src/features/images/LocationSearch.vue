@@ -80,8 +80,8 @@ const setRegion = (region: GeocodeRegion) => {
     <ul v-if="results.length" class="location-search-results">
       <li v-for="result in results" :key="`${result.lat},${result.lng},${result.name}`">
         <button type="button" class="location-result" @click="selectResult(result)">
-          <span>{{ result.name }}</span>
-          <small>{{ result.lat.toFixed(6) }}, {{ result.lng.toFixed(6) }}</small>
+          <span :title="result.name">{{ result.name }}</span>
+          <small :title="`${result.lat.toFixed(6)}, ${result.lng.toFixed(6)}`">{{ result.lat.toFixed(6) }}, {{ result.lng.toFixed(6) }}</small>
           <strong>选择位置</strong>
         </button>
       </li>
@@ -209,6 +209,7 @@ const setRegion = (region: GeocodeRegion) => {
 }
 
 .location-result span {
+  font-size: 0.78rem;
   color: rgb(226, 232, 240);
 }
 
