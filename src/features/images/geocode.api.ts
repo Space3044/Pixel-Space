@@ -35,6 +35,7 @@ interface AmapGeocode {
 interface AmapReverseGeocode {
   formattedAddress?: unknown;
   formatted_address?: unknown;
+  pois?: unknown;
   addressComponent?: {
     province?: unknown;
     city?: unknown;
@@ -270,9 +271,18 @@ export async function searchLocations(query: string, region: GeocodeRegion = 'cn
 export async function reverseGeocodeLocation(lat: number, lng: number): Promise<string | null> {
   const amap = await loadAmap();
   const gcj = wgs84ToGcj02(lng, lat);
-  const geocoder = new amap.Geocoder({ city: '全国' });
+  const geocoder = new amap.Geocoder({ city: '全国', extensions: 'all' });
   const reverse = await reverseGeocodeAmapLocation(geocoder, gcj);
   if (!reverse) return null;
+
+  // 优先取最近的 POI，让自动填充的地名与位置搜索结果同构（地点名 · 行政区 · 详情）
+  if (Array.isArray(reverse.pois)) {
+    for (const poi of reverse.pois) {
+      const result = normalizeAmapPoi(poi as AmapPoi, reverse);
+      if (result) return result.name;
+    }
+  }
+
   const component = reverse.addressComponent;
   return formatLocationName({
     title: reverse.formattedAddress ?? reverse.formatted_address,
