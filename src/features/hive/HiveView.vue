@@ -332,7 +332,6 @@ const initFlatMap = async () => {
     zooms: [ZOOM_MIN, ZOOM_MAX],
   });
 
-  flatMap.addControl(new amap.ToolBar({ position: 'RT' }));
   flatMap.addControl(new amap.Scale());
   currentZoom.value = flatMap.getZoom();
   zoomReady.value = true;
