@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   mapLngLatFromStored,
   storedLngLatFromMap,
@@ -42,6 +42,19 @@ const getCoordinates = () => {
   if (props.lat === null || props.lng === null) return null;
   if (!Number.isFinite(props.lat) || !Number.isFinite(props.lng)) return null;
   return { lat: props.lat, lng: props.lng };
+};
+
+const staticError = ref(false);
+
+// 只读态用静态地图代理（命中 R2 缓存则零高德调用），完全不加载 JS SDK。
+const staticMapUrl = computed(() => {
+  const coordinates = getCoordinates();
+  if (!coordinates) return null;
+  return `/api/staticmap?lat=${coordinates.lat}&lng=${coordinates.lng}`;
+});
+
+const onStaticError = () => {
+  staticError.value = true;
 };
 
 const mapCenter = (): [number, number] => {
@@ -111,17 +124,27 @@ const initMap = async () => {
 };
 
 onMounted(() => {
-  void initMap();
+  if (props.interactive) void initMap();
 });
 
 watch(
   () => [props.lat, props.lng],
-  () => placeMarker(),
+  () => {
+    staticError.value = false;
+    placeMarker();
+  },
 );
 
 watch(
   () => props.interactive,
-  (interactive) => setInteractionState(interactive),
+  async (interactive) => {
+    if (interactive) {
+      await initMap();
+      setInteractionState(true);
+    } else {
+      setInteractionState(false);
+    }
+  },
 );
 
 onBeforeUnmount(() => {
@@ -135,8 +158,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="readonly-map" :class="{ 'is-interactive': interactive }" :aria-label="label || '图片位置地图'">
-    <div ref="mapEl" class="readonly-map-canvas" />
+  <div
+    class="readonly-map"
+    :class="{ 'is-interactive': interactive, 'is-placeholder': !interactive && (!staticMapUrl || staticError) }"
+    :aria-label="label || '图片位置地图'"
+  >
+    <div v-show="interactive" ref="mapEl" class="readonly-map-canvas" />
+    <template v-if="!interactive">
+      <img
+        v-if="staticMapUrl && !staticError"
+        class="readonly-map-static"
+        :src="staticMapUrl"
+        :alt="label || '图片位置地图'"
+        loading="lazy"
+        decoding="async"
+        @error="onStaticError"
+      />
+      <div v-else class="readonly-map-placeholder">
+        <span class="readonly-map-placeholder-icon" aria-hidden="true">📍</span>
+        <span>暂无位置信息</span>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -156,6 +198,35 @@ onBeforeUnmount(() => {
 .readonly-map-canvas {
   width: 100%;
   height: 100%;
+}
+
+.readonly-map-static {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.readonly-map.is-placeholder {
+  border-style: dashed;
+  border-color: rgba(53, 243, 255, 0.22);
+  background: rgba(7, 7, 19, 0.3);
+}
+
+.readonly-map-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 100%;
+  color: rgba(148, 163, 184, 0.75);
+  font-size: 0.78rem;
+}
+
+.readonly-map-placeholder-icon {
+  font-size: 1.5rem;
+  opacity: 0.65;
 }
 
 :deep(.readonly-map-marker) {

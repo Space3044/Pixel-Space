@@ -10,6 +10,8 @@ export interface Env {
   PROXY_KEY: string;
   AMAP_JS_KEY?: string;
   AMAP_SECURITY_JS_CODE?: string;
+  // 高德 Web 服务 API key，静态地图代理用，与 JS API key 不同源，需单独申请。
+  AMAP_WEB_KEY?: string;
   MAPTILER_KEY?: string;
   // 仅本地开发可用。线上 (request.cf 存在) 时被强制忽略，绝不参与生产鉴权。
   // 取值: 'admin' | 'visitor'，缺省视为 'admin'。

@@ -186,4 +186,5 @@ test('ReadOnlyMap supports empty coordinates and interactive coordinate picking'
   assert.match(readOnlyMap, /center: mapCenter\(\)/);
   assert.match(readOnlyMap, /dragEnable: props\.interactive/);
   assert.match(readOnlyMap, /storedLngLatFromMap/);
+  assert.match(readOnlyMap, /readonly-map-placeholder/);
 });

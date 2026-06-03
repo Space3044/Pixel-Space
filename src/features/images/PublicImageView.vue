@@ -114,10 +114,7 @@ const exifRows = computed(() => {
               </dl>
             </section>
 
-            <section
-              v-if="image.location_public === 0 || (image.location_lat !== null && image.location_lng !== null)"
-              class="public-info-card cyber-panel"
-            >
+            <section class="public-info-card cyber-panel">
               <p class="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-neon-cyan">Location</p>
               <ReadOnlyMap
                 :lat="image.location_public === 0 ? null : image.location_lat"

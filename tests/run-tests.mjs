@@ -11,6 +11,7 @@ for (const path of [
   './upload-form.test.mjs',
   './map-style.test.mjs',
   './map-coordinate.test.mjs',
+  './staticmap-api.test.mjs',
   './upload-view.test.mjs',
   './api-shape.test.mjs',
   './stats-api.test.mjs',

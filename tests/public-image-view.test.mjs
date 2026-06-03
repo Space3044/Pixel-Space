@@ -27,12 +27,8 @@ test('PublicImageView does not render public copy link controls', () => {
   assert.doesNotMatch(view, /class="link-row"|class="link-copy"|class="link-value"|class="link-label"/);
 });
 
-test('PublicImageView renders a read-only map when coordinates exist or location is hidden', () => {
+test('PublicImageView always reserves the location card and falls back to a placeholder when hidden or missing', () => {
   assert.match(view, /import ReadOnlyMap from '\.\/ReadOnlyMap\.vue'/);
-  assert.match(
-    view,
-    /v-if="image\.location_public === 0 \|\| \(image\.location_lat !== null && image\.location_lng !== null\)"/,
-  );
   assert.match(view, /:lat="image\.location_public === 0 \? null : image\.location_lat"/);
   assert.match(view, /:lng="image\.location_public === 0 \? null : image\.location_lng"/);
 });
