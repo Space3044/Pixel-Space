@@ -19,6 +19,7 @@ for (const path of [
   './upload-api.test.mjs',
   './original-api.test.mjs',
   './amap-config-api.test.mjs',
+  './mapbox-config-api.test.mjs',
   './ai-settings-api.test.mjs',
   './ai-preview-api.test.mjs',
   './admin-image-api.test.mjs',
