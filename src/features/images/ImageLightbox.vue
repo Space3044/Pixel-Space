@@ -6,6 +6,8 @@ import { formatBytes, paletteFromImage, parseDominantColor, tagsFromImage } from
 import LocationSearch from './LocationSearch.vue';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 import type { GeocodeResult } from './geocode.api';
+import { mapRegionForStoredCoordinate } from '@/features/upload/map-coordinate';
+import type { MapRegion } from '@/features/upload/map-coordinate';
 import { deleteImage, updateImage } from './images.api';
 import { isAdmin } from '@/shared/auth/useAdmin';
 
@@ -130,6 +132,7 @@ const editForm = reactive({
   location_name: '',
   location_lat: '' as number | '',
   location_lng: '' as number | '',
+  location_region: null as MapRegion | null,
   is_public: 1 as 0 | 1,
   location_public: 1 as 0 | 1,
 });
@@ -250,6 +253,24 @@ const sharePage = async () => {
   await copyValue(publicPageUrl.value, '分享链接');
 };
 
+const toRegion = (value: string | null | undefined): MapRegion | null =>
+  value === 'china' || value === 'global' ? value : null;
+
+// 编辑时坐标一变就重算归属区域默认值，与上传页一致；用户随后可手动校正。
+const recomputeEditRegion = () => {
+  const lat = editForm.location_lat === '' ? null : Number(editForm.location_lat);
+  const lng = editForm.location_lng === '' ? null : Number(editForm.location_lng);
+  editForm.location_region =
+    lat === null || lng === null || !Number.isFinite(lat) || !Number.isFinite(lng)
+      ? null
+      : mapRegionForStoredCoordinate({ lng, lat });
+};
+
+const setEditRegion = (region: MapRegion) => {
+  if (editForm.location_lat === '' || editForm.location_lng === '') return;
+  editForm.location_region = region;
+};
+
 const resetForm = (image: ImageRecord | null | undefined) => {
   actionError.value = null;
   editForm.title = image?.title ?? '';
@@ -261,6 +282,7 @@ const resetForm = (image: ImageRecord | null | undefined) => {
   editForm.location_name = image?.location_name ?? '';
   editForm.location_lat = image?.location_lat ?? '';
   editForm.location_lng = image?.location_lng ?? '';
+  editForm.location_region = toRegion(image?.location_region);
   editForm.is_public = image?.is_public === 0 ? 0 : 1;
   editForm.location_public = image?.location_public === 0 ? 0 : 1;
 };
@@ -287,6 +309,7 @@ const saveAiMetadata = async () => {
       location_name: props.image.location_name ?? '',
       location_lat: props.image.location_lat,
       location_lng: props.image.location_lng,
+      location_region: props.image.location_region,
       tags: editForm.tags,
       dominant_color: editForm.dominant_color,
       palette: editForm.palette,
@@ -318,12 +341,14 @@ const cancelLocationEditor = () => {
 const updateLocationFromMap = (coords: { lat: number; lng: number }) => {
   editForm.location_lat = coords.lat;
   editForm.location_lng = coords.lng;
+  recomputeEditRegion();
 };
 
 const applyLocationSearchResult = (result: GeocodeResult) => {
   editForm.location_name = result.name;
   editForm.location_lat = result.lat;
   editForm.location_lng = result.lng;
+  recomputeEditRegion();
 };
 
 const saveLocation = async () => {
@@ -337,6 +362,7 @@ const saveLocation = async () => {
       location_name: editForm.location_name,
       location_lat: editForm.location_lat === '' ? null : Number(editForm.location_lat),
       location_lng: editForm.location_lng === '' ? null : Number(editForm.location_lng),
+      location_region: editForm.location_region,
       tags: tagsTextFromImage(props.image),
       dominant_color: props.image.dominant_color ?? '',
       palette: paletteTextFromImage(props.image),
@@ -382,6 +408,7 @@ const saveVisibilityFlag = async (field: 'is_public' | 'location_public', next: 
       location_name: image.location_name ?? '',
       location_lat: image.location_lat,
       location_lng: image.location_lng,
+      location_region: image.location_region,
       tags: tagsTextFromImage(image),
       dominant_color: image.dominant_color ?? '',
       palette: paletteTextFromImage(image),
@@ -913,12 +940,33 @@ onBeforeUnmount(() => {
                     <div class="edit-grid">
                       <label class="edit-field">
                         <span>纬度</span>
-                        <input v-model="editForm.location_lat" type="number" step="any" min="-90" max="90" />
+                        <input v-model="editForm.location_lat" type="number" step="any" min="-90" max="90" @change="recomputeEditRegion" />
                       </label>
                       <label class="edit-field">
                         <span>经度</span>
-                        <input v-model="editForm.location_lng" type="number" step="any" min="-180" max="180" />
+                        <input v-model="editForm.location_lng" type="number" step="any" min="-180" max="180" @change="recomputeEditRegion" />
                       </label>
+                    </div>
+                    <div class="edit-region">
+                      <span class="edit-region-label">归属区域</span>
+                      <div class="edit-region-toggle" role="group" aria-label="选择归属区域">
+                        <button
+                          type="button"
+                          :class="{ active: editForm.location_region === 'china' }"
+                          :disabled="editForm.location_lat === '' || editForm.location_lng === ''"
+                          @click="setEditRegion('china')"
+                        >
+                          国内
+                        </button>
+                        <button
+                          type="button"
+                          :class="{ active: editForm.location_region === 'global' }"
+                          :disabled="editForm.location_lat === '' || editForm.location_lng === ''"
+                          @click="setEditRegion('global')"
+                        >
+                          国外
+                        </button>
+                      </div>
                     </div>
                     <label
                       class="edit-toggle"
@@ -1444,6 +1492,41 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+.edit-region {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.edit-region-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(103, 232, 249, 0.75);
+}
+.edit-region-toggle {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid rgba(53, 243, 255, 0.18);
+  border-radius: 4px;
+  background: rgba(7, 7, 19, 0.72);
+}
+.edit-region-toggle button {
+  border: 0;
+  background: transparent;
+  padding: 6px 14px;
+  color: rgba(148, 163, 184, 0.92);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.edit-region-toggle button.active {
+  background: rgba(53, 243, 255, 0.14);
+  color: rgb(165, 243, 252);
+}
+.edit-region-toggle button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 .edit-field {
   display: flex;

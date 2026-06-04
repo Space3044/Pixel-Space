@@ -11,7 +11,8 @@ import { reverseGeocodeLocation, type GeocodeResult } from '@/features/images/ge
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkImageHash } from '@/features/images/images.api';
-import { mapLngLatFromStored, storedLngLatFromMap } from './map-coordinate';
+import { mapLngLatFromStored, mapRegionForStoredCoordinate, storedLngLatFromMap } from './map-coordinate';
+import type { MapRegion } from './map-coordinate';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { loadAmap } from './amap';
 import type { AMapClickEvent, AMapMap, AMapMarker, AMapNamespace } from './amap';
@@ -64,6 +65,7 @@ const createMeta = (file: File): UploadMeta => ({
   location_name: '',
   location_lat: null,
   location_lng: null,
+  location_region: null,
   tags: '',
   search_content: '',
   dominant_color: '',
@@ -245,6 +247,8 @@ const updateMapMarker = (centerMap = false) => {
 const setEntryCoordinates = (entry: UploadEntry, lat: number | null, lng: number | null, centerMap = true) => {
   entry.meta.location_lat = lat;
   entry.meta.location_lng = lng;
+  // 坐标一变就重算归属区域作为默认，用户随后可在表单里手动校正。
+  entry.meta.location_region = lat === null || lng === null ? null : mapRegionForStoredCoordinate({ lng, lat });
   if (entry.id === currentEntryId.value) updateMapMarker(centerMap);
 };
 
@@ -574,6 +578,12 @@ const clearLocation = () => {
   if (!entry) return;
   entry.meta.location_name = '';
   setEntryCoordinates(entry, null, null, false);
+};
+
+const setEntryRegion = (region: MapRegion) => {
+  const entry = currentEntry.value;
+  if (!entry || entry.meta.location_lat === null || entry.meta.location_lng === null) return;
+  entry.meta.location_region = region;
 };
 
 const setIsPublic = (entry: UploadEntry, checked: boolean) => {
@@ -1104,6 +1114,31 @@ onBeforeUnmount(() => {
                       @input="updateLng"
                     />
                   </label>
+                </div>
+
+                <div class="map-region-row">
+                  <span class="field-sublabel">归属区域</span>
+                  <div class="region-toggle" role="group" aria-label="选择归属区域">
+                    <button
+                      type="button"
+                      class="region-button"
+                      :class="{ active: displayEntry.meta.location_region === 'china' }"
+                      :disabled="!hasCurrent || displayEntry.meta.location_lat === null || displayEntry.meta.location_lng === null"
+                      @click="setEntryRegion('china')"
+                    >
+                      国内
+                    </button>
+                    <button
+                      type="button"
+                      class="region-button"
+                      :class="{ active: displayEntry.meta.location_region === 'global' }"
+                      :disabled="!hasCurrent || displayEntry.meta.location_lat === null || displayEntry.meta.location_lng === null"
+                      @click="setEntryRegion('global')"
+                    >
+                      国外
+                    </button>
+                  </div>
+                  <span class="region-hint">国内走高德、国外走 Mapbox</span>
                 </div>
               </div>
             </section>
@@ -2247,5 +2282,46 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.4rem;
+}
+
+.map-region-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.region-toggle {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid rgba(53, 243, 255, 0.18);
+  border-radius: 0.4rem;
+  background: rgba(7, 7, 19, 0.52);
+}
+
+.region-button {
+  border: 0;
+  background: transparent;
+  padding: 0.3rem 0.7rem;
+  color: rgba(148, 163, 184, 0.92);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 800;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.region-button.active {
+  background: rgba(53, 243, 255, 0.14);
+  color: rgb(165, 243, 252);
+}
+
+.region-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.region-hint {
+  font-size: 10.5px;
+  color: rgba(148, 163, 184, 0.78);
 }
 </style>

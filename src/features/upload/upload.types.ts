@@ -1,3 +1,5 @@
+import type { MapRegion } from './map-coordinate';
+
 export interface UploadExif {
   taken_at: string | null;
   camera: string | null;
@@ -15,6 +17,7 @@ export interface UploadMeta {
   location_name: string;
   location_lat: number | null;
   location_lng: number | null;
+  location_region: MapRegion | null;
   tags: string;
   search_content: string;
   dominant_color: string;

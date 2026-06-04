@@ -9,6 +9,7 @@ export interface ImageUpdatePayload {
   location_name: string;
   location_lat: number | null;
   location_lng: number | null;
+  location_region: string | null;
   tags: string;
   dominant_color: string;
   palette: string;

@@ -11,6 +11,7 @@ export interface ImageRecord {
   location_name: string | null;
   location_lat: number | null;
   location_lng: number | null;
+  location_region: string | null;
   exif_taken_at: string | null;
   exif_camera: string | null;
   exif_iso: number | null;
