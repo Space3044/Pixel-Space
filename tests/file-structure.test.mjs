@@ -32,6 +32,10 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/images/images.api.ts',
     'src/features/random/RandomView.vue',
     'src/features/hive/HiveView.vue',
+    'src/features/hive/FootprintFlatMap.vue',
+    'src/features/hive/footprint.ts',
+    'src/features/hive/footprint-map.ts',
+    'src/features/hive/mapbox.ts',
     'src/features/upload/amap.ts',
     'src/features/upload/exif.ts',
     'src/features/upload/map-coordinate.ts',
@@ -48,6 +52,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'functions/_shared/images.ts',
     'functions/_shared/telegram.ts',
     'functions/api/amap-config.ts',
+    'functions/api/mapbox-config.ts',
     'functions/api/list.ts',
     'functions/api/image/[key].ts',
     'functions/api/upload.ts',
@@ -108,12 +113,12 @@ test('keeps package scripts and dependencies minimal', () => {
     'browser-image-compression',
     'exifr',
     'justified-layout',
+    'maplibre-gl',
     'three',
     'vue',
     'vue-router',
   ]);
   assert.equal(pkg.dependencies.leaflet, undefined, 'Leaflet is not used');
-  assert.equal(pkg.dependencies['maplibre-gl'], undefined, 'AMap JS API is loaded through the official browser loader');
   assert.equal(pkg.devDependencies['@types/leaflet'], undefined, '@types/leaflet is not needed');
   assert.ok(pkg.devDependencies.wrangler, 'wrangler must be installed from stage 4');
   assert.ok(
