@@ -13,6 +13,7 @@ export interface ImageRecord {
   location_name: string | null;
   location_lat: number | null;
   location_lng: number | null;
+  location_region: string | null;
   exif_taken_at: string | null;
   exif_camera: string | null;
   exif_iso: number | null;
@@ -32,7 +33,7 @@ export interface ImageRecord {
 }
 
 export const IMAGE_SELECT_COLUMNS =
-  'key, title, caption, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, created_at, updated_at, is_public, location_public, folder_id';
+  'key, title, caption, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, location_region, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, created_at, updated_at, is_public, location_public, folder_id';
 
 // D1 表里的原始行形状（只声明 list / detail 接口会用到的列）。
 export interface ImageRow {
@@ -47,6 +48,7 @@ export interface ImageRow {
   location_name: string | null;
   location_lat: number | null;
   location_lng: number | null;
+  location_region: string | null;
   exif_taken_at: string | null;
   exif_camera: string | null;
   exif_iso: number | null;
@@ -119,6 +121,7 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     location_name: row.location_name,
     location_lat: row.location_lat,
     location_lng: row.location_lng,
+    location_region: row.location_region,
     exif_taken_at: row.exif_taken_at,
     exif_camera: row.exif_camera,
     exif_iso: row.exif_iso,
@@ -147,5 +150,26 @@ export function scrubRecordForVisitor(record: ImageRecord): ImageRecord {
     location_name: null,
     location_lat: null,
     location_lng: null,
+    location_region: null,
   };
 }
+
+export type LocationRegion = 'china' | 'global';
+
+// 与前端 map-coordinate.ts 的 isOutsideChina 同一套边界框，后端兜底判定区域。
+const regionForCoordinate = (lat: number | null, lng: number | null): LocationRegion | null => {
+  if (lat === null || lng === null) return null;
+  const outside = lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+  return outside ? 'global' : 'china';
+};
+
+// 优先用调用方显式传入的 region，否则按坐标兜底；无坐标则 null。
+export const normalizeRegion = (
+  value: unknown,
+  lat: number | null,
+  lng: number | null,
+): LocationRegion | null => {
+  if (lat === null || lng === null) return null;
+  if (value === 'china' || value === 'global') return value;
+  return regionForCoordinate(lat, lng);
+};

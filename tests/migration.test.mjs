@@ -32,10 +32,19 @@ const tableBody = (tableName) => {
   return match[1];
 };
 
-test('migration is consolidated into a single init file', () => {
-  assert.deepEqual(migrationFiles, ['0001_init.sql']);
+test('migrations keep the consolidated init plus the location_region delta', () => {
+  assert.deepEqual(migrationFiles, ['0001_init.sql', '0002_location_region.sql']);
   assert.doesNotMatch(sqlBody, /\balter\s+table\b/);
   assert.doesNotMatch(sqlBody, /\bimages_next\b/);
+});
+
+test('0002 adds and backfills location_region', () => {
+  const delta = stripComments(readFileSync(join(migrationDir, '0002_location_region.sql'), 'utf8')).toLowerCase();
+  assert.match(delta, /alter\s+table\s+images\s+add\s+column\s+location_region\s+text/);
+  assert.match(delta, /update\s+images/);
+  assert.match(delta, /location_region\s*=/);
+  assert.match(delta, /'global'/);
+  assert.match(delta, /'china'/);
 });
 
 test('migration creates the final images table', () => {

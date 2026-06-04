@@ -133,22 +133,23 @@ const makeEnv = () => {
                   location_name: inserted?.[9] ?? null,
                   location_lat: inserted?.[10] ?? null,
                   location_lng: inserted?.[11] ?? null,
-                  exif_taken_at: inserted?.[12] ?? null,
-                  exif_camera: inserted?.[13] ?? null,
-                  exif_iso: inserted?.[14] ?? null,
-                  exif_aperture: inserted?.[15] ?? null,
-                  exif_shutter: inserted?.[16] ?? null,
-                  exif_focal_length: inserted?.[17] ?? null,
-                  tags_json: inserted?.[18] ?? null,
-                  dominant_color: inserted?.[20] ?? null,
-                  color_palette_json: inserted?.[21] ?? null,
-                  composition: inserted?.[22] ?? null,
-                  ai_status: inserted?.[23] ?? 'pending',
+                  location_region: inserted?.[12] ?? null,
+                  exif_taken_at: inserted?.[13] ?? null,
+                  exif_camera: inserted?.[14] ?? null,
+                  exif_iso: inserted?.[15] ?? null,
+                  exif_aperture: inserted?.[16] ?? null,
+                  exif_shutter: inserted?.[17] ?? null,
+                  exif_focal_length: inserted?.[18] ?? null,
+                  tags_json: inserted?.[19] ?? null,
+                  dominant_color: inserted?.[21] ?? null,
+                  color_palette_json: inserted?.[22] ?? null,
+                  composition: inserted?.[23] ?? null,
+                  ai_status: inserted?.[24] ?? 'pending',
                   created_at: '2026-05-20 10:11:12',
                   updated_at: '2026-05-20 10:11:12',
-                  is_public: inserted?.[25] ?? 1,
-                  location_public: inserted?.[26] ?? 1,
-                  folder_id: inserted?.[27] ?? null,
+                  is_public: inserted?.[26] ?? 1,
+                  location_public: inserted?.[27] ?? 1,
+                  folder_id: inserted?.[28] ?? null,
                 };
               },
             };
@@ -209,6 +210,7 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
     'location_lng',
     'location_name',
     'location_public',
+    'location_region',
     'original_filename',
     'public_url',
     'tags_json',
@@ -238,6 +240,7 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal('ai_model' in data, false);
   assert.equal('ocr_text' in data, false);
   assert.equal(data.tags_json, '["猫","夜景"]');
+  assert.equal(data.location_region, 'china');
 
   assert.equal(calls.puts.length, 1);
   assert.equal(calls.puts[0].key, data.key);
@@ -264,14 +267,15 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(calls.insert.values[5], 853);
   assert.equal(calls.insert.values[6], 'webp');
   assert.equal(calls.insert.values[8], expectedHash);
-  assert.equal(calls.insert.values[17], 40);
-  assert.equal(calls.insert.values[18], '["猫","夜景"]');
-  assert.equal(calls.insert.values[19], '猫 夜景 HELLO');
-  assert.equal(calls.insert.values[20], '深蓝色 #0F172A');
-  assert.equal(calls.insert.values[21], '["#0F172A","#F59E0B"]');
-  assert.equal(calls.insert.values[22], '主体居中，暗色背景突出轮廓。');
-  assert.equal(calls.insert.values[23], 'done');
-  assert.equal(calls.insert.values[24], 'pending');
+  assert.equal(calls.insert.values[12], 'china');
+  assert.equal(calls.insert.values[18], 40);
+  assert.equal(calls.insert.values[19], '["猫","夜景"]');
+  assert.equal(calls.insert.values[20], '猫 夜景 HELLO');
+  assert.equal(calls.insert.values[21], '深蓝色 #0F172A');
+  assert.equal(calls.insert.values[22], '["#0F172A","#F59E0B"]');
+  assert.equal(calls.insert.values[23], '主体居中，暗色背景突出轮廓。');
+  assert.equal(calls.insert.values[24], 'done');
+  assert.equal(calls.insert.values[25], 'pending');
   assert.equal(calls.selectedKey, data.key);
 });
 

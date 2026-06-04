@@ -150,6 +150,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.equal(calls.updates.length, 1);
   assert.match(calls.updates[0].sql, /\btitle\b/i);
   assert.match(calls.updates[0].sql, /\blocation_lat\b/i);
+  assert.match(calls.updates[0].sql, /\blocation_region\b/i);
   assert.match(calls.updates[0].sql, /\btags_json\b/i);
   assert.match(calls.updates[0].sql, /\bdominant_color\b/i);
   assert.match(calls.updates[0].sql, /\bcolor_palette_json\b/i);
@@ -160,6 +161,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
     '上海',
     31.2304,
     121.4737,
+    'china',
     '["猫","城市","夜景"]',
     '暖橙色 #F59E0B',
     '["#F59E0B","#0F172A"]',

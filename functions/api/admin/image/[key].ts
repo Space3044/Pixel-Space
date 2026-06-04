@@ -2,7 +2,7 @@ import type { Env } from '../../../types';
 import { badRequest, json, notFound, serverError, unauthorized } from '../../../_shared/http';
 import { resolveAdmin } from '../../../_shared/auth';
 import type { ImageRow } from '../../../_shared/images';
-import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../../../_shared/images';
+import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToRecord } from '../../../_shared/images';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 
 const DETAIL_SQL = `
@@ -24,6 +24,7 @@ SET title = ?,
     location_name = ?,
     location_lat = ?,
     location_lng = ?,
+    location_region = ?,
     tags_json = ?,
     dominant_color = ?,
     color_palette_json = ?,
@@ -48,6 +49,7 @@ interface EditablePayload {
   location_name: string | null;
   location_lat: number | null;
   location_lng: number | null;
+  location_region: 'china' | 'global' | null;
   tags_json: string | null;
   dominant_color: string | null;
   color_palette_json: string | null;
@@ -103,6 +105,7 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
     location_name: stringOrNull(raw.location_name),
     location_lat: locationLat,
     location_lng: locationLng,
+    location_region: normalizeRegion(raw.location_region, locationLat, locationLng),
     tags_json: normalizeTagsJson(raw.tags),
     dominant_color: stringOrNull(raw.dominant_color),
     color_palette_json: normalizeColorPaletteJson(raw.palette),
@@ -131,6 +134,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
         payload.location_name,
         payload.location_lat,
         payload.location_lng,
+        payload.location_region,
         payload.tags_json,
         payload.dominant_color,
         payload.color_palette_json,

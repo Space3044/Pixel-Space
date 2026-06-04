@@ -2,7 +2,7 @@ import type { Env } from '../types';
 import { badRequest, json, serverError, unauthorized } from '../_shared/http';
 import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
-import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeTagsJson, rowToRecord } from '../_shared/images';
+import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToRecord } from '../_shared/images';
 import { archiveOriginalToTelegram } from '../_shared/telegram';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
@@ -21,6 +21,7 @@ INSERT INTO images (
   location_name,
   location_lat,
   location_lng,
+  location_region,
   exif_taken_at,
   exif_camera,
   exif_iso,
@@ -37,7 +38,7 @@ INSERT INTO images (
   is_public,
   location_public,
   folder_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const SELECT_SQL =
@@ -71,6 +72,7 @@ interface UploadMeta {
   location_name: string | null;
   location_lat: number | null;
   location_lng: number | null;
+  location_region: 'china' | 'global' | null;
   tags_json: string | null;
   search_content: string | null;
   dominant_color: string | null;
@@ -148,22 +150,27 @@ const normalizeFlag = (value: unknown, fallback: 0 | 1): 0 | 1 => {
   return fallback;
 };
 
-const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => ({
-  title: stringOrEmpty(raw.title),
-  caption: stringOrNull(raw.caption),
-  location_name: stringOrNull(raw.location_name),
-  location_lat: normalizeCoordinate(raw.location_lat, -90, 90),
-  location_lng: normalizeCoordinate(raw.location_lng, -180, 180),
-  tags_json: normalizeTagsJson(raw.tags),
-  search_content: stringOrNull(raw.search_content),
-  dominant_color: stringOrNull(raw.dominant_color),
-  color_palette_json: normalizeColorPaletteJson(raw.palette),
-  composition: stringOrNull(raw.composition),
-  ai_status: normalizeAiStatus(raw.ai_status),
-  is_public: normalizeFlag(raw.is_public, 1),
-  location_public: normalizeFlag(raw.location_public, 1),
-  folder_id: stringOrNull(raw.folder_id),
-});
+const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => {
+  const location_lat = normalizeCoordinate(raw.location_lat, -90, 90);
+  const location_lng = normalizeCoordinate(raw.location_lng, -180, 180);
+  return {
+    title: stringOrEmpty(raw.title),
+    caption: stringOrNull(raw.caption),
+    location_name: stringOrNull(raw.location_name),
+    location_lat,
+    location_lng,
+    location_region: normalizeRegion(raw.location_region, location_lat, location_lng),
+    tags_json: normalizeTagsJson(raw.tags),
+    search_content: stringOrNull(raw.search_content),
+    dominant_color: stringOrNull(raw.dominant_color),
+    color_palette_json: normalizeColorPaletteJson(raw.palette),
+    composition: stringOrNull(raw.composition),
+    ai_status: normalizeAiStatus(raw.ai_status),
+    is_public: normalizeFlag(raw.is_public, 1),
+    location_public: normalizeFlag(raw.location_public, 1),
+    folder_id: stringOrNull(raw.folder_id),
+  };
+};
 
 const normalizeExif = (raw: Record<string, unknown>): UploadExif => ({
   taken_at: stringOrNull(raw.taken_at),
@@ -257,6 +264,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         meta.location_name,
         meta.location_lat,
         meta.location_lng,
+        meta.location_region,
         exif.taken_at,
         exif.camera,
         exif.iso,
