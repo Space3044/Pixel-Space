@@ -64,8 +64,5 @@ export const gcj02ToWgs84 = (lng: number, lat: number): LngLat => {
 export const mapLngLatFromStored = (coordinate: LngLat): LngLat =>
   wgs84ToGcj02(coordinate.lng, coordinate.lat);
 
-export const mapLngLatForRegion = (coordinate: LngLat, region: MapRegion): LngLat =>
-  region === 'china' ? wgs84ToGcj02(coordinate.lng, coordinate.lat) : coordinate;
-
 export const storedLngLatFromMap = (coordinate: LngLat): LngLat =>
   gcj02ToWgs84(coordinate.lng, coordinate.lat);

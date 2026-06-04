@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import {
   gcj02ToWgs84,
-  mapLngLatForRegion,
   mapLngLatFromStored,
   mapRegionForStoredCoordinate,
   storedLngLatFromMap,
@@ -46,11 +45,4 @@ test('map region uses China as default and switches global for foreign coordinat
   assert.equal(mapRegionForStoredCoordinate(null), 'china');
   assert.equal(mapRegionForStoredCoordinate({ lng: 121.4737, lat: 31.2304 }), 'china');
   assert.equal(mapRegionForStoredCoordinate({ lng: 2.3522, lat: 48.8566 }), 'global');
-});
-
-test('map coordinate conversion follows the active base map region', () => {
-  const shanghai = { lng: 121.4737, lat: 31.2304 };
-
-  assert.notDeepEqual(mapLngLatForRegion(shanghai, 'china'), shanghai);
-  assert.deepEqual(mapLngLatForRegion(shanghai, 'global'), shanghai);
 });
