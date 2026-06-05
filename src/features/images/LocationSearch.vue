@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { searchLocations, type GeocodeRegion, type GeocodeResult } from './geocode.api';
 
-const emit = defineEmits<{ select: [result: GeocodeResult] }>();
+const emit = defineEmits<{ select: [result: GeocodeResult]; 'region-change': [region: GeocodeRegion] }>();
 
 const query = ref('');
 const selectedRegion = ref<GeocodeRegion>('cn');
@@ -34,6 +34,7 @@ const selectResult = (result: GeocodeResult) => {
 
 const setRegion = (region: GeocodeRegion) => {
   selectedRegion.value = region;
+  emit('region-change', region);
   results.value = [];
   error.value = null;
 };

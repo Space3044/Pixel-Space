@@ -7,15 +7,14 @@ import AppShell from '@/shared/ui/AppShell.vue';
 import LocationSearch from '@/features/images/LocationSearch.vue';
 import FolderPickerPopover from '@/features/images/FolderPickerPopover.vue';
 import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
-import { reverseGeocodeLocation, type GeocodeResult } from '@/features/images/geocode.api';
+import { reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkImageHash } from '@/features/images/images.api';
-import { mapLngLatFromStored, mapRegionForStoredCoordinate, storedLngLatFromMap } from './map-coordinate';
+import { mapRegionForStoredCoordinate } from './map-coordinate';
 import type { MapRegion } from './map-coordinate';
 import { formatExifTakenAt, normalizeExif } from './exif';
-import { loadAmap } from './amap';
-import type { AMapClickEvent, AMapMap, AMapMarker, AMapNamespace } from './amap';
+import { createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter } from './pick-map';
 import { previewAiAnnotation } from './ai-preview.api';
 import { uploadImage } from './upload.api';
 import { buildUploadFormData } from './upload-form';
@@ -23,8 +22,6 @@ import type { UploadDimensions, UploadExif, UploadMeta } from './upload.types';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 const MAX_EDGE = 2048;
-const DEFAULT_CENTER = { lat: 31.2304, lng: 121.4737 };
-const DEFAULT_MAP_CENTER = mapLngLatFromStored(DEFAULT_CENTER);
 
 type EntryStatus = 'processing' | 'ready' | 'uploading' | 'done' | 'error';
 type AiStatus = 'idle' | 'pending' | 'done' | 'failed';
@@ -115,9 +112,9 @@ const batchFolderId = ref<string>('');
 const syncLocation = ref<boolean>(false);
 const folders = ref<FolderRecord[]>([]);
 
-let map: AMapMap | null = null;
-let marker: AMapMarker | null = null;
-let amap: AMapNamespace | null = null;
+let pickAdapter: PickMapAdapter | null = null;
+// 取景底图区域：跟随位置搜索的国内/国外开关切换引擎（国内高德、国外 Mapbox）。
+const pickRegion = ref<GeocodeRegion>('cn');
 
 const currentEntry = computed(() => entries.value.find((entry) => entry.id === currentEntryId.value) ?? null);
 const hasCurrent = computed(() => currentEntry.value !== null);
@@ -200,16 +197,6 @@ const releaseEntryPreview = (entry: UploadEntry) => {
   entry.previewUrl = null;
 };
 
-const createMapMarkerElement = (): HTMLSpanElement => {
-  const element = document.createElement('span');
-  element.className = 'map-marker map-location-pin';
-  element.setAttribute('aria-hidden', 'true');
-  const dot = document.createElement('span');
-  dot.className = 'map-location-pin-dot';
-  element.appendChild(dot);
-  return element;
-};
-
 const currentStoredCoordinate = () => {
   const entry = currentEntry.value;
   const lat = entry?.meta.location_lat ?? null;
@@ -217,31 +204,8 @@ const currentStoredCoordinate = () => {
   return lat === null || lng === null ? null : { lng, lat };
 };
 
-const updateMapMarker = (centerMap = false) => {
-  if (!map || !amap) return;
-  const coordinate = currentStoredCoordinate();
-
-  if (!coordinate) {
-    marker?.setMap(null);
-    marker = null;
-    return;
-  }
-
-  const mapCoordinate = mapLngLatFromStored(coordinate);
-  const lngLat: [number, number] = [mapCoordinate.lng, mapCoordinate.lat];
-  if (!marker) {
-    marker = new amap.Marker({
-      position: lngLat,
-      content: createMapMarkerElement(),
-      anchor: 'bottom-center',
-    });
-    marker.setMap(map);
-  } else {
-    marker.setPosition(lngLat);
-  }
-
-  if (centerMap)
-    map.setZoomAndCenter(Math.max(map.getZoom(), 12), lngLat);
+const syncMarker = (center = false) => {
+  pickAdapter?.setMarker(currentStoredCoordinate(), center);
 };
 
 const setEntryCoordinates = (entry: UploadEntry, lat: number | null, lng: number | null, centerMap = true) => {
@@ -249,7 +213,7 @@ const setEntryCoordinates = (entry: UploadEntry, lat: number | null, lng: number
   entry.meta.location_lng = lng;
   // 坐标一变就重算归属区域作为默认，用户随后可在表单里手动校正。
   entry.meta.location_region = lat === null || lng === null ? null : mapRegionForStoredCoordinate({ lng, lat });
-  if (entry.id === currentEntryId.value) updateMapMarker(centerMap);
+  if (entry.id === currentEntryId.value) syncMarker(centerMap);
 };
 
 // 把当前选中图的位置广播给目标图：只在同步开关打开、对方还没坐标时才覆盖；
@@ -278,37 +242,38 @@ const loadFolders = async () => {
   }
 };
 
-const initMap = async () => {
-  if (!mapRef.value || map) return;
-  amap = await loadAmap();
-  if (!mapRef.value || map) return;
+const mountMap = async () => {
+  if (!mapRef.value || pickAdapter) return;
+  mapLoadState.value = 'loading';
+  const adapter = pickRegion.value === 'cn' ? createChinaPickAdapter() : createWorldPickAdapter();
+  pickAdapter = adapter;
+  await adapter.init(
+    mapRef.value,
+    () => {
+      if (pickAdapter !== adapter) return;
+      mapLoadState.value = 'ready';
+      adapter.setMarker(currentStoredCoordinate(), false);
+    },
+    (stored) => {
+      const entry = currentEntry.value;
+      if (!entry) return;
+      setEntryCoordinates(entry, stored.lat, stored.lng, false);
+    },
+  );
+};
 
-  map = new amap.Map(mapRef.value, {
-    center: [DEFAULT_MAP_CENTER.lng, DEFAULT_MAP_CENTER.lat],
-    zoom: 9,
-    lang: 'zh_cn',
-    viewMode: '2D',
-    resizeEnable: true,
-  });
-  map.addControl(new amap.ToolBar({ position: 'RT' }));
-  map.addControl(new amap.Scale());
-  mapLoadState.value = 'ready';
+// 切换搜索区域时换底图引擎：销毁旧实例、按新区域重建，标记在 onReady 里按当前坐标恢复。
+const remountMap = async () => {
+  pickAdapter?.destroy();
+  pickAdapter = null;
+  mapLoadState.value = 'loading';
+  await mountMap();
+};
 
-  map.on('click', (event: AMapClickEvent) => {
-    const entry = currentEntry.value;
-    if (!entry) return;
-    const storedCoordinate = storedLngLatFromMap({
-      lng: event.lnglat.getLng(),
-      lat: event.lnglat.getLat(),
-    });
-    setEntryCoordinates(
-      entry,
-      Number(storedCoordinate.lat.toFixed(6)),
-      Number(storedCoordinate.lng.toFixed(6)),
-      false,
-    );
-  });
-  updateMapMarker(false);
+const onSearchRegionChange = (region: GeocodeRegion) => {
+  if (region === pickRegion.value) return;
+  pickRegion.value = region;
+  void remountMap();
 };
 
 const readExif = async (file: File): Promise<UploadExif> => {
@@ -645,26 +610,26 @@ const submitUploadAll = async () => {
 
 watch(currentEntryId, () => {
   void nextTick(() => {
-    if (!map && mapRef.value) {
-      void initMap();
+    if (!pickAdapter) {
+      void mountMap();
       return;
     }
-    updateMapMarker(true);
-    map?.resize?.();
+    syncMarker(true);
+    pickAdapter.resize();
   });
 });
 
 watch(
   () => currentEntry.value?.meta.location_lat,
   () => {
-    updateMapMarker(false);
+    syncMarker(false);
     broadcastLocationToAll();
   },
 );
 watch(
   () => currentEntry.value?.meta.location_lng,
   () => {
-    updateMapMarker(false);
+    syncMarker(false);
     broadcastLocationToAll();
   },
 );
@@ -677,17 +642,14 @@ watch(syncLocation, (val) => {
 });
 
 onMounted(() => {
-  void initMap();
+  void mountMap();
   void loadFolders();
 });
 
 onBeforeUnmount(() => {
   for (const entry of entries.value) releaseEntryPreview(entry);
-  marker?.setMap(null);
-  map?.destroy();
-  marker = null;
-  map = null;
-  amap = null;
+  pickAdapter?.destroy();
+  pickAdapter = null;
 });
 </script>
 
@@ -1086,7 +1048,7 @@ onBeforeUnmount(() => {
                     清空
                   </button>
                 </div>
-                <LocationSearch class="location-search" @select="applyLocationSearchResult" />
+                <LocationSearch class="location-search" @select="applyLocationSearchResult" @region-change="onSearchRegionChange" />
                 <div ref="mapRef" class="map-pane" aria-label="点击地图选择图片位置"></div>
                 <p v-if="mapLoadState !== 'ready'" class="map-status">
                   正在加载地图
@@ -2237,6 +2199,22 @@ onBeforeUnmount(() => {
 
 .map-pane :deep(.amap-toolbar button:hover) {
   background-color: rgba(53, 243, 255, 0.16);
+}
+
+.map-pane :deep(.maplibregl-ctrl-attrib) {
+  background: rgba(7, 7, 19, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.map-pane :deep(.maplibregl-ctrl-attrib),
+.map-pane :deep(.maplibregl-ctrl-attrib a) {
+  color: rgba(148, 163, 184, 0.82);
+}
+
+.map-pane :deep(.maplibregl-ctrl-scale) {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(7, 7, 19, 0.55);
+  color: rgba(226, 232, 240, 0.82);
 }
 
 .map-pane :deep(.map-marker) {

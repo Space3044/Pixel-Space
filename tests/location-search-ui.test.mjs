@@ -50,17 +50,19 @@ test('LocationSearch lets the user choose domestic or global geocoding', () => {
   assert.match(locationSearch, /searchLocations\(keyword, selectedRegion\.value\)/);
   assert.match(locationSearch, /setRegion\('cn'\)/);
   assert.match(locationSearch, /setRegion\('global'\)/);
+  assert.match(locationSearch, /emit\('region-change', region\)/);
   assert.match(locationSearch, /国内/);
   assert.match(locationSearch, /国外/);
 });
 
 test('UploadView applies selected geocode result to location name and marker coordinates', () => {
   assert.match(upload, /import LocationSearch from '@\/features\/images\/LocationSearch\.vue'/);
-  assert.match(upload, /import \{ reverseGeocodeLocation, type GeocodeResult \} from '@\/features\/images\/geocode\.api'/);
+  assert.match(upload, /import \{ reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult \} from '@\/features\/images\/geocode\.api'/);
   assert.match(upload, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
   assert.match(upload, /meta\.location_name = result\.name/);
   assert.match(upload, /setEntryCoordinates\(entry, result\.lat, result\.lng, true\)/);
-  assert.match(upload, /<LocationSearch class="location-search" @select="applyLocationSearchResult" \/>/);
+  assert.match(upload, /const onSearchRegionChange = \(region: GeocodeRegion\) =>/);
+  assert.match(upload, /<LocationSearch class="location-search" @select="applyLocationSearchResult" @region-change="onSearchRegionChange" \/>/);
 });
 
 test('ImageLightbox applies selected geocode result while editing location', () => {

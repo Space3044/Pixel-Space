@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const amapLoader = readFileSync('src/features/upload/amap.ts', 'utf8');
 const uploadView = readFileSync('src/features/upload/UploadView.vue', 'utf8');
+const pickMap = readFileSync('src/features/upload/pick-map.ts', 'utf8');
 const readOnlyMap = readFileSync('src/features/images/ReadOnlyMap.vue', 'utf8');
 const hiveView = readFileSync('src/features/hive/HiveView.vue', 'utf8');
 const mapboxLoader = readFileSync('src/features/hive/mapbox.ts', 'utf8');
@@ -30,12 +31,23 @@ test('AMap loader uses the official JS API loader with zh_cn language', () => {
   assert.match(amapLoader, /'AMap\.Geocoder'/);
 });
 
-test('upload and read-only maps use AMap JS API instead of MapLibre styles', () => {
-  for (const source of [uploadView, readOnlyMap]) {
-    assert.match(source, /loadAmap/);
-    assert.match(source, /new amap\.Map/);
-    assert.doesNotMatch(source, /maplibre-gl|primaryMapStyleForRegion|RASTER_FALLBACK_STYLE|setStyle/);
-  }
+test('read-only single image map uses AMap JS API instead of MapLibre styles', () => {
+  assert.match(readOnlyMap, /loadAmap/);
+  assert.match(readOnlyMap, /new amap\.Map/);
+  assert.doesNotMatch(readOnlyMap, /maplibre-gl|primaryMapStyleForRegion|RASTER_FALLBACK_STYLE|setStyle/);
+});
+
+test('upload picker splits into AMap (domestic) and Mapbox (overseas) maps', () => {
+  // 容器不直接建图，引擎差异收敛到 pick-map.ts 的两个 adapter
+  assert.doesNotMatch(uploadView, /new amap\.Map|new maplibregl\.Map/);
+  assert.match(uploadView, /createChinaPickAdapter/);
+  assert.match(uploadView, /createWorldPickAdapter/);
+  assert.match(pickMap, /loadAmap/);
+  assert.match(pickMap, /new amap\.Map/);
+  assert.match(pickMap, /amap:\/\/styles\/grey/);
+  assert.match(pickMap, /loadMapboxToken/);
+  assert.match(pickMap, /new maplibregl\.Map/);
+  assert.match(pickMap, /mapboxRasterStyle/);
 });
 
 test('footprint page splits into AMap (domestic) and Mapbox (overseas) maps', () => {
@@ -57,17 +69,22 @@ test('footprint page splits into AMap (domestic) and Mapbox (overseas) maps', ()
 });
 
 test('AMap maps keep WGS84 storage and GCJ-02 display conversion', () => {
-  assert.match(uploadView, /mapLngLatFromStored/);
-  assert.match(uploadView, /storedLngLatFromMap/);
+  assert.match(pickMap, /mapLngLatFromStored/);
+  assert.match(pickMap, /storedLngLatFromMap/);
   assert.match(readOnlyMap, /mapLngLatFromStored/);
   assert.match(readOnlyMap, /storedLngLatFromMap/);
 });
 
 test('single image maps use pin markers anchored at the coordinate point', () => {
-  for (const source of [uploadView, readOnlyMap]) {
-    assert.match(source, /map-location-pin/);
-    assert.match(source, /map-location-pin-dot/);
-    assert.match(source, /anchor:\s*'bottom-center'/);
-    assert.match(source, /clip-path:\s*polygon/);
-  }
+  assert.match(readOnlyMap, /map-location-pin/);
+  assert.match(readOnlyMap, /map-location-pin-dot/);
+  assert.match(readOnlyMap, /anchor:\s*'bottom-center'/);
+  assert.match(readOnlyMap, /clip-path:\s*polygon/);
+
+  // 取景图样式留在 UploadView，标记创建移到 pick-map：高德锚点 bottom-center、Mapbox 锚点 bottom
+  assert.match(uploadView, /map-location-pin/);
+  assert.match(uploadView, /clip-path:\s*polygon/);
+  assert.match(pickMap, /map-location-pin/);
+  assert.match(pickMap, /anchor:\s*'bottom-center'/);
+  assert.match(pickMap, /anchor:\s*'bottom'/);
 });

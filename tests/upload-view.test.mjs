@@ -59,8 +59,8 @@ test('upload workbench keeps the preview fixed while side panels scroll with sty
 });
 
 test('upload map can place a marker before a file is selected', () => {
-  const clickHandler = extract("map.on('click'", '  });\n  updateMapMarker(false);');
-  assert.doesNotMatch(clickHandler, /selectedFile\.value/);
+  // 点选回调在 pick-map adapter 里触发，UploadView 不再用被移除的 selectedFile 把关
+  assert.doesNotMatch(view, /selectedFile\.value/);
 
   const mapBlock = extract('<div class="map-block">', '            </section>\n          </aside>');
   assert.doesNotMatch(mapBlock, /:disabled="!hasFile"/);
