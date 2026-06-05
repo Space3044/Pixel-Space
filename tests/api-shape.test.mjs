@@ -145,7 +145,7 @@ await test('GET /api/list returns empty array when D1 has no rows', async () => 
   assert.deepEqual(data, []);
 });
 
-await test('GET /api/list searches title caption and location by q parameter', async () => {
+await test('GET /api/list searches title caption original filename and location by q parameter', async () => {
   const { env, calls } = makeEnv(sampleRow, [sampleRow]);
   const res = await listGet({
     env,
@@ -157,11 +157,12 @@ await test('GET /api/list searches title caption and location by q parameter', a
   assert.match(calls.prepared[0], /WHERE/i);
   assert.match(calls.prepared[0], /\btitle\b/i);
   assert.match(calls.prepared[0], /\bcaption\b/i);
+  assert.match(calls.prepared[0], /\boriginal_filename\b/i);
   assert.match(calls.prepared[0], /\blocation_name\b/i);
   assert.match(calls.prepared[0], /\bsearch_content\b/i);
   assert.match(calls.prepared[0], /\bdominant_color\b/i);
   assert.match(calls.prepared[0], /\bcomposition\b/i);
-  assert.deepEqual(calls.binds[0], ['%上海%', '%上海%', '%上海%', '%上海%', '%上海%', '%上海%']);
+  assert.deepEqual(calls.binds[0], ['%上海%', '%上海%', '%上海%', '%上海%', '%上海%', '%上海%', '%上海%']);
 });
 
 await test('GET /api/image/:key returns single ImageRecord', async () => {

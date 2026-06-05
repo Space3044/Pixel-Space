@@ -67,14 +67,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     if (!isAdmin) conditions.push('is_public = 1');
 
     if (search) {
-      const likeBinds = Array(6).fill(`%${search}%`);
+      const likeBinds = Array(7).fill(`%${search}%`);
       if (isAdmin) {
         conditions.push(
-          '(title LIKE ? OR caption LIKE ? OR location_name LIKE ? OR search_content LIKE ? OR dominant_color LIKE ? OR composition LIKE ?)',
+          '(title LIKE ? OR caption LIKE ? OR original_filename LIKE ? OR location_name LIKE ? OR search_content LIKE ? OR dominant_color LIKE ? OR composition LIKE ?)',
         );
       } else {
         conditions.push(
-          '(title LIKE ? OR caption LIKE ? OR (location_public = 1 AND location_name LIKE ?) OR search_content LIKE ? OR dominant_color LIKE ? OR composition LIKE ?)',
+          '(title LIKE ? OR caption LIKE ? OR original_filename LIKE ? OR (location_public = 1 AND location_name LIKE ?) OR search_content LIKE ? OR dominant_color LIKE ? OR composition LIKE ?)',
         );
       }
       binds.push(...likeBinds);

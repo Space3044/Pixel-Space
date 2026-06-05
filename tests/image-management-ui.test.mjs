@@ -21,7 +21,7 @@ test('GalleryView wires the search box to listImages(query)', () => {
   assert.match(gallery, /const searchQuery = ref/);
   assert.match(gallery, /listImages\(searchQuery\.value,\s*\{ folderId \}\)/);
   assert.match(gallery, /@submit\.prevent="loadImages"/);
-  assert.match(gallery, /placeholder="搜索标题、描述或位置"/);
+  assert.match(gallery, /placeholder="搜索标题、描述、文件名或位置"/);
   assert.match(gallery, /class="explore-header"/);
   assert.match(gallery, />探索</);
   assert.match(gallery, /发现公开图片/);

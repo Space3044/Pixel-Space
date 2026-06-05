@@ -163,8 +163,8 @@ const clearSearch = async () => {
               v-model="searchQuery"
               type="search"
               class="gallery-search-input"
-              placeholder="搜索标题、描述或位置"
-              aria-label="搜索标题、描述或位置"
+              placeholder="搜索标题、描述、文件名或位置"
+              aria-label="搜索标题、描述、文件名或位置"
             />
             <button v-if="searchQuery" type="button" class="toolbar-icon" aria-label="清空搜索" @click="clearSearch">
               清空
