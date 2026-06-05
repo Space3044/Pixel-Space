@@ -34,10 +34,11 @@ test('PublicImageView always reserves the location card and falls back to a plac
 });
 
 test('PublicImageView lays out the image and information side by side on desktop', () => {
+  assert.match(view, /<article class="mx-auto w-full max-w-\[90rem\] px-4 py-8 sm:px-6">/);
   assert.match(view, /class="public-image-layout"/);
   assert.match(view, /class="public-image-preview/);
   assert.match(view, /class="public-image-info/);
-  assert.match(view, /\.public-image-layout\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*24rem;/s);
+  assert.match(view, /\.public-image-layout\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*60rem\)\s*24rem;/s);
   assert.match(view, /@media \(max-width:\s*900px\)\s*\{[^}]*\.public-image-layout\s*\{[^}]*grid-template-columns:\s*1fr;/s);
 });
 
@@ -54,8 +55,17 @@ test('PublicImageView shows exposure metadata in the information column', () => 
   assert.match(view, /焦距/);
 });
 
-test('PublicImageView stretches the image preview to match the info column height', () => {
-  assert.match(view, /\.public-image-layout\s*\{[^}]*align-items:\s*stretch;/s);
+test('PublicImageView reserves a fixed desktop image stage constrained to the viewport height', () => {
+  assert.match(view, /\.public-image-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*60rem\)\s*24rem;[^}]*align-items:\s*start;[^}]*justify-content:\s*center;/s);
+  assert.match(view, /\.public-image-preview\s*\{[^}]*height:\s*clamp\(32rem,\s*calc\(100vh - 8rem\),\s*48rem\);/s);
   assert.match(view, /\.public-image-preview\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s);
   assert.match(view, /\.public-image-img\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*contain;/s);
+});
+
+test('PublicImageView pins the side cards to the image stage while keeping the sidebar gap', () => {
+  assert.match(view, /\.public-image-info\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:\s*clamp\(32rem,\s*calc\(100vh - 8rem\),\s*48rem\);[^}]*gap:\s*1rem;/s);
+  assert.match(view, /\.public-image-info > \.public-info-card:first-child\s*\{[^}]*flex:\s*1 1 auto;/s);
+  assert.match(view, /\.public-image-info > \.public-info-card:nth-child\(2\)\s*\{[^}]*flex:\s*0 0 auto;/s);
+  assert.doesNotMatch(view, /justify-content:\s*space-between/);
+  assert.match(view, /@media \(max-width:\s*900px\)[\s\S]*?\.public-image-info\s*\{[\s\S]*?height:\s*auto;/);
 });

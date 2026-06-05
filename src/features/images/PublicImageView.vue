@@ -84,7 +84,7 @@ const exifRows = computed(() => {
       </div>
     </header>
 
-    <article class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
+    <article class="mx-auto w-full max-w-[90rem] px-4 py-8 sm:px-6">
       <p v-if="loading" class="text-sm text-slate-500">加载中…</p>
       <p v-else-if="loadError" class="text-sm text-rose-400">加载失败：{{ loadError }}</p>
       <template v-else-if="image">
@@ -132,8 +132,9 @@ const exifRows = computed(() => {
 <style scoped>
 .public-image-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24rem;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 60rem) 24rem;
+  align-items: start;
+  justify-content: center;
   gap: 1.5rem;
 }
 
@@ -141,6 +142,7 @@ const exifRows = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  height: clamp(32rem, calc(100vh - 8rem), 48rem);
   overflow: hidden;
   border-radius: 6px;
 }
@@ -156,12 +158,21 @@ const exifRows = computed(() => {
 .public-image-info {
   display: flex;
   flex-direction: column;
+  height: clamp(32rem, calc(100vh - 8rem), 48rem);
   gap: 1rem;
 }
 
 .public-info-card {
   border-radius: 6px;
   padding: 1.25rem;
+}
+
+.public-image-info > .public-info-card:first-child {
+  flex: 1 1 auto;
+}
+
+.public-image-info > .public-info-card:nth-child(2) {
+  flex: 0 0 auto;
 }
 
 .public-exif-grid {
@@ -202,9 +213,16 @@ const exifRows = computed(() => {
     grid-template-columns: 1fr;
   }
 
-  .public-image-img {
+  .public-image-preview {
+    height: clamp(22rem, 72vh, 40rem);
+  }
+
+  .public-image-info {
     height: auto;
-    max-height: none;
+  }
+
+  .public-image-img {
+    height: 100%;
   }
 }
 </style>
