@@ -913,7 +913,7 @@ onBeforeUnmount(() => {
                   <span class="visibility-toggle-hint">
                     {{
                       displayEntry.meta.is_public === 1
-                        ? '会出现在图库、随机和蜂巢等公开聚合视图'
+                        ? '会出现在图库、随机和足迹等公开聚合视图'
                         : '私藏，仅凭直链可见，不进入任何公开聚合'
                     }}
                   </span>

@@ -4,6 +4,10 @@ import { existsSync, readFileSync } from 'node:fs';
 const shell = readFileSync('src/shared/ui/AppShell.vue', 'utf8');
 const router = readFileSync('src/app/router.ts', 'utf8');
 const i18nPath = 'src/shared/i18n/useLanguage.ts';
+const legacyPath = ['/', 'h', 'ive'].join('');
+const legacyIcon = ['h', 'ive'].join('');
+const legacyView = `${legacyIcon[0].toUpperCase()}${legacyIcon.slice(1)}View`;
+const legacyTitle = '\u8702\u5de2';
 
 const extractNavLinks = (name) => {
   const match = shell.match(new RegExp(`const ${name}: [^=]+ = \\[([\\s\\S]*?)\\];`));
@@ -21,15 +25,15 @@ const test = (name, fn) => {
   }
 };
 
-test('AppShell renames the hive nav entry to footprints', () => {
-  assert.match(shell, /\{\s*to:\s*'\/hive',\s*label:\s*'足迹'/);
-  assert.doesNotMatch(shell, /\{\s*to:\s*'\/hive',\s*label:\s*'蜂巢'/);
+test('AppShell links the footprints nav entry to the footprints route', () => {
+  assert.match(shell, /\{\s*to:\s*'\/footprints',\s*label:\s*'足迹',\s*icon:\s*'footprints'\s*\}/);
+  assert.doesNotMatch(shell, new RegExp(`${legacyPath}|icon:\\s*'${legacyIcon}'|${legacyTitle}`));
 });
 
 test('router title matches the footprints page', () => {
-  assert.match(router, /path:\s*'\/hive'[\s\S]*title:\s*'足迹'/);
-  assert.doesNotMatch(router, /path:\s*'\/hive'[\s\S]*titleKey/);
-  assert.doesNotMatch(router, /path:\s*'\/hive'[\s\S]*title:\s*'蜂巢'/);
+  assert.match(router, /path:\s*'\/footprints'[\s\S]*name:\s*'footprints'[\s\S]*title:\s*'足迹'/);
+  assert.match(router, /@\/features\/footprints\/FootprintsView\.vue/);
+  assert.doesNotMatch(router, new RegExp(`${legacyPath}|${legacyView}|titleKey|${legacyTitle}`));
 });
 
 test('AppShell exposes the library route as the admin console', () => {

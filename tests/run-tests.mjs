@@ -41,7 +41,7 @@ for (const path of [
   './app-shell.test.mjs',
   './geo-hit.test.mjs',
   './world-boundary-globe.test.mjs',
-  './hive-view.test.mjs',
+  './footprints-view.test.mjs',
 ]) {
   await import(path);
 }

@@ -2,7 +2,6 @@ import type { ImageRecord } from '@/features/images/image.types';
 import type { MapRegion } from '@/features/upload/map-coordinate';
 
 // 足迹页的点位分组：同一地点（同名 + 同四位小数坐标）的图聚成一组。
-// region 取图自带的 location_region，缺省时用国内作为旧数据兜底，不再按坐标推断。
 
 export interface FootprintGroup {
   key: string;
@@ -25,16 +24,18 @@ const isLocatedImage = (image: ImageRecord): image is LocatedImage =>
 
 const coordinateLabel = (lat: number, lng: number) => `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-const regionOf = (image: LocatedImage): MapRegion =>
+const regionOf = (image: LocatedImage): MapRegion | null =>
   image.location_region === 'china' || image.location_region === 'global'
     ? image.location_region
-    : 'china';
+    : null;
 
 export const groupFootprints = (images: ImageRecord[]): FootprintGroup[] => {
   const groups = new Map<string, FootprintGroup>();
 
   for (const image of images) {
     if (!isLocatedImage(image)) continue;
+    const region = regionOf(image);
+    if (!region) continue;
     const name = image.location_name?.trim() || coordinateLabel(image.location_lat, image.location_lng);
     const key = `${name}|${image.location_lat.toFixed(4)}|${image.location_lng.toFixed(4)}`;
     let group = groups.get(key);
@@ -45,7 +46,7 @@ export const groupFootprints = (images: ImageRecord[]): FootprintGroup[] => {
         name,
         lat: image.location_lat,
         lng: image.location_lng,
-        region: regionOf(image),
+        region,
         cover: image,
         images: [],
       };

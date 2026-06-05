@@ -22,7 +22,7 @@ src/                          Vue 前端 SPA
     images/       /images      探索（瀑布 + 搜索 + 文件夹筛选 + lightbox）
     images/       /p/:key      公开分享页
     random/       /random      随机一张
-    hive/         /hive        旅行足迹（高德平面图 + Three.js 旋转地球）
+    footprints/   /footprints  旅行足迹（高德平面图 + Three.js 旋转地球）
     upload/       /upload      多文件上传 + EXIF + AI 预览 + 批量目录
     library/      /library     管理员控制台（文件管理 + AI 配置）
     auth/         /login       Cloudflare Access 引导

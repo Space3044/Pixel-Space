@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { groupFootprints } from '../src/features/footprints/footprint.ts';
 
-const view = readFileSync('src/features/hive/HiveView.vue', 'utf8');
-const flatMap = readFileSync('src/features/hive/FootprintFlatMap.vue', 'utf8');
-const footprint = readFileSync('src/features/hive/footprint.ts', 'utf8');
+const view = readFileSync('src/features/footprints/FootprintsView.vue', 'utf8');
+const flatMap = readFileSync('src/features/footprints/FootprintFlatMap.vue', 'utf8');
+const footprint = readFileSync('src/features/footprints/footprint.ts', 'utf8');
 
 const test = (name, fn) => {
   try {
@@ -15,7 +16,7 @@ const test = (name, fn) => {
   }
 };
 
-test('HiveView is a container that splits footprints into domestic and overseas maps', () => {
+test('FootprintsView is a container that splits footprints into domestic and overseas maps', () => {
   assert.match(view, /旅行足迹/);
   assert.match(view, /import\s+\{\s*groupFootprints[^}]*\}\s+from\s+'\.\/footprint'/);
   assert.match(view, /import\s+FootprintFlatMap\s+from\s+'\.\/FootprintFlatMap\.vue'/);
@@ -34,7 +35,7 @@ test('HiveView is a container that splits footprints into domestic and overseas 
   assert.match(view, /<WorldBoundaryGlobe\s+:visited-places="visitedPlaces"\s+:visited-coordinates="visitedCoordinates"/);
 });
 
-test('HiveView keeps the stats, selection detail and globe', () => {
+test('FootprintsView keeps the stats, selection detail and globe', () => {
   assert.match(view, /const footprints = computed\(\(\) => groupFootprints\(images\.value\)\)/);
   assert.match(view, /locatedCount/);
   assert.match(view, /unlocatedCount/);
@@ -66,4 +67,20 @@ test('footprint grouping resolves region per point', () => {
   assert.match(footprint, /location_region === 'global'/);
   assert.doesNotMatch(footprint, /mapRegionForStoredCoordinate/);
   assert.match(footprint, /region:/);
+});
+
+test('footprint grouping ignores located images without an explicit region', () => {
+  const groups = groupFootprints([
+    {
+      key: 'img-1',
+      title: 'missing region',
+      caption: null,
+      location_lat: 31.2,
+      location_lng: 121.4,
+      location_name: '上海',
+      location_region: null,
+    },
+  ]);
+
+  assert.deepEqual(groups, []);
 });

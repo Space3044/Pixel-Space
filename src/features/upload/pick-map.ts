@@ -1,7 +1,7 @@
 import { loadAmap } from './amap';
 import type { AMapClickEvent, AMapMap, AMapMarker, AMapNamespace } from './amap';
-import { loadMapboxToken, mapboxRasterStyle, maplibregl } from '@/features/hive/mapbox';
-import type { MaplibreMap, MaplibreMarker } from '@/features/hive/mapbox';
+import { loadMapboxToken, mapboxRasterStyle, maplibregl } from '@/features/footprints/mapbox';
+import type { MaplibreMap, MaplibreMarker } from '@/features/footprints/mapbox';
 import { mapLngLatFromStored, storedLngLatFromMap } from './map-coordinate';
 import type { LngLat } from './map-coordinate';
 

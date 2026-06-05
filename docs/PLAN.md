@@ -21,8 +21,8 @@ src/
       LoginView.vue
     home/
       HomeView.vue
-    hive/
-      HiveView.vue
+    footprints/
+      FootprintsView.vue
     images/
       GalleryView.vue
       ImageLightbox.vue
@@ -90,7 +90,7 @@ tests/
 - `GET /api/image/:key`：单图公开元数据。
 - `GET /api/public/:key`：R2 压缩图回吐（本地开发用，生产走 R2 公共域名直链）。
 - `GET /api/geocode`：国外位置搜索代理，无破坏性，目前不锁；国内搜索走高德 JS API。
-- 公开分享页 `/p/:key`、首页、图库 `/images`、随机 `/random`、蜂巢 `/hive` 等纯展示路由。
+- 公开分享页 `/p/:key`、首页、图库 `/images`、随机 `/random`、足迹 `/footprints` 等纯展示路由。
 
 **前端权限点**：
 
@@ -108,7 +108,7 @@ tests/
 
 两个开关都落在 `images` 表，由 `db/migrations/0001_init.sql` 直接创建：
 
-- `is_public INTEGER NOT NULL DEFAULT 1`：是否公开到图库/探索/随机/蜂巢/足迹等任何聚合视图。`0` 表示"私藏"，访客在所有列表型接口里都看不到这张图，但只要拿到 `key` 仍可通过 `GET /api/image/:key` 与 `/p/:key` 直接访问（key 是 UUID 不可枚举，等同"凭直链可见"）。
+- `is_public INTEGER NOT NULL DEFAULT 1`：是否公开到图库/探索/随机/足迹等任何聚合视图。`0` 表示"私藏"，访客在所有列表型接口里都看不到这张图，但只要拿到 `key` 仍可通过 `GET /api/image/:key` 与 `/p/:key` 直接访问（key 是 UUID 不可枚举，等同"凭直链可见"）。
 - `location_public INTEGER NOT NULL DEFAULT 1`：是否对访客暴露位置。`0` 表示访客拿不到 `location_lat`、`location_lng`、`location_name`；详情页的地图区块仍然渲染，但是是一张**没有标记的空地图**，明确传达"作者保留了位置但选择不公开"的语义。无位置数据的图（lat/lng/name 全空）不渲染地图区块，与"有位置但不公开"在视觉上有别。
 
 上传页表单新增两个开关：
@@ -118,7 +118,7 @@ tests/
 
 接口层处理（统一在 `_shared/images.ts` 或同层加一个 `scrubForVisitor` 工具，避免每个接口各写一份）：
 
-- **聚合型接口**（公开收口必须过滤 `is_public`）：`GET /api/list`、未来的 `/api/random`、`/api/hive`、`/api/footprint` 等任何"批量返回多张图"的接口，对访客一律加 `WHERE is_public = 1`；管理员视角不加过滤。
+- **聚合型接口**（公开收口必须过滤 `is_public`）：`GET /api/list`、未来的 `/api/random`、`/api/footprints` 等任何"批量返回多张图"的接口，对访客一律加 `WHERE is_public = 1`；管理员视角不加过滤。
 - **单图接口** `GET /api/image/:key` 与公开页 `/p/:key`：不按 `is_public` 拦（保留"凭直链分享私图"的能力），但对访客若 `location_public = 0`，把响应里的 `location_lat` / `location_lng` / `location_name` 置 null。
 - **搜索接口**：访客侧搜索结果继承 `is_public = 1` 过滤；管理员搜索看全量。
 - **足迹 / 地图聚合视图**（未实现，列入阶段 12）：对访客必须同时满足 `is_public = 1` 且 `location_public = 1` 才出现在地图上。
@@ -169,7 +169,7 @@ npm run build
 
 任务：
 
-- [x] `AppShell` 完成导航和基础布局：左侧 Logo、中间「首页/探索/随机/上传/蜂巢」五项、右侧搜索按钮 + 语言/主题占位 + GitHub 链接 + 接入按钮
+- [x] `AppShell` 完成导航和基础布局：左侧 Logo、中间「首页/探索/随机/上传/足迹」五项、右侧搜索按钮 + 语言/主题占位 + GitHub 链接 + 接入按钮
 - [x] 首页写出 Hero 区域、CTA 按钮、站点数据占位（Photos/Storage/AI Tagged）和功能卡片
 - [x] 登录页写明 Cloudflare Access 管理员登录入口（当前 UI 文案展示通用接入，阶段 6 选定 OTP 后 LoginView 文案与图标同步调整）
 - [x] 上传页写出选图区域、缩略图队列、大图预览、EXIF 与表单侧栏
@@ -178,7 +178,7 @@ npm run build
 - [x] 图库点击图片打开全屏 `ImageLightbox`（参考 PixelPunk：顶部 navbar、左右翻页箭头、底部控件条；缩放/旋转/详情等占位待阶段 7、5 接入）
 - [x] 公开图片页写出单图展示结构
 - [x] 随机页：参考 PixelPunk 沉浸式设计——首屏占满一张随机大图、向下滚动展开详情卡（作者、AI、文件信息）、右下浮动刷新按钮（loading 时 spin）、左下键盘提示（Space 换一张）；阶段 5 接 `GET /api/random` 真实数据
-- [x] 蜂巢页：参考 PixelPunk 蜂窝马赛克设计——pointy-top 六边形 clip-path 密铺、奇偶行错位、深色渐变背景、浮动六边形装饰、左上角浮动提示卡（含收起按钮）；阶段 12 接入拖动浏览、全屏、滚动加载更多
+- [x] 足迹页：参考 PixelPunk 蜂窝马赛克设计——pointy-top 六边形 clip-path 密铺、奇偶行错位、深色渐变背景、浮动六边形装饰、左上角浮动提示卡（含收起按钮）；阶段 12 接入拖动浏览、全屏、滚动加载更多
 - [x] 未接入的全局搜索弹窗不保留，后续需要搜索时再按实际入口实现
 - [x] 在 `index.html` 写入基础 SEO 元信息（`description`、`og:title`、`og:type` 等）
 - [x] 公开图片页路由层面预留 `og:image` 注入位置，当前阶段先留空

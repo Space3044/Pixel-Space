@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const root = process.cwd();
 const exists = (path) => existsSync(join(root, path));
 const read = (path) => readFileSync(join(root, path), 'utf8');
+const legacyFeatureName = ['h', 'ive'].join('');
 const test = (name, fn) => {
   try {
     fn();
@@ -34,11 +35,11 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/access/AccessView.vue',
     'src/features/access/access.api.ts',
     'src/features/random/RandomView.vue',
-    'src/features/hive/HiveView.vue',
-    'src/features/hive/FootprintFlatMap.vue',
-    'src/features/hive/footprint.ts',
-    'src/features/hive/footprint-map.ts',
-    'src/features/hive/mapbox.ts',
+    'src/features/footprints/FootprintsView.vue',
+    'src/features/footprints/FootprintFlatMap.vue',
+    'src/features/footprints/footprint.ts',
+    'src/features/footprints/footprint-map.ts',
+    'src/features/footprints/mapbox.ts',
     'src/features/upload/amap.ts',
     'src/features/upload/exif.ts',
     'src/features/upload/map-coordinate.ts',
@@ -106,6 +107,8 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'tests/frontend-skeleton.test.mjs',
     'tests/backend-read.test.mjs',
     'tests/local-dev.test.mjs',
+    `tests/${legacyFeatureName}-view.test.mjs`,
+    `src/features/${legacyFeatureName}`,
   ]) {
     assert.equal(exists(path), false, `${path} should not exist`);
   }

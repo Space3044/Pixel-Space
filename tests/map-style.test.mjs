@@ -5,9 +5,9 @@ const amapLoader = readFileSync('src/features/upload/amap.ts', 'utf8');
 const uploadView = readFileSync('src/features/upload/UploadView.vue', 'utf8');
 const pickMap = readFileSync('src/features/upload/pick-map.ts', 'utf8');
 const readOnlyMap = readFileSync('src/features/images/ReadOnlyMap.vue', 'utf8');
-const hiveView = readFileSync('src/features/hive/HiveView.vue', 'utf8');
-const mapboxLoader = readFileSync('src/features/hive/mapbox.ts', 'utf8');
-const footprintMap = readFileSync('src/features/hive/footprint-map.ts', 'utf8');
+const footprintsView = readFileSync('src/features/footprints/FootprintsView.vue', 'utf8');
+const mapboxLoader = readFileSync('src/features/footprints/mapbox.ts', 'utf8');
+const footprintMap = readFileSync('src/features/footprints/footprint-map.ts', 'utf8');
 
 const test = (name, fn) => {
   try {
@@ -51,12 +51,12 @@ test('upload picker splits into AMap (domestic) and Mapbox (overseas) maps', () 
 });
 
 test('footprint page splits into AMap (domestic) and Mapbox (overseas) maps', () => {
-  assert.match(hiveView, /groupFootprints/);
-  assert.match(hiveView, /FootprintFlatMap/);
-  assert.match(hiveView, /domesticFootprints/);
-  assert.match(hiveView, /overseasFootprints/);
+  assert.match(footprintsView, /groupFootprints/);
+  assert.match(footprintsView, /FootprintFlatMap/);
+  assert.match(footprintsView, /domesticFootprints/);
+  assert.match(footprintsView, /overseasFootprints/);
   // 容器本身不直接建图，地图源差异收敛到 footprint-map.ts 的两个 adapter
-  assert.doesNotMatch(hiveView, /new amap\.Map|new maplibregl\.Map/);
+  assert.doesNotMatch(footprintsView, /new amap\.Map|new maplibregl\.Map/);
   assert.match(footprintMap, /loadAmap/);
   assert.match(footprintMap, /new amap\.Map/);
   assert.match(footprintMap, /amap:\/\/styles\//);

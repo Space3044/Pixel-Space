@@ -763,7 +763,7 @@ onBeforeUnmount(() => {
                         <span class="edit-toggle-hint">
                           {{
                             editForm.is_public === 1
-                              ? '出现在图库、随机和蜂巢等公开聚合'
+                              ? '出现在图库、随机和足迹等公开聚合'
                               : '私藏，仅凭直链可见'
                           }}
                         </span>

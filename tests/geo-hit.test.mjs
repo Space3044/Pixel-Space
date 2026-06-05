@@ -5,7 +5,7 @@ import {
   findRegionByLngLat,
   lngLatToVector,
   vectorToLngLat,
-} from '../src/features/hive/geo-hit.ts';
+} from '../src/features/footprints/geo-hit.ts';
 
 const world = JSON.parse(readFileSync('public/maps/world.zh.json', 'utf8'));
 const china = JSON.parse(readFileSync('public/maps/china.json', 'utf8'));

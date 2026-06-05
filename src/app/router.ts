@@ -56,9 +56,9 @@ const router = createRouter({
       },
     },
     {
-      path: '/hive',
-      name: 'hive',
-      component: () => import('@/features/hive/HiveView.vue'),
+      path: '/footprints',
+      name: 'footprints',
+      component: () => import('@/features/footprints/FootprintsView.vue'),
       meta: {
         title: '足迹',
       },

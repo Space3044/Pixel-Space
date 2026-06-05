@@ -4,7 +4,7 @@ import { devRole as currentDevRole, isAdmin, isDev, setDevRole } from '@/shared/
 
 defineProps<{ fluid?: boolean }>();
 
-type IconName = 'home' | 'images' | 'random' | 'upload' | 'hive' | 'sliders' | 'github' | 'plug';
+type IconName = 'home' | 'images' | 'random' | 'upload' | 'footprints' | 'sliders' | 'github' | 'plug';
 
 interface NavLink {
   to: string;
@@ -29,7 +29,7 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
     vb: '0 0 512 512',
     d: 'M288 109.3V352c0 17.7-14.3 32-32 32s-32-14.3-32-32V109.3l-73.4 73.4c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l128-128c12.5-12.5 32.8-12.5 45.3 0l128 128c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L288 109.3zM64 352H192c0 35.3 28.7 64 64 64s64-28.7 64-64H448c35.3 0 64 28.7 64 64v32c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V416c0-35.3 28.7-64 64-64zM432 456a24 24 0 1 0 0-48 24 24 0 1 0 0 48z',
   },
-  hive: {
+  footprints: {
     vb: '0 0 512 512',
     d: 'M64 32C28.7 32 0 60.7 0 96V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64H64zm88 64v64H64V96h88zm56 0h88v64H208V96zm240 0v64H360V96h88zM64 224h88v64H64V224zm232 0v64H208V224h88zm64 0h88v64H360V224zM152 352v64H64V352h88zm56 0h88v64H208V352zm240 0v64H360V352h88z',
   },
@@ -51,7 +51,7 @@ const navLinks: NavLink[] = [
   { to: '/', label: '首页', icon: 'home' },
   { to: '/images', label: '探索', icon: 'images' },
   { to: '/random', label: '随机', icon: 'random' },
-  { to: '/hive', label: '足迹', icon: 'hive' },
+  { to: '/footprints', label: '足迹', icon: 'footprints' },
 ];
 
 const adminNavLinks: NavLink[] = [
