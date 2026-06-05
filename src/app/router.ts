@@ -72,6 +72,14 @@ const router = createRouter({
         requiresAdmin: true,
       },
     },
+    {
+      path: '/access',
+      name: 'access',
+      component: () => import('@/features/access/AccessView.vue'),
+      meta: {
+        title: '原图通行',
+      },
+    },
   ],
 });
 
