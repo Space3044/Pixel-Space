@@ -49,7 +49,7 @@ export interface CreateDownloadGrantResponse {
 
 export interface DownloadGrantRecord {
   id: string;
-  code: string | null;
+  code: string;
   expires_at: string;
   created_at: string;
   image_count: number;
@@ -156,6 +156,3 @@ export function deleteDownloadGrant(id: string): Promise<void> {
 }
 
 // 借用 list API（管理员视角拿全量）；前端按 folder_id 自己过滤当前目录。
-// 这里特意复用，避免再给后端开一个按文件夹查询的端点：管理员视角下数据量可控，
-// 真要分页可以等到 10k+ 图片再优化。
-export type LibraryImage = ImageRecord;

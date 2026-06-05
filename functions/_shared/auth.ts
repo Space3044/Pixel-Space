@@ -1,5 +1,4 @@
 import type { Env } from '../types';
-import { unauthorized } from './http';
 
 export interface AdminIdentity {
   email: string;
@@ -25,9 +24,4 @@ export const resolveAdmin = (request: Request, env: Env): AdminIdentity | null =
   const envRole = env.LOCAL_ROLE?.trim().toLowerCase();
   const role = headerRole || envRole || 'admin';
   return role === 'visitor' ? null : { email: DEV_ADMIN_EMAIL };
-};
-
-export const requireAdmin = (request: Request, env: Env): AdminIdentity | Response => {
-  const admin = resolveAdmin(request, env);
-  return admin ?? unauthorized();
 };

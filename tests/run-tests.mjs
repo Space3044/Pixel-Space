@@ -42,6 +42,7 @@ for (const path of [
   './geo-hit.test.mjs',
   './world-boundary-globe.test.mjs',
   './footprints-view.test.mjs',
+  './redundancy-cleanup.test.mjs',
 ]) {
   await import(path);
 }

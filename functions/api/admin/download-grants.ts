@@ -13,7 +13,7 @@ interface CreatePayload {
 
 interface DownloadGrantRow {
   id: string;
-  code: string | null;
+  code: string;
   expires_at: string;
   created_at: string;
 }
@@ -63,41 +63,19 @@ const createUniqueCode = async (db: D1Database): Promise<{ code: string; hash: s
   throw new Error('download_grant_code_collision');
 };
 
-const isMissingCodeColumnError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error);
-  return /no such column:\s*code|no column named code/i.test(message);
-};
-
 const insertDownloadGrant = async (db: D1Database, id: string, hash: string, code: string, expiresAt: string) => {
-  try {
-    await db
-      .prepare('INSERT INTO download_grants (id, code_hash, code, expires_at) VALUES (?, ?, ?, ?)')
-      .bind(id, hash, code, expiresAt)
-      .run();
-  } catch (error) {
-    if (!isMissingCodeColumnError(error)) throw error;
-    await db
-      .prepare('INSERT INTO download_grants (id, code_hash, expires_at) VALUES (?, ?, ?)')
-      .bind(id, hash, expiresAt)
-      .run();
-  }
+  await db
+    .prepare('INSERT INTO download_grants (id, code_hash, code, expires_at) VALUES (?, ?, ?, ?)')
+    .bind(id, hash, code, expiresAt)
+    .run();
 };
 
 const loadGrantRows = async (db: D1Database): Promise<DownloadGrantRow[]> => {
-  try {
-    const result = await db
-      .prepare('SELECT id, code, expires_at, created_at FROM download_grants ORDER BY created_at DESC')
-      .bind()
-      .all<DownloadGrantRow>();
-    return result.results ?? [];
-  } catch (error) {
-    if (!isMissingCodeColumnError(error)) throw error;
-    const result = await db
-      .prepare('SELECT id, NULL AS code, expires_at, created_at FROM download_grants ORDER BY created_at DESC')
-      .bind()
-      .all<DownloadGrantRow>();
-    return result.results ?? [];
-  }
+  const result = await db
+    .prepare('SELECT id, code, expires_at, created_at FROM download_grants ORDER BY created_at DESC')
+    .bind()
+    .all<DownloadGrantRow>();
+  return result.results ?? [];
 };
 
 const loadGrantRecords = async (env: Env): Promise<DownloadGrantRecord[]> => {

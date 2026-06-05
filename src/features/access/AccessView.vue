@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
+import { formatDownloadGrantExpiry } from '@/features/library/download-grant-expiry';
 import { downloadGrantOriginal, verifyDownloadGrant } from './access.api';
 
 const code = ref('');
@@ -15,23 +16,7 @@ const batchDownloading = ref(false);
 
 const hasResult = computed(() => expiresAt.value !== null);
 
-// 后端返回的是 UTC ISO 时间，这里统一格式化成北京时间（东八区）展示。
-const expiresLabel = computed(() => {
-  if (!expiresAt.value) return '';
-  const date = new Date(expiresAt.value);
-  if (Number.isNaN(date.getTime())) return expiresAt.value;
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-    .format(date)
-    .replace(/\//g, '-');
-});
+const expiresLabel = computed(() => (expiresAt.value ? formatDownloadGrantExpiry(expiresAt.value) : ''));
 
 const submitCode = async () => {
   const normalized = code.value.trim().toUpperCase();
@@ -146,7 +131,6 @@ const downloadAllOriginals = async () => {
               <span class="expiry-label">授权有效期至</span>
               <strong class="expiry-value">{{ expiresLabel }}</strong>
             </div>
-            <span class="expiry-tz">北京时间</span>
             <button
               v-if="images.length > 0"
               type="button"
@@ -389,16 +373,6 @@ const downloadAllOriginals = async () => {
   font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: 0.02em;
-}
-
-.expiry-tz {
-  flex-shrink: 0;
-  border: 1px solid rgba(110, 231, 183, 0.3);
-  border-radius: 999px;
-  padding: 0.15rem 0.6rem;
-  color: rgb(110, 231, 183);
-  font-size: 0.68rem;
-  font-weight: 700;
 }
 
 .access-batch-download {

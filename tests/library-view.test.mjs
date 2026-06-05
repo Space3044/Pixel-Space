@@ -85,6 +85,7 @@ test('library.api exposes download grant creation helper', () => {
   assert.match(api, /export interface CreateDownloadGrantPayload/);
   assert.match(api, /export interface CreateDownloadGrantResponse/);
   assert.match(api, /export interface DownloadGrantRecord/);
+  assert.doesNotMatch(api, /LibraryImage/);
   assert.match(api, /export function createDownloadGrant\(payload: CreateDownloadGrantPayload\): Promise<CreateDownloadGrantResponse>/);
   assert.match(api, /jsonFetch<CreateDownloadGrantResponse>\('\/api\/admin\/download-grants'/);
   assert.match(api, /method:\s*'POST'/);
@@ -139,9 +140,8 @@ test('DownloadGrantManager shows codes images expiration editing and delete acti
   assert.match(grantManager, /defineEmits<\{\s*update: \[id: string, expiresAt: string\];\s*delete: \[id: string\];\s*\}>/);
   assert.match(grantManager, /formatDownloadGrantExpiry\(grant\.expires_at\)/);
   assert.match(grantManager, /v-for="grant in grants"/);
-  assert.match(grantManager, /grant\.code \|\| '旧记录未保存验证码'/);
-  assert.match(grantManager, /旧验证码只保存了哈希，无法反推出原码/);
-  assert.match(grantManager, /'is-missing': !grant\.code/);
+  assert.match(grantManager, /\{\{ grant\.code \}\}/);
+  assert.doesNotMatch(grantManager, /旧记录|无法反推|'is-missing': !grant\.code/);
   assert.match(grantManager, /v-model="expiresAtById\[grant\.id\]"/);
   assert.match(grantManager, /type="datetime-local"/);
   assert.match(grantManager, /@click="emit\('update', grant\.id, expiresAtById\[grant\.id\]\)"/);

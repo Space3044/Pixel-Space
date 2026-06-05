@@ -22,3 +22,10 @@ test('LoginView presents Access OTP instead of GitHub identity copy', () => {
   assert.doesNotMatch(source, /GitHub/);
   assert.doesNotMatch(source, /const GITHUB/);
 });
+
+test('AccessView reuses the shared download grant expiry formatter', () => {
+  const source = read('src/features/access/AccessView.vue');
+
+  assert.match(source, /formatDownloadGrantExpiry/);
+  assert.doesNotMatch(source, /new Intl\.DateTimeFormat/);
+});

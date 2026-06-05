@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { onRequestGet as listGrants, onRequestPost as createGrant } from '../functions/api/admin/download-grants.ts';
 import {
   onRequestDelete as deleteGrant,
@@ -6,6 +7,8 @@ import {
 } from '../functions/api/admin/download-grants/[id].ts';
 import { onRequestPost as verifyGrant } from '../functions/api/download-grants/verify.ts';
 import { onRequestPost as downloadGrantOriginal } from '../functions/api/download-grants/original/[key].ts';
+
+const adminDownloadGrantsSource = readFileSync('functions/api/admin/download-grants.ts', 'utf8');
 
 const test = async (name, fn) => {
   try {
@@ -31,7 +34,7 @@ const makeVisitorRequest = (body) =>
     body: JSON.stringify(body),
   });
 
-const makeCreateEnv = ({ existingKeys = ['img-1', 'img-2'], legacyCodeColumn = false } = {}) => {
+const makeCreateEnv = ({ existingKeys = ['img-1', 'img-2'] } = {}) => {
   const calls = { imageSelect: [], grantInsert: [], grantImageInsert: [] };
   const env = {
     DB: {
@@ -50,9 +53,6 @@ const makeCreateEnv = ({ existingKeys = ['img-1', 'img-2'], legacyCodeColumn = f
               run: async () => {
                 if (/insert\s+into\s+download_grants/i.test(sql)) {
                   calls.grantInsert.push({ sql, values });
-                  if (legacyCodeColumn && /\bcode\b/i.test(sql)) {
-                    throw new Error('table download_grants has no column named code');
-                  }
                 }
                 if (/insert\s+into\s+download_grant_images/i.test(sql)) calls.grantImageInsert.push({ sql, values });
                 return { success: true, meta: { changes: 1 } };
@@ -93,23 +93,10 @@ await test('POST /api/admin/download-grants creates a reusable access code for s
   assert.equal(calls.grantInsert[0].values[2], data.code);
 });
 
-await test('POST /api/admin/download-grants still creates grants before the display-code migration is applied', async () => {
-  const { env, calls } = makeCreateEnv({ existingKeys: ['img-1'], legacyCodeColumn: true });
-  const response = await createGrant({
-    env,
-    request: makeAdminRequest({
-      keys: ['img-1'],
-      expires_at: '2999-01-01T00:00:00.000Z',
-    }),
-  });
-
-  assert.equal(response.status, 200);
-  const data = await response.json();
-  assert.match(data.code, /^[A-Z0-9]{8}$/);
-  assert.equal(data.image_count, 1);
-  assert.equal(calls.grantInsert.length, 2);
-  assert.match(calls.grantInsert[0].sql, /code_hash,\s*code,\s*expires_at/i);
-  assert.match(calls.grantInsert[1].sql, /code_hash,\s*expires_at/i);
+await test('admin download grants code has no pre-display-code migration fallback', async () => {
+  assert.doesNotMatch(adminDownloadGrantsSource, /isMissingCodeColumnError|no such column:\s*code|no column named code/i);
+  assert.doesNotMatch(adminDownloadGrantsSource, /NULL AS code/i);
+  assert.doesNotMatch(adminDownloadGrantsSource, /INSERT INTO download_grants \(id, code_hash, expires_at\)/i);
 });
 
 await test('GET /api/admin/download-grants lists generated codes with grouped images', async () => {
@@ -191,50 +178,6 @@ await test('GET /api/admin/download-grants lists generated codes with grouped im
   assert.equal(data.grants[0].images[0].key, 'img-1');
   assert.equal(data.grants[0].images[0].public_url, 'https://cdn.test/img-1');
   assert.match(calls.prepared[0], /order\s+by\s+created_at\s+desc/i);
-});
-
-await test('GET /api/admin/download-grants keeps working before the display-code migration is applied', async () => {
-  const env = {
-    PUBLIC_BASE_URL: 'https://cdn.test',
-    DB: {
-      prepare(sql) {
-        return {
-          bind() {
-            return {
-              all: async () => {
-                if (/from\s+download_grants/i.test(sql) && !/download_grant_images/i.test(sql)) {
-                  if (/select\s+id,\s*code,/i.test(sql)) throw new Error('no such column: code');
-                  return {
-                    results: [
-                      {
-                        id: 'legacy-grant',
-                        code: null,
-                        expires_at: '2999-01-01T00:00:00.000Z',
-                        created_at: '2026-06-01 10:00:00',
-                      },
-                    ],
-                  };
-                }
-                return { results: [] };
-              },
-            };
-          },
-        };
-      },
-    },
-  };
-
-  const response = await listGrants({
-    env,
-    request: new Request('http://localhost/api/admin/download-grants'),
-  });
-
-  assert.equal(response.status, 200);
-  const data = await response.json();
-  assert.equal(data.grants.length, 1);
-  assert.equal(data.grants[0].id, 'legacy-grant');
-  assert.equal(data.grants[0].code, null);
-  assert.equal(data.grants[0].image_count, 0);
 });
 
 await test('PATCH /api/admin/download-grants/:id updates expiration', async () => {

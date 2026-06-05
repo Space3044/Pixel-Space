@@ -150,9 +150,7 @@ const breadcrumb = computed<Array<{ id: string | null; name: string }>>(() => {
   return trail;
 });
 
-// 把所有文件夹拼成「全路径」字符串，按层级缩进，用于 move 下拉选项。
-// 当前目录与当前目录的后代（避免把图片移到正在浏览的同一层级或子树里其实是允许的，
-// 但更直观的体验是把"当前目录"过滤掉，让用户只能选别的位置）。
+// move 下拉使用全路径标签，模板里禁用当前目录。
 interface FolderOption {
   id: string;
   label: string;

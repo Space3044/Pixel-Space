@@ -52,13 +52,7 @@ watch(
       <article v-for="grant in grants" :key="grant.id" class="grant-row">
         <header class="grant-row-header">
           <div class="grant-row-main">
-            <p
-              class="grant-code"
-              :class="{ 'is-missing': !grant.code }"
-              :title="grant.code ? '验证码' : '旧验证码只保存了哈希，无法反推出原码'"
-            >
-              {{ grant.code || '旧记录未保存验证码' }}
-            </p>
+            <p class="grant-code">{{ grant.code }}</p>
             <p class="grant-meta">
               {{ grant.image_count }} 张图片 · {{ formatDownloadGrantExpiry(grant.expires_at) }}
             </p>
@@ -186,13 +180,6 @@ watch(
   font-size: 1.08rem;
   font-weight: 900;
   letter-spacing: 0.12em;
-}
-
-.grant-code.is-missing {
-  color: rgba(203, 213, 225, 0.78);
-  font-family: inherit;
-  font-size: 0.9rem;
-  letter-spacing: 0;
 }
 
 .grant-row-actions {
