@@ -5,16 +5,25 @@ import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { imageSortOptions, sortImagesByMode, type ImageSortMode } from '@/features/images/image-sort';
 import { listImages } from '@/features/images/images.api';
+import DownloadGrantDialog from './DownloadGrantDialog.vue';
+import DownloadGrantManager from './DownloadGrantManager.vue';
+import { buildDownloadGrantExpiry } from './download-grant-expiry';
 import {
+  createDownloadGrant,
   createFolder,
+  deleteDownloadGrant,
   deleteFolder,
   deleteImages,
   fetchAiSettings,
+  fetchDownloadGrants,
   fetchFolders,
   moveImages,
   updateAiSettings,
+  updateDownloadGrant,
   updateFolder,
   type AiSettings,
+  type CreateDownloadGrantResponse,
+  type DownloadGrantRecord,
   type FolderRecord,
 } from './library.api';
 
@@ -22,9 +31,10 @@ const ImageLightbox = defineAsyncComponent(() => import('@/features/images/Image
 
 const VIRTUAL_HIDDEN_IMAGES = '__hidden_images__';
 const VIRTUAL_HIDDEN_LOCATIONS = '__hidden_locations__';
+const VIRTUAL_DOWNLOAD_GRANTS = '__download_grants__';
 
 interface VirtualFolder {
-  id: typeof VIRTUAL_HIDDEN_IMAGES | typeof VIRTUAL_HIDDEN_LOCATIONS;
+  id: typeof VIRTUAL_HIDDEN_IMAGES | typeof VIRTUAL_HIDDEN_LOCATIONS | typeof VIRTUAL_DOWNLOAD_GRANTS;
   name: string;
   description: string;
 }
@@ -32,16 +42,24 @@ interface VirtualFolder {
 const virtualFolders: VirtualFolder[] = [
   { id: VIRTUAL_HIDDEN_IMAGES, name: '未公开图片', description: '仅管理员可见的私有图片' },
   { id: VIRTUAL_HIDDEN_LOCATIONS, name: '未公开位置', description: '位置对访客隐藏的图片' },
+  { id: VIRTUAL_DOWNLOAD_GRANTS, name: '验证码管理', description: '查看验证码、授权图片与过期时间' },
 ];
 
 const isVirtualId = (id: string | null): id is VirtualFolder['id'] =>
-  id === VIRTUAL_HIDDEN_IMAGES || id === VIRTUAL_HIDDEN_LOCATIONS;
+  id === VIRTUAL_HIDDEN_IMAGES || id === VIRTUAL_HIDDEN_LOCATIONS || id === VIRTUAL_DOWNLOAD_GRANTS;
 
 const folders = ref<FolderRecord[]>([]);
 const images = ref<ImageRecord[]>([]);
+const downloadGrants = ref<DownloadGrantRecord[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const actionMessage = ref<string | null>(null);
+const grantDialogOpen = ref(false);
+const grantCreating = ref(false);
+const grantResult = ref<CreateDownloadGrantResponse | null>(null);
+const grantError = ref<string | null>(null);
+const grantManagingId = ref<string | null>(null);
+const grantManagerError = ref<string | null>(null);
 const aiSettingsForm = reactive<AiSettings>({
   proxy_url: '',
   model: '',
@@ -85,12 +103,14 @@ const subfolders = computed<FolderRecord[]>(() => {
 const virtualCounts = computed(() => ({
   [VIRTUAL_HIDDEN_IMAGES]: images.value.filter((img) => Number(img.is_public) === 0).length,
   [VIRTUAL_HIDDEN_LOCATIONS]: images.value.filter((img) => Number(img.location_public) === 0).length,
+  [VIRTUAL_DOWNLOAD_GRANTS]: downloadGrants.value.length,
 }));
 
 const filteredCurrentImages = computed<ImageRecord[]>(() => {
   const cur = currentFolderId.value;
   if (cur === VIRTUAL_HIDDEN_IMAGES) return images.value.filter((img) => Number(img.is_public) === 0);
   if (cur === VIRTUAL_HIDDEN_LOCATIONS) return images.value.filter((img) => Number(img.location_public) === 0);
+  if (cur === VIRTUAL_DOWNLOAD_GRANTS) return [];
   return images.value.filter((img) => (img.folder_id ?? null) === cur);
 });
 
@@ -157,13 +177,15 @@ const refreshAll = async () => {
   loading.value = true;
   loadError.value = null;
   try {
-    const [folderList, imageList, aiSettings] = await Promise.all([
+    const [folderList, imageList, aiSettings, grantList] = await Promise.all([
       fetchFolders(),
       listImages(),
       fetchAiSettings(),
+      fetchDownloadGrants(),
     ]);
     folders.value = folderList;
     images.value = imageList;
+    downloadGrants.value = grantList;
     aiSettingsForm.proxy_url = aiSettings.proxy_url;
     aiSettingsForm.model = aiSettings.model;
     aiSettingsForm.prompt = aiSettings.prompt;
@@ -178,6 +200,7 @@ const enterFolder = (id: string | null) => {
   currentFolderId.value = id;
   selectedKeys.value = new Set();
   actionMessage.value = null;
+  grantManagerError.value = null;
 };
 
 const toggleSelection = (key: string) => {
@@ -195,6 +218,75 @@ const selectAllCurrent = () => {
 
 const clearSelection = () => {
   selectedKeys.value = new Set();
+};
+
+const clearGrantResult = () => {
+  grantResult.value = null;
+  grantError.value = null;
+};
+
+const handleCreateDownloadGrant = async (expiresAt: string) => {
+  if (selectedKeys.value.size === 0) return;
+  grantCreating.value = true;
+  grantError.value = null;
+  try {
+    grantResult.value = await createDownloadGrant({
+      keys: Array.from(selectedKeys.value),
+      expires_at: expiresAt,
+    });
+    downloadGrants.value = await fetchDownloadGrants();
+    actionMessage.value = `已生成 ${grantResult.value.image_count} 张图片的验证码`;
+  } catch (error) {
+    grantError.value = (error as Error).message;
+  } finally {
+    grantCreating.value = false;
+  }
+};
+
+const replaceDownloadGrant = (id: string, patch: Partial<DownloadGrantRecord>) => {
+  downloadGrants.value = downloadGrants.value.map((grant) => (grant.id === id ? { ...grant, ...patch } : grant));
+};
+
+const removeDownloadGrant = (id: string) => {
+  downloadGrants.value = downloadGrants.value.filter((grant) => grant.id !== id);
+};
+
+const handleUpdateDownloadGrant = async (id: string, expiresAtValue: string) => {
+  const expiresAt = buildDownloadGrantExpiry('custom', expiresAtValue);
+  if (!expiresAt) {
+    grantManagerError.value = '请选择未来的有效期';
+    return;
+  }
+
+  grantManagingId.value = id;
+  grantManagerError.value = null;
+  try {
+    const updated = await updateDownloadGrant(id, { expires_at: expiresAt });
+    replaceDownloadGrant(id, { expires_at: updated.expires_at });
+    actionMessage.value = '验证码有效期已更新';
+  } catch (error) {
+    grantManagerError.value = `更新失败：${(error as Error).message}`;
+  } finally {
+    grantManagingId.value = null;
+  }
+};
+
+const handleDeleteDownloadGrant = async (id: string) => {
+  const grant = downloadGrants.value.find((item) => item.id === id);
+  const label = grant?.code ?? '这个验证码';
+  if (!window.confirm(`确定删除验证码「${label}」？授权入口会立即失效。`)) return;
+
+  grantManagingId.value = id;
+  grantManagerError.value = null;
+  try {
+    await deleteDownloadGrant(id);
+    removeDownloadGrant(id);
+    actionMessage.value = '验证码已删除';
+  } catch (error) {
+    grantManagerError.value = `删除失败：${(error as Error).message}`;
+  } finally {
+    grantManagingId.value = null;
+  }
 };
 
 const handleCreateFolder = async () => {
@@ -416,16 +508,23 @@ onMounted(refreshAll);
                   <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
                   <line x1="2" y1="2" x2="22" y2="22" />
                 </svg>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg v-else-if="vf.id === VIRTUAL_HIDDEN_LOCATIONS" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" />
                   <circle cx="12" cy="10" r="3" />
                   <line x1="3" y1="3" x2="21" y2="21" />
+                </svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="7.5" cy="15.5" r="5.5" />
+                  <path d="m21 2-9.6 9.6" />
+                  <path d="m15.5 7.5 2 2" />
+                  <path d="m18.5 4.5 2 2" />
                 </svg>
               </div>
               <div class="folder-body">
                 <p class="folder-name shortcut-name">{{ vf.name }}</p>
                 <p class="folder-meta shortcut-meta">
-                  {{ virtualCounts[vf.id] }} 张图片
+                  <template v-if="vf.id === VIRTUAL_DOWNLOAD_GRANTS">{{ virtualCounts[vf.id] }} 个验证码</template>
+                  <template v-else>{{ virtualCounts[vf.id] }} 张图片</template>
                 </p>
               </div>
             </button>
@@ -482,6 +581,16 @@ onMounted(refreshAll);
       <div v-else-if="loadError" class="state-card is-error">加载失败：{{ loadError }}</div>
 
       <template v-else>
+        <DownloadGrantManager
+          v-if="currentFolderId === VIRTUAL_DOWNLOAD_GRANTS"
+          :grants="downloadGrants"
+          :loading-id="grantManagingId"
+          :error="grantManagerError"
+          @update="handleUpdateDownloadGrant"
+          @delete="handleDeleteDownloadGrant"
+        />
+
+        <template v-else>
         <section v-if="subfolders.length > 0" class="folder-grid" aria-label="文件夹">
           <article
             v-for="folder in subfolders"
@@ -578,6 +687,7 @@ onMounted(refreshAll);
           <template v-if="currentVirtual">没有符合「{{ currentVirtual.name }}」条件的图片。</template>
           <template v-else>这个文件夹是空的。可以新建子文件夹，或回到上一级把图片移进来。</template>
         </p>
+        </template>
       </template>
 
       <Transition name="move-bar">
@@ -597,6 +707,7 @@ onMounted(refreshAll);
               </option>
             </select>
           </label>
+          <button type="button" class="library-btn primary" @click="grantDialogOpen = true">生成验证码</button>
           <button type="button" class="library-btn primary" @click="handleMove">移动</button>
           <button type="button" class="library-btn danger" @click="handleBatchDelete">删除</button>
           <button type="button" class="library-btn ghost" @click="clearSelection">取消</button>
@@ -610,6 +721,16 @@ onMounted(refreshAll);
       @close="lightboxOpen = false"
       @updated="replaceImage"
       @deleted="removeImage"
+    />
+    <DownloadGrantDialog
+      :open="grantDialogOpen"
+      :selected-count="selectedKeys.size"
+      :loading="grantCreating"
+      :result="grantResult"
+      :error="grantError"
+      @close="grantDialogOpen = false"
+      @create="handleCreateDownloadGrant"
+      @clear="clearGrantResult"
     />
   </AppShell>
 </template>

@@ -35,6 +35,40 @@ export interface AiSettings {
   prompt: string;
 }
 
+export interface CreateDownloadGrantPayload {
+  keys: string[];
+  expires_at: string;
+}
+
+export interface CreateDownloadGrantResponse {
+  code: string;
+  expires_at: string;
+  image_count: number;
+  access_url: string;
+}
+
+export interface DownloadGrantRecord {
+  id: string;
+  code: string | null;
+  expires_at: string;
+  created_at: string;
+  image_count: number;
+  images: ImageRecord[];
+}
+
+interface DownloadGrantsResponse {
+  grants: DownloadGrantRecord[];
+}
+
+export interface UpdateDownloadGrantPayload {
+  expires_at: string;
+}
+
+export interface UpdateDownloadGrantResponse {
+  id: string;
+  expires_at: string;
+}
+
 export function fetchFolders(): Promise<FolderRecord[]> {
   return jsonFetch<FoldersResponse>('/api/folders').then((data) => data.folders);
 }
@@ -90,6 +124,35 @@ export function deleteImages(payload: { keys: string[] }): Promise<DeleteImagesR
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+export function createDownloadGrant(payload: CreateDownloadGrantPayload): Promise<CreateDownloadGrantResponse> {
+  return jsonFetch<CreateDownloadGrantResponse>('/api/admin/download-grants', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchDownloadGrants(): Promise<DownloadGrantRecord[]> {
+  return jsonFetch<DownloadGrantsResponse>('/api/admin/download-grants').then((data) => data.grants);
+}
+
+export function updateDownloadGrant(
+  id: string,
+  payload: UpdateDownloadGrantPayload,
+): Promise<UpdateDownloadGrantResponse> {
+  return jsonFetch<UpdateDownloadGrantResponse>(`/api/admin/download-grants/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteDownloadGrant(id: string): Promise<void> {
+  return jsonFetch<{ ok: boolean }>(`/api/admin/download-grants/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  }).then(() => undefined);
 }
 
 // 借用 list API（管理员视角拿全量）；前端按 folder_id 自己过滤当前目录。

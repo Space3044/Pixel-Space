@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 const view = readFileSync('src/features/library/LibraryView.vue', 'utf8');
 const api = readFileSync('src/features/library/library.api.ts', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
+const grantDialog = readFileSync('src/features/library/DownloadGrantDialog.vue', 'utf8');
+const grantManager = readFileSync('src/features/library/DownloadGrantManager.vue', 'utf8');
+const expiryHelper = readFileSync('src/features/library/download-grant-expiry.ts', 'utf8');
 
 const test = (name, fn) => {
   try {
@@ -39,7 +42,7 @@ test('LibraryView loads and saves AI settings through library API helpers', () =
   assert.match(view, /import \{[\s\S]*fetchAiSettings,[\s\S]*updateAiSettings,[\s\S]*type AiSettings,[\s\S]*\} from '\.\/library\.api'/);
   assert.match(view, /const aiSettingsForm = reactive<AiSettings>\(\{\s*proxy_url:\s*'',\s*model:\s*'',\s*prompt:\s*'',\s*\}\)/);
   assert.match(view, /const aiSettingsSaving = ref\(false\)/);
-  assert.match(view, /Promise\.all\(\[\s*fetchFolders\(\),\s*listImages\(\),\s*fetchAiSettings\(\),\s*\]\)/);
+  assert.match(view, /Promise\.all\(\[\s*fetchFolders\(\),\s*listImages\(\),\s*fetchAiSettings\(\),\s*fetchDownloadGrants\(\),\s*\]\)/);
   assert.match(view, /aiSettingsForm\.proxy_url = aiSettings\.proxy_url/);
   assert.match(view, /aiSettingsForm\.model = aiSettings\.model/);
   assert.match(view, /aiSettingsForm\.prompt = aiSettings\.prompt/);
@@ -52,7 +55,7 @@ test('LibraryView renders virtual folders as folder-style cards with image count
   assert.match(view, /<div class="library-main">[\s\S]*<div class="library-actions">[\s\S]*<section class="folder-grid shortcut-grid" aria-label="智能目录">[\s\S]*v-for="vf in virtualFolders"[\s\S]*class="folder-card shortcut-card"[\s\S]*<\/section>[\s\S]*<\/div>[\s\S]*<aside class="ai-settings-panel"/);
   assert.match(view, /:class="\{ 'is-active': currentFolderId === vf\.id \}"/);
   assert.match(view, /<div class="folder-icon shortcut-icon" aria-hidden="true">[\s\S]*<svg v-if="vf\.id === VIRTUAL_HIDDEN_IMAGES"[\s\S]*<line x1="2" y1="2" x2="22" y2="22" \/>/);
-  assert.match(view, /<p class="folder-name shortcut-name">\{\{ vf\.name \}\}<\/p>[\s\S]*<p class="folder-meta shortcut-meta">\s*\{\{ virtualCounts\[vf\.id\] \}\} 张图片\s*<\/p>/);
+  assert.match(view, /<p class="folder-name shortcut-name">\{\{ vf\.name \}\}<\/p>[\s\S]*<template v-if="vf\.id === VIRTUAL_DOWNLOAD_GRANTS">\{\{ virtualCounts\[vf\.id\] \}\} 个验证码<\/template>[\s\S]*<template v-else>\{\{ virtualCounts\[vf\.id\] \}\} 张图片<\/template>/);
   assert.match(view, /<section v-if="subfolders\.length > 0" class="folder-grid" aria-label="文件夹">[\s\S]*<article[\s\S]*v-for="folder in subfolders"[\s\S]*class="folder-card"/);
   assert.match(view, /\.shortcut-card\s*\{[\s\S]*border:\s*1px solid rgba\(255,\s*79,\s*216,\s*0\.22\)[\s\S]*color:\s*rgba\(248,\s*207,\s*233,\s*0\.78\)/);
   assert.doesNotMatch(view, /class="library-shortcuts"|class="shortcut-btn"|class="shortcut-count"/);
@@ -76,6 +79,76 @@ test('library.api exposes AI settings helpers for proxy URL, model and prompt on
   assert.match(api, /jsonFetch<AiSettings>\('\/api\/admin\/ai-settings',\s*\{\s*method:\s*'PATCH'/);
   assert.match(api, /body:\s*JSON\.stringify\(payload\)/);
   assert.doesNotMatch(api, /proxy_key|PROXY_KEY/);
+});
+
+test('library.api exposes download grant creation helper', () => {
+  assert.match(api, /export interface CreateDownloadGrantPayload/);
+  assert.match(api, /export interface CreateDownloadGrantResponse/);
+  assert.match(api, /export interface DownloadGrantRecord/);
+  assert.match(api, /export function createDownloadGrant\(payload: CreateDownloadGrantPayload\): Promise<CreateDownloadGrantResponse>/);
+  assert.match(api, /jsonFetch<CreateDownloadGrantResponse>\('\/api\/admin\/download-grants'/);
+  assert.match(api, /method:\s*'POST'/);
+  assert.match(api, /export function fetchDownloadGrants\(\): Promise<DownloadGrantRecord\[\]>/);
+  assert.match(api, /jsonFetch<DownloadGrantsResponse>\('\/api\/admin\/download-grants'\)/);
+  assert.match(api, /export function updateDownloadGrant\(\s*id: string,\s*payload: UpdateDownloadGrantPayload,\s*\): Promise<UpdateDownloadGrantResponse>/);
+  assert.match(api, /method:\s*'PATCH'/);
+  assert.match(api, /export function deleteDownloadGrant\(id: string\): Promise<void>/);
+  assert.match(api, /method:\s*'DELETE'/);
+});
+
+test('DownloadGrantDialog exposes expiration presets and generated code result', () => {
+  assert.match(grantDialog, /DOWNLOAD_GRANT_EXPIRY_OPTIONS/);
+  assert.match(grantDialog, /DEFAULT_DOWNLOAD_GRANT_PRESET/);
+  assert.match(grantDialog, /buildDownloadGrantExpiry/);
+  assert.match(grantDialog, /formatDownloadGrantExpiry/);
+  assert.match(grantDialog, /v-for="option in DOWNLOAD_GRANT_EXPIRY_OPTIONS"/);
+  assert.match(grantDialog, /type="datetime-local"/);
+  assert.match(grantDialog, /生成验证码/);
+  assert.match(grantDialog, /复制验证码/);
+  assert.match(grantDialog, /复制入口/);
+  assert.match(grantDialog, /props\.result\.code/);
+  assert.match(grantDialog, /formatDownloadGrantExpiry\(props\.result\.expires_at\)/);
+  assert.match(grantDialog, /new URL\(props\.result\.access_url, window\.location\.origin\)\.toString\(\)/);
+  assert.match(grantDialog, /const copiedMessage = ref<string \| null>\(null\)/);
+  assert.match(grantDialog, /aria-live="polite"/);
+  assert.match(expiryHelper, /'1d'/);
+  assert.match(expiryHelper, /'7d'/);
+  assert.match(expiryHelper, /'30d'/);
+});
+
+test('LibraryView opens the download grant dialog from selected images', () => {
+  assert.match(view, /import DownloadGrantDialog from '\.\/DownloadGrantDialog\.vue'/);
+  assert.match(view, /import DownloadGrantManager from '\.\/DownloadGrantManager\.vue'/);
+  assert.match(view, /createDownloadGrant/);
+  assert.match(view, /fetchDownloadGrants/);
+  assert.match(view, /const grantDialogOpen = ref\(false\)/);
+  assert.match(view, /const VIRTUAL_DOWNLOAD_GRANTS = '__download_grants__'/);
+  assert.match(view, /name: '验证码管理'/);
+  assert.match(view, /downloadGrants\.value = grantList/);
+  assert.match(view, /const handleCreateDownloadGrant = async \(expiresAt: string\) =>/);
+  assert.match(view, /keys: Array\.from\(selectedKeys\.value\)/);
+  assert.match(view, /downloadGrants\.value = await fetchDownloadGrants\(\)/);
+  assert.match(view, /<button type="button" class="library-btn primary" @click="grantDialogOpen = true">生成验证码<\/button>/);
+  assert.match(view, /<DownloadGrantManager[\s\S]*v-if="currentFolderId === VIRTUAL_DOWNLOAD_GRANTS"[\s\S]*:grants="downloadGrants"[\s\S]*@update="handleUpdateDownloadGrant"[\s\S]*@delete="handleDeleteDownloadGrant"/);
+  assert.match(view, /<DownloadGrantDialog/);
+  assert.match(view, /@create="handleCreateDownloadGrant"/);
+});
+
+test('DownloadGrantManager shows codes images expiration editing and delete actions', () => {
+  assert.match(grantManager, /defineProps<\{\s*grants: DownloadGrantRecord\[\];\s*loadingId: string \| null;\s*error: string \| null;\s*\}>/);
+  assert.match(grantManager, /defineEmits<\{\s*update: \[id: string, expiresAt: string\];\s*delete: \[id: string\];\s*\}>/);
+  assert.match(grantManager, /formatDownloadGrantExpiry\(grant\.expires_at\)/);
+  assert.match(grantManager, /v-for="grant in grants"/);
+  assert.match(grantManager, /grant\.code \|\| '旧记录未保存验证码'/);
+  assert.match(grantManager, /旧验证码只保存了哈希，无法反推出原码/);
+  assert.match(grantManager, /'is-missing': !grant\.code/);
+  assert.match(grantManager, /v-model="expiresAtById\[grant\.id\]"/);
+  assert.match(grantManager, /type="datetime-local"/);
+  assert.match(grantManager, /@click="emit\('update', grant\.id, expiresAtById\[grant\.id\]\)"/);
+  assert.match(grantManager, /@click="emit\('delete', grant\.id\)"/);
+  assert.match(grantManager, /v-for="image in grant\.images"/);
+  assert.match(grantManager, /image\.original_filename \|\| image\.title \|\| image\.key/);
+  assert.match(grantManager, /grant\.image_count/);
 });
 
 test('README describes /library as the console instead of a file-library-only page', () => {
