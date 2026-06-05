@@ -11,4 +11,3 @@ dist/
 .playwright-mcp/
 .tmp-vite*.log
 docs/superpowers/
-.worktrees/
