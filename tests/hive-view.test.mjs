@@ -64,6 +64,6 @@ test('footprint grouping resolves region per point', () => {
   assert.match(footprint, /export const groupFootprints/);
   assert.match(footprint, /location_region === 'china'/);
   assert.match(footprint, /location_region === 'global'/);
-  assert.match(footprint, /mapRegionForStoredCoordinate/);
+  assert.doesNotMatch(footprint, /mapRegionForStoredCoordinate/);
   assert.match(footprint, /region:/);
 });

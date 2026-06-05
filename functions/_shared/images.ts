@@ -1,4 +1,4 @@
-import { regionForCoordinate, type LocationRegion } from '../../shared/geo-region';
+import type { LocationRegion } from '../../shared/geo-region';
 
 // functions 与 src 使用独立 tsconfig，ImageRecord 在前后端各声明一份并保持字段一致。
 
@@ -158,13 +158,16 @@ export function scrubRecordForVisitor(record: ImageRecord): ImageRecord {
 
 export type { LocationRegion };
 
-// 优先用调用方显式传入的 region，否则按坐标兜底；无坐标则 null。
+export const normalizeExplicitRegion = (value: unknown): LocationRegion | null => {
+  if (value === 'china' || value === 'global') return value;
+  return null;
+};
+
 export const normalizeRegion = (
   value: unknown,
   lat: number | null,
   lng: number | null,
 ): LocationRegion | null => {
   if (lat === null || lng === null) return null;
-  if (value === 'china' || value === 'global') return value;
-  return regionForCoordinate({ lng, lat });
+  return normalizeExplicitRegion(value);
 };

@@ -18,7 +18,7 @@ const test = (name, fn) => {
 
 test('LocationSearch searches only on submit and emits selected coordinates', () => {
   assert.match(locationSearch, /searchLocations/);
-  assert.match(locationSearch, /defineEmits<\{ select:/);
+  assert.match(locationSearch, /defineEmits<\{[\s\S]*select:/);
   assert.match(locationSearch, /@submit\.prevent="runSearch"/);
   assert.match(locationSearch, /emit\('select', result\)/);
   assert.match(locationSearch, /搜索位置/);
@@ -47,10 +47,12 @@ test('geocode.api enriches domestic POI names with reverse geocoded administrati
 
 test('LocationSearch lets the user choose domestic or global geocoding', () => {
   assert.match(locationSearch, /import \{ searchLocations, type GeocodeRegion, type GeocodeResult \}/);
-  assert.match(locationSearch, /const selectedRegion = ref<GeocodeRegion>\('cn'\)/);
+  assert.match(locationSearch, /const localRegion = ref<GeocodeRegion>\('cn'\)/);
+  assert.match(locationSearch, /const selectedRegion = computed\(\(\) => props\.modelValue \?\? localRegion\.value\)/);
   assert.match(locationSearch, /searchLocations\(keyword, selectedRegion\.value\)/);
   assert.match(locationSearch, /setRegion\('cn'\)/);
   assert.match(locationSearch, /setRegion\('global'\)/);
+  assert.match(locationSearch, /emit\('update:modelValue', region\)/);
   assert.match(locationSearch, /emit\('region-change', region\)/);
   assert.match(locationSearch, /国内/);
   assert.match(locationSearch, /国外/);
@@ -63,15 +65,15 @@ test('UploadView applies selected geocode result to location name and marker coo
   assert.match(upload, /meta\.location_name = result\.name/);
   assert.match(upload, /setEntryCoordinates\(entry, result\.lat, result\.lng, true\)/);
   assert.match(upload, /const onSearchRegionChange = \(region: GeocodeRegion\) =>/);
-  assert.match(upload, /<LocationSearch class="location-search" @select="applyLocationSearchResult" @region-change="onSearchRegionChange" \/>/);
+  assert.match(upload, /:model-value="pickRegion"[\s\S]*class="location-search"[\s\S]*@select="applyLocationSearchResult"[\s\S]*@region-change="onSearchRegionChange"/);
 });
 
 test('ImageLightbox applies selected geocode result while editing location', () => {
   assert.match(lightbox, /import LocationSearch from '\.\/LocationSearch\.vue'/);
-  assert.match(lightbox, /import type \{ GeocodeResult \} from '\.\/geocode\.api'/);
+  assert.match(lightbox, /import type \{ GeocodeRegion, GeocodeResult \} from '\.\/geocode\.api'/);
   assert.match(lightbox, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
   assert.match(lightbox, /editForm\.location_name = result\.name/);
   assert.match(lightbox, /editForm\.location_lat = result\.lat/);
   assert.match(lightbox, /editForm\.location_lng = result\.lng/);
-  assert.match(lightbox, /<LocationSearch @select="applyLocationSearchResult" \/>/);
+  assert.match(lightbox, /:model-value="editSearchRegion"[\s\S]*@select="applyLocationSearchResult"[\s\S]*@region-change="onEditSearchRegionChange"/);
 });

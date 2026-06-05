@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
-import { regionForCoordinate } from '../shared/geo-region.ts';
 import {
   gcj02ToWgs84,
   mapLngLatFromStored,
-  mapRegionForStoredCoordinate,
   storedLngLatFromMap,
   wgs84ToGcj02,
 } from '../src/features/upload/map-coordinate.ts';
@@ -40,13 +38,4 @@ test('map coordinate conversion leaves non-China coordinates unchanged', () => {
 
   assert.deepEqual(wgs84ToGcj02(paris.lng, paris.lat), paris);
   assert.deepEqual(gcj02ToWgs84(paris.lng, paris.lat), paris);
-});
-
-test('map region uses China as default and switches global for foreign coordinates', () => {
-  assert.equal(mapRegionForStoredCoordinate(null), 'china');
-  assert.equal(mapRegionForStoredCoordinate({ lng: 121.4737, lat: 31.2304 }), 'china');
-  assert.equal(mapRegionForStoredCoordinate({ lng: 2.3522, lat: 48.8566 }), 'global');
-  assert.equal(regionForCoordinate(null), null);
-  assert.equal(regionForCoordinate({ lng: 121.4737, lat: 31.2304 }), 'china');
-  assert.equal(regionForCoordinate({ lng: 2.3522, lat: 48.8566 }), 'global');
 });

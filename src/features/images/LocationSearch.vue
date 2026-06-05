@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { searchLocations, type GeocodeRegion, type GeocodeResult } from './geocode.api';
 
-const emit = defineEmits<{ select: [result: GeocodeResult]; 'region-change': [region: GeocodeRegion] }>();
+const props = defineProps<{ modelValue?: GeocodeRegion }>();
+const emit = defineEmits<{
+  select: [result: GeocodeResult];
+  'region-change': [region: GeocodeRegion];
+  'update:modelValue': [region: GeocodeRegion];
+}>();
 
 const query = ref('');
-const selectedRegion = ref<GeocodeRegion>('cn');
+const localRegion = ref<GeocodeRegion>('cn');
+const selectedRegion = computed(() => props.modelValue ?? localRegion.value);
 const results = ref<GeocodeResult[]>([]);
 const searching = ref(false);
 const error = ref<string | null>(null);
@@ -33,7 +39,8 @@ const selectResult = (result: GeocodeResult) => {
 };
 
 const setRegion = (region: GeocodeRegion) => {
-  selectedRegion.value = region;
+  localRegion.value = region;
+  emit('update:modelValue', region);
   emit('region-change', region);
   results.value = [];
   error.value = null;

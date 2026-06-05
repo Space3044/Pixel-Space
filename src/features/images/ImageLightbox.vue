@@ -5,8 +5,7 @@ import { buildImageLinkRows, buildPublicPageUrl } from './image-links';
 import { formatBytes, formatDateTime, paletteFromImage, parseDominantColor, tagsFromImage } from './image-meta';
 import LocationSearch from './LocationSearch.vue';
 import ReadOnlyMap from './ReadOnlyMap.vue';
-import type { GeocodeResult } from './geocode.api';
-import { mapRegionForStoredCoordinate } from '@/features/upload/map-coordinate';
+import type { GeocodeRegion, GeocodeResult } from './geocode.api';
 import type { MapRegion } from '@/features/upload/map-coordinate';
 import { deleteImage, updateImage } from './images.api';
 import { isAdmin } from '@/shared/auth/useAdmin';
@@ -74,6 +73,7 @@ const {
 } = useImageZoom();
 const aiEditOpen = ref(false);
 const locationEditOpen = ref(false);
+const editSearchRegion = ref<GeocodeRegion>('cn');
 const saving = ref(false);
 const deleting = ref(false);
 const actionError = ref<string | null>(null);
@@ -174,19 +174,27 @@ const sharePage = async () => {
 const toRegion = (value: string | null | undefined): MapRegion | null =>
   value === 'china' || value === 'global' ? value : null;
 
-// 编辑时坐标一变就重算归属区域默认值，与上传页一致；用户随后可手动校正。
-const recomputeEditRegion = () => {
+const regionFromSearchRegion = (region: GeocodeRegion): MapRegion => (region === 'cn' ? 'china' : 'global');
+
+// 编辑时坐标归属跟随用户选择的搜索区域，避免用坐标范围自动误判。
+const syncEditRegionFromSearch = () => {
   const lat = editForm.location_lat === '' ? null : Number(editForm.location_lat);
   const lng = editForm.location_lng === '' ? null : Number(editForm.location_lng);
   editForm.location_region =
     lat === null || lng === null || !Number.isFinite(lat) || !Number.isFinite(lng)
       ? null
-      : mapRegionForStoredCoordinate({ lng, lat });
+      : regionFromSearchRegion(editSearchRegion.value);
 };
 
 const setEditRegion = (region: MapRegion) => {
   if (editForm.location_lat === '' || editForm.location_lng === '') return;
   editForm.location_region = region;
+  editSearchRegion.value = region === 'china' ? 'cn' : 'global';
+};
+
+const onEditSearchRegionChange = (region: GeocodeRegion) => {
+  editSearchRegion.value = region;
+  syncEditRegionFromSearch();
 };
 
 const resetForm = (image: ImageRecord | null | undefined) => {
@@ -259,14 +267,14 @@ const cancelLocationEditor = () => {
 const updateLocationFromMap = (coords: { lat: number; lng: number }) => {
   editForm.location_lat = coords.lat;
   editForm.location_lng = coords.lng;
-  recomputeEditRegion();
+  syncEditRegionFromSearch();
 };
 
 const applyLocationSearchResult = (result: GeocodeResult) => {
   editForm.location_name = result.name;
   editForm.location_lat = result.lat;
   editForm.location_lng = result.lng;
-  recomputeEditRegion();
+  syncEditRegionFromSearch();
 };
 
 const saveLocation = async () => {
@@ -848,7 +856,11 @@ onBeforeUnmount(() => {
                   />
 
                   <form v-if="locationEditOpen" class="location-edit-form" @submit.prevent="saveLocation">
-                    <LocationSearch @select="applyLocationSearchResult" />
+                    <LocationSearch
+                      :model-value="editSearchRegion"
+                      @select="applyLocationSearchResult"
+                      @region-change="onEditSearchRegionChange"
+                    />
                     <label class="edit-field">
                       <span>位置名</span>
                       <input v-model="editForm.location_name" type="text" />
@@ -856,11 +868,11 @@ onBeforeUnmount(() => {
                     <div class="edit-grid">
                       <label class="edit-field">
                         <span>纬度</span>
-                        <input v-model="editForm.location_lat" type="number" step="any" min="-90" max="90" @change="recomputeEditRegion" />
+                        <input v-model="editForm.location_lat" type="number" step="any" min="-90" max="90" @change="syncEditRegionFromSearch" />
                       </label>
                       <label class="edit-field">
                         <span>经度</span>
-                        <input v-model="editForm.location_lng" type="number" step="any" min="-180" max="180" @change="recomputeEditRegion" />
+                        <input v-model="editForm.location_lng" type="number" step="any" min="-180" max="180" @change="syncEditRegionFromSearch" />
                       </label>
                     </div>
                     <div class="edit-region">

@@ -2,7 +2,13 @@ import type { Env } from '../types';
 import { badRequest, json, serverError, unauthorized } from '../_shared/http';
 import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
-import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToRecord } from '../_shared/images';
+import {
+  IMAGE_SELECT_COLUMNS,
+  normalizeColorPaletteJson,
+  normalizeRegion,
+  normalizeTagsJson,
+  rowToRecord,
+} from '../_shared/images';
 import {
   coordinateOrNull,
   flagOrDefault,

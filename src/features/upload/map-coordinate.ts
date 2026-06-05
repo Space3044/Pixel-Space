@@ -14,11 +14,6 @@ const PI = Math.PI;
 const isOutsideChina = (lng: number, lat: number): boolean =>
   regionForCoordinate({ lng, lat }) === 'global';
 
-export const mapRegionForStoredCoordinate = (coordinate: LngLat | null | undefined): MapRegion => {
-  if (!coordinate) return 'china';
-  return regionForCoordinate(coordinate) ?? 'china';
-};
-
 const transformLat = (lng: number, lat: number): number => {
   let ret = -100 + 2 * lng + 3 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * Math.sqrt(Math.abs(lng));
   ret += ((20 * Math.sin(6 * lng * PI) + 20 * Math.sin(2 * lng * PI)) * 2) / 3;

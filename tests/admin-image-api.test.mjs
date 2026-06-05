@@ -161,7 +161,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
     '上海',
     31.2304,
     121.4737,
-    'china',
+    null,
     '["猫","城市","夜景"]',
     '暖橙色 #F59E0B',
     '["#F59E0B","#0F172A"]',

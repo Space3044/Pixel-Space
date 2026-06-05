@@ -68,6 +68,7 @@ const makeUploadRequest = (overrides = {}) => {
       location_name: '上海',
       location_lat: 31.2304,
       location_lng: 121.4737,
+      location_region: 'china',
       tags: '猫, 夜景',
       search_content: '猫 夜景 HELLO',
       dominant_color: '深蓝色 #0F172A',
@@ -303,6 +304,20 @@ await test('POST /api/upload archives the original file to Telegram after D1 ins
   assert.match(calls.updates[0].sql, /\btg_chat_id\b/i);
   assert.match(calls.updates[0].sql, /tg_status\s*=\s*'done'/i);
   assert.deepEqual(calls.updates[0].values, ['telegram-file-id', 77, '-100123', data.key]);
+});
+
+await test('POST /api/upload does not infer location_region from coordinate bounds', async () => {
+  const { env, calls } = makeEnv();
+  const request = makeUploadRequest({ meta: { location_region: undefined } });
+
+  const response = await withMockedFetch(telegramSuccessFetch(calls), () =>
+    uploadPost({ env, request, params: {} }),
+  );
+
+  assert.equal(response.status, 201);
+  const data = await response.json();
+  assert.equal(data.location_region, null);
+  assert.equal(calls.insert.values[12], null);
 });
 
 await test('POST /api/upload marks Telegram archive failure without blocking upload', async () => {

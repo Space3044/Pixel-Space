@@ -11,7 +11,6 @@ import { reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult } from '
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkImageHash } from '@/features/images/images.api';
-import { mapRegionForStoredCoordinate } from './map-coordinate';
 import type { MapRegion } from './map-coordinate';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter } from './pick-map';
@@ -113,8 +112,9 @@ const syncLocation = ref<boolean>(false);
 const folders = ref<FolderRecord[]>([]);
 
 let pickAdapter: PickMapAdapter | null = null;
-// 取景底图区域：跟随位置搜索的国内/国外开关切换引擎（国内高德、国外 Mapbox）。
+// 取景底图区域跟随位置搜索范围切换。
 const pickRegion = ref<GeocodeRegion>('cn');
+const regionFromPickRegion = (region: GeocodeRegion): MapRegion => (region === 'cn' ? 'china' : 'global');
 
 const currentEntry = computed(() => entries.value.find((entry) => entry.id === currentEntryId.value) ?? null);
 const hasCurrent = computed(() => currentEntry.value !== null);
@@ -211,8 +211,8 @@ const syncMarker = (center = false) => {
 const setEntryCoordinates = (entry: UploadEntry, lat: number | null, lng: number | null, centerMap = true) => {
   entry.meta.location_lat = lat;
   entry.meta.location_lng = lng;
-  // 坐标一变就重算归属区域作为默认，用户随后可在表单里手动校正。
-  entry.meta.location_region = lat === null || lng === null ? null : mapRegionForStoredCoordinate({ lng, lat });
+  // 坐标来源跟随用户选择的搜索区域，避免海外坐标被国内边界兜底误判。
+  entry.meta.location_region = lat === null || lng === null ? null : regionFromPickRegion(pickRegion.value);
   if (entry.id === currentEntryId.value) syncMarker(centerMap);
 };
 
@@ -226,6 +226,7 @@ const broadcastLocationInto = (target: UploadEntry) => {
   if (target.meta.location_lat !== null && target.meta.location_lng !== null) return;
   target.meta.location_lat = cur.meta.location_lat;
   target.meta.location_lng = cur.meta.location_lng;
+  target.meta.location_region = cur.meta.location_region;
   if (!target.meta.location_name) target.meta.location_name = cur.meta.location_name;
 };
 
@@ -271,9 +272,13 @@ const remountMap = async () => {
 };
 
 const onSearchRegionChange = (region: GeocodeRegion) => {
-  if (region === pickRegion.value) return;
+  const shouldRemount = region !== pickRegion.value;
   pickRegion.value = region;
-  void remountMap();
+  const entry = currentEntry.value;
+  if (entry && entry.meta.location_lat !== null && entry.meta.location_lng !== null) {
+    entry.meta.location_region = regionFromPickRegion(region);
+  }
+  if (shouldRemount) void remountMap();
 };
 
 const readExif = async (file: File): Promise<UploadExif> => {
@@ -543,12 +548,6 @@ const clearLocation = () => {
   if (!entry) return;
   entry.meta.location_name = '';
   setEntryCoordinates(entry, null, null, false);
-};
-
-const setEntryRegion = (region: MapRegion) => {
-  const entry = currentEntry.value;
-  if (!entry || entry.meta.location_lat === null || entry.meta.location_lng === null) return;
-  entry.meta.location_region = region;
 };
 
 const setIsPublic = (entry: UploadEntry, checked: boolean) => {
@@ -1048,7 +1047,12 @@ onBeforeUnmount(() => {
                     清空
                   </button>
                 </div>
-                <LocationSearch class="location-search" @select="applyLocationSearchResult" @region-change="onSearchRegionChange" />
+                <LocationSearch
+                  :model-value="pickRegion"
+                  class="location-search"
+                  @select="applyLocationSearchResult"
+                  @region-change="onSearchRegionChange"
+                />
                 <div ref="mapRef" class="map-pane" aria-label="点击地图选择图片位置"></div>
                 <p v-if="mapLoadState !== 'ready'" class="map-status">
                   正在加载地图
@@ -1076,31 +1080,6 @@ onBeforeUnmount(() => {
                       @input="updateLng"
                     />
                   </label>
-                </div>
-
-                <div class="map-region-row">
-                  <span class="field-sublabel">归属区域</span>
-                  <div class="region-toggle" role="group" aria-label="选择归属区域">
-                    <button
-                      type="button"
-                      class="region-button"
-                      :class="{ active: displayEntry.meta.location_region === 'china' }"
-                      :disabled="!hasCurrent || displayEntry.meta.location_lat === null || displayEntry.meta.location_lng === null"
-                      @click="setEntryRegion('china')"
-                    >
-                      国内
-                    </button>
-                    <button
-                      type="button"
-                      class="region-button"
-                      :class="{ active: displayEntry.meta.location_region === 'global' }"
-                      :disabled="!hasCurrent || displayEntry.meta.location_lat === null || displayEntry.meta.location_lng === null"
-                      @click="setEntryRegion('global')"
-                    >
-                      国外
-                    </button>
-                  </div>
-                  <span class="region-hint">国内走高德、国外走 Mapbox</span>
                 </div>
               </div>
             </section>
@@ -2262,44 +2241,4 @@ onBeforeUnmount(() => {
   gap: 0.4rem;
 }
 
-.map-region-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.region-toggle {
-  display: inline-flex;
-  overflow: hidden;
-  border: 1px solid rgba(53, 243, 255, 0.18);
-  border-radius: 0.4rem;
-  background: rgba(7, 7, 19, 0.52);
-}
-
-.region-button {
-  border: 0;
-  background: transparent;
-  padding: 0.3rem 0.7rem;
-  color: rgba(148, 163, 184, 0.92);
-  cursor: pointer;
-  font-size: 11.5px;
-  font-weight: 800;
-  transition: background-color 160ms ease, color 160ms ease;
-}
-
-.region-button.active {
-  background: rgba(53, 243, 255, 0.14);
-  color: rgb(165, 243, 252);
-}
-
-.region-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.region-hint {
-  font-size: 10.5px;
-  color: rgba(148, 163, 184, 0.78);
-}
 </style>

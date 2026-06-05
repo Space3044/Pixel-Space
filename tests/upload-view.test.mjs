@@ -141,6 +141,25 @@ test('upload duplicate check failure is not silently treated as a new image', ()
   assert.match(view, /const existing = await checkImageHash\(hash\)/);
 });
 
+test('upload location region follows the manually selected search region instead of coordinate bounds', () => {
+  assert.doesNotMatch(view, /mapRegionForStoredCoordinate/);
+  assert.match(view, /const\s+regionFromPickRegion\s*=\s*\(region:\s*GeocodeRegion\):\s*MapRegion\s*=>\s*\(region === 'cn' \? 'china' : 'global'\)/);
+  assert.match(view, /entry\.meta\.location_region\s*=\s*lat === null \|\| lng === null \? null : regionFromPickRegion\(pickRegion\.value\)/);
+});
+
+test('upload location region controls do not render implementation-source hint text', () => {
+  assert.doesNotMatch(view, /国内走高德、国外走 Mapbox/);
+  assert.doesNotMatch(view, /class="region-hint"/);
+  assert.doesNotMatch(view, /\.region-hint\s*\{/);
+});
+
+test('upload location region uses only the search region toggle', () => {
+  assert.doesNotMatch(view, /class="map-region-row"/);
+  assert.doesNotMatch(view, />归属区域</);
+  assert.doesNotMatch(view, /class="region-button"/);
+  assert.doesNotMatch(view, /const setEntryRegion/);
+});
+
 test('upload folder loading errors are visible instead of silently falling back', () => {
   assert.match(view, /globalError\.value = `文件夹加载失败：\$\{\(error as Error\)\.message\}`/);
   assert.doesNotMatch(view, /拉不到不阻塞上传/);
