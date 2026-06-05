@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
 import { devRole as currentDevRole, isAdmin, isDev, setDevRole } from '@/shared/auth/useAdmin';
 
 defineProps<{ fluid?: boolean }>();
@@ -60,13 +59,9 @@ const adminNavLinks: NavLink[] = [
   { to: '/library', label: '控制台', icon: 'sliders' },
 ];
 
-const route = useRoute();
 const scrollY = ref(0);
 
-const isScrolled = computed(() => {
-  if (route.path === '/') return false;
-  return scrollY.value > 20;
-});
+const isScrolled = computed(() => scrollY.value > 8);
 
 const handleScroll = () => {
   scrollY.value = window.scrollY;
