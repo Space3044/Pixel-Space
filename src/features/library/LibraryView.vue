@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
+import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from '@/features/images/image.types';
+import { imageSortOptions, sortImagesByMode, type ImageSortMode } from '@/features/images/image-sort';
 import { listImages } from '@/features/images/images.api';
 import {
   createFolder,
@@ -51,6 +53,7 @@ const aiSettingsSaving = ref(false);
 const currentFolderId = ref<string | null>(null);
 const selectedKeys = ref<Set<string>>(new Set());
 const moveTarget = ref<string>('__none__');
+const sortMode = ref<ImageSortMode>('created-desc');
 
 const lightboxOpen = ref(false);
 const lightboxImage = ref<ImageRecord | null>(null);
@@ -84,12 +87,14 @@ const virtualCounts = computed(() => ({
   [VIRTUAL_HIDDEN_LOCATIONS]: images.value.filter((img) => Number(img.location_public) === 0).length,
 }));
 
-const currentImages = computed<ImageRecord[]>(() => {
+const filteredCurrentImages = computed<ImageRecord[]>(() => {
   const cur = currentFolderId.value;
   if (cur === VIRTUAL_HIDDEN_IMAGES) return images.value.filter((img) => Number(img.is_public) === 0);
   if (cur === VIRTUAL_HIDDEN_LOCATIONS) return images.value.filter((img) => Number(img.location_public) === 0);
   return images.value.filter((img) => (img.folder_id ?? null) === cur);
 });
+
+const currentImages = computed<ImageRecord[]>(() => sortImagesByMode(filteredCurrentImages.value, sortMode.value));
 
 const currentFolder = computed<FolderRecord | null>(() =>
   currentFolderId.value && !isVirtualId(currentFolderId.value)
@@ -506,6 +511,17 @@ onMounted(refreshAll);
         <section v-if="currentImages.length > 0" class="image-section">
           <header class="image-section-header">
             <span class="section-label">本目录图片 · {{ currentImages.length }}</span>
+            <SelectPopover v-model="sortMode" :options="imageSortOptions" aria-label="排序方式">
+              <template #leading-icon>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="leading-icon" aria-hidden="true">
+                  <path d="M3 6h13" />
+                  <path d="M3 12h9" />
+                  <path d="M3 18h5" />
+                  <path d="m17 8 4 4-4 4" />
+                  <path d="M21 12H10" />
+                </svg>
+              </template>
+            </SelectPopover>
             <button
               v-if="!currentReadonly"
               type="button"
@@ -960,6 +976,13 @@ onMounted(refreshAll);
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(165, 243, 252, 0.84);
+}
+
+.leading-icon {
+  width: 14px;
+  height: 14px;
+  color: rgba(165, 243, 252, 0.85);
+  flex-shrink: 0;
 }
 
 .image-grid {

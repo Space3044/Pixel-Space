@@ -58,6 +58,16 @@ test('LibraryView renders virtual folders as folder-style cards with image count
   assert.doesNotMatch(view, /class="library-shortcuts"|class="shortcut-btn"|class="shortcut-count"/);
 });
 
+test('LibraryView uses the shared explore image sorting control for each directory', () => {
+  assert.match(view, /import SelectPopover from '@\/shared\/ui\/SelectPopover\.vue'/);
+  assert.match(view, /import \{ imageSortOptions, sortImagesByMode, type ImageSortMode \} from '@\/features\/images\/image-sort'/);
+  assert.match(view, /const sortMode = ref<ImageSortMode>\('created-desc'\)/);
+  assert.match(view, /const filteredCurrentImages = computed<ImageRecord\[\]>\(\(\) => \{/);
+  assert.match(view, /const currentImages = computed<ImageRecord\[\]>\(\(\) => sortImagesByMode\(filteredCurrentImages\.value, sortMode\.value\)\)/);
+  assert.match(view, /<SelectPopover v-model="sortMode" :options="imageSortOptions" aria-label="排序方式">/);
+  assert.match(view, /<section v-if="currentImages\.length > 0" class="image-section">[\s\S]*<header class="image-section-header">[\s\S]*<SelectPopover v-model="sortMode" :options="imageSortOptions" aria-label="排序方式">[\s\S]*<\/SelectPopover>/);
+});
+
 test('library.api exposes AI settings helpers for proxy URL, model and prompt only', () => {
   assert.match(api, /export interface AiSettings \{\s*proxy_url:\s*string;\s*model:\s*string;\s*prompt:\s*string;\s*\}/);
   assert.match(api, /export function fetchAiSettings\(\): Promise<AiSettings>/);

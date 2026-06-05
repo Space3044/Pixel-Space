@@ -4,6 +4,7 @@ import justifiedLayout from 'justified-layout';
 import AppShell from '@/shared/ui/AppShell.vue';
 import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from './image.types';
+import { imageSortOptions, sortImagesByMode, type ImageSortMode } from './image-sort';
 import { listImages } from './images.api';
 import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
 import FolderPickerPopover from './FolderPickerPopover.vue';
@@ -16,13 +17,7 @@ const loadError = ref<string | null>(null);
 const folderLoadError = ref<string | null>(null);
 const searchQuery = ref('');
 
-const sortMode = ref<string>('created-desc');
-const sortOptions = [
-  { value: 'created-desc', label: '最新上传' },
-  { value: 'created-asc', label: '最早上传' },
-  { value: 'taken-desc', label: '最新拍摄' },
-  { value: 'taken-asc', label: '最早拍摄' },
-];
+const sortMode = ref<ImageSortMode>('created-desc');
 
 // 文件夹筛选状态：
 //   '' 表示「全部」（不传 folder 参数）
@@ -43,22 +38,7 @@ const resultLabel = computed(() => {
   return `${images.value.length} 张图片`;
 });
 
-// 列表本身从后端按 created_at DESC 拿到；拍摄时间排序时把 exif_taken_at 为空的图统一沉到末尾，
-// 避免空值跟有值混排造成跳跃。
-const displayImages = computed<ImageRecord[]>(() => {
-  const list = [...images.value];
-  if (sortMode.value === 'created-desc') return list;
-  if (sortMode.value === 'created-asc') return list.reverse();
-  const direction = sortMode.value === 'taken-desc' ? -1 : 1;
-  return list.sort((a, b) => {
-    const av = a.exif_taken_at;
-    const bv = b.exif_taken_at;
-    if (av === bv) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    return av < bv ? -direction : direction;
-  });
-});
+const displayImages = computed<ImageRecord[]>(() => sortImagesByMode(images.value, sortMode.value));
 
 const layout = computed(() => {
   if (displayImages.value.length === 0 || containerWidth.value === 0) {
@@ -166,7 +146,7 @@ const clearSearch = async () => {
             <span>{{ resultLabel }}</span>
           </div>
           <button type="button" class="toolbar-icon" aria-label="刷新图库" @click="loadImages">刷新</button>
-          <SelectPopover v-model="sortMode" :options="sortOptions" aria-label="排序方式">
+          <SelectPopover v-model="sortMode" :options="imageSortOptions" aria-label="排序方式">
             <template #leading-icon>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="leading-icon" aria-hidden="true">
                 <path d="M3 6h13" />

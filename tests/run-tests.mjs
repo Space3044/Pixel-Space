@@ -2,6 +2,7 @@ for (const path of [
   './file-structure.test.mjs',
   './image-links.test.mjs',
   './image-meta.test.mjs',
+  './image-sort.test.mjs',
   './image-zoom.test.mjs',
   './location-name.test.mjs',
   './http-api.test.mjs',
