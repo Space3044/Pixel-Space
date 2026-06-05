@@ -1,20 +1,22 @@
+import { regionForCoordinate, type LocationRegion } from '../../../shared/geo-region';
+
 export interface LngLat {
   lng: number;
   lat: number;
 }
 
-export type MapRegion = 'china' | 'global';
+export type MapRegion = LocationRegion;
 
 const GCJ_A = 6378245;
 const GCJ_EE = 0.006693421622965943;
 const PI = Math.PI;
 
 const isOutsideChina = (lng: number, lat: number): boolean =>
-  lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+  regionForCoordinate({ lng, lat }) === 'global';
 
 export const mapRegionForStoredCoordinate = (coordinate: LngLat | null | undefined): MapRegion => {
   if (!coordinate) return 'china';
-  return isOutsideChina(coordinate.lng, coordinate.lat) ? 'global' : 'china';
+  return regionForCoordinate(coordinate) ?? 'china';
 };
 
 const transformLat = (lng: number, lat: number): number => {

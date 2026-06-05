@@ -25,17 +25,11 @@ test('RandomView detail cards are file detail, ai analysis, and copyable links',
   assert.match(view, />File Detail</);
   assert.match(view, />AI Analysis</);
   assert.match(view, />Copy Links</);
-  assert.match(view, /buildAbsoluteImageUrl/);
-  assert.match(view, /buildMarkdown/);
-  assert.match(view, /buildHtml/);
-  assert.match(view, /buildPublicPageUrl/);
-  assert.match(view, /const imageUrl = buildAbsoluteImageUrl\(current\.public_url,\s*origin\)/);
-  assert.match(view, /const imageForCopy = \{ \.\.\.current, public_url: imageUrl \}/);
-  assert.match(view, /\{ label: '图片直链', value: imageUrl \}/);
-  assert.match(view, /buildMarkdown\(imageForCopy\)/);
-  assert.match(view, /buildHtml\(imageForCopy\)/);
+  assert.match(view, /buildImageLinkRows/);
+  assert.match(view, /buildImageLinkRows\(current,\s*origin\)/);
   assert.match(view, /copyLink/);
-  assert.match(view, /navigator\.clipboard\.writeText/);
+  assert.match(view, /useClipboardFeedback/);
+  assert.doesNotMatch(view, /navigator\.clipboard\.writeText/);
 });
 
 test('RandomView exposes image metadata and ai fields', () => {

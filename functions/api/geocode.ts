@@ -1,5 +1,6 @@
 import { badRequest, json, serverError } from '../_shared/http';
 import type { Env } from '../types';
+import { dedupeGeocodeResults, validCoordinate, type GeocodeResult } from '../../shared/geocode';
 
 type GeocodeRegion = 'cn' | 'global';
 type ProviderResults = GeocodeResult[] | null;
@@ -29,12 +30,6 @@ interface PhotonFeature {
   geometry?: {
     coordinates?: unknown;
   };
-}
-
-export interface GeocodeResult {
-  name: string;
-  lat: number;
-  lng: number;
 }
 
 const MAPTILER_GEOCODING_BASE_URL = 'https://api.maptiler.com/geocoding/';
@@ -73,12 +68,6 @@ const normalizeRegion = (request: Request): GeocodeRegion | null => {
 const requestOrigin = (request: Request): string => {
   const origin = request.headers.get('origin') ?? new URL(request.url).origin;
   return origin.endsWith('/') ? origin : `${origin}/`;
-};
-
-const validCoordinate = (value: unknown, min: number, max: number): number | null => {
-  const number = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
-  if (!Number.isFinite(number) || number < min || number > max) return null;
-  return number;
 };
 
 const compactParts = (parts: unknown[]): string[] =>
@@ -141,16 +130,6 @@ const normalizePhotonFeature = (feature: PhotonFeature): GeocodeResult | null =>
   return { name, lat: coordinates.lat, lng: coordinates.lng };
 };
 
-const dedupeResults = (results: GeocodeResult[]): GeocodeResult[] => {
-  const seen = new Set<string>();
-  return results.filter((result) => {
-    const key = `${result.name}|${result.lat.toFixed(6)}|${result.lng.toFixed(6)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
 const errorMessage = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error);
 
@@ -181,7 +160,7 @@ const fetchMapTiler = async (query: string, env: Env): Promise<ProviderResults> 
   const data = (await response.json()) as { features?: unknown };
   if (!Array.isArray(data.features)) return [];
 
-  return dedupeResults(
+  return dedupeGeocodeResults(
     data.features
       .map((feature) => normalizeMapTilerFeature(feature as MapTilerFeature))
       .filter((row): row is GeocodeResult => row !== null),
@@ -208,7 +187,7 @@ const fetchNominatim = async (query: string, request: Request): Promise<GeocodeR
 
   const data = (await response.json()) as unknown;
   if (!Array.isArray(data)) return [];
-  return dedupeResults(
+  return dedupeGeocodeResults(
     data.map((row) => normalizeNominatimResult(row as NominatimResult)).filter((row): row is GeocodeResult => row !== null),
   );
 };
@@ -229,7 +208,7 @@ const fetchPhoton = async (query: string): Promise<GeocodeResult[]> => {
 
   const data = (await response.json()) as { features?: unknown };
   if (!Array.isArray(data.features)) return [];
-  return dedupeResults(
+  return dedupeGeocodeResults(
     data.features
       .map((feature) => normalizePhotonFeature(feature as PhotonFeature))
       .filter((row): row is GeocodeResult => row !== null),

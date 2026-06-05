@@ -1,6 +1,7 @@
 import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
+import { normalizeOptionalString, normalizeStringList, parseJsonObject } from '../../../_shared/request';
 
 // 批量把一组图片移动到目标 folder_id（null 表示根 / 未分类）。
 // 单次最多 200 张，超出请前端分片调用。
@@ -13,34 +14,12 @@ interface MovePayload {
 const MAX_BATCH = 200;
 
 const parsePayload = async (request: Request): Promise<MovePayload | null> => {
-  let raw: Record<string, unknown>;
-  try {
-    const data = (await request.json()) as unknown;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    raw = data as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-
-  const keysRaw = raw.keys;
-  if (!Array.isArray(keysRaw) || keysRaw.length === 0 || keysRaw.length > MAX_BATCH) return null;
-  const keys: string[] = [];
-  for (const value of keysRaw) {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    keys.push(trimmed);
-  }
-
-  const folderRaw = raw.folder_id;
-  let folderId: string | null = null;
-  if (folderRaw === null || folderRaw === undefined || folderRaw === '') {
-    folderId = null;
-  } else if (typeof folderRaw === 'string') {
-    folderId = folderRaw.trim() || null;
-  } else {
-    return null;
-  }
+  const raw = await parseJsonObject(request);
+  if (!raw) return null;
+  const keys = normalizeStringList(raw.keys, { min: 1, max: MAX_BATCH });
+  if (!keys) return null;
+  const folderId = normalizeOptionalString(raw.folder_id);
+  if (folderId === undefined) return null;
 
   return { keys, folder_id: folderId };
 };

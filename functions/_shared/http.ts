@@ -1,5 +1,3 @@
-// Functions 共享的 JSON 响应工具，接口默认不缓存。
-
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
   'cache-control': 'no-store',

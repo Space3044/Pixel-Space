@@ -1,3 +1,5 @@
+import { regionForCoordinate, type LocationRegion } from '../../shared/geo-region';
+
 // functions 与 src 使用独立 tsconfig，ImageRecord 在前后端各声明一份并保持字段一致。
 
 export interface ImageRecord {
@@ -154,14 +156,7 @@ export function scrubRecordForVisitor(record: ImageRecord): ImageRecord {
   };
 }
 
-export type LocationRegion = 'china' | 'global';
-
-// 与前端 map-coordinate.ts 的 isOutsideChina 同一套边界框，后端兜底判定区域。
-const regionForCoordinate = (lat: number | null, lng: number | null): LocationRegion | null => {
-  if (lat === null || lng === null) return null;
-  const outside = lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
-  return outside ? 'global' : 'china';
-};
+export type { LocationRegion };
 
 // 优先用调用方显式传入的 region，否则按坐标兜底；无坐标则 null。
 export const normalizeRegion = (
@@ -171,5 +166,5 @@ export const normalizeRegion = (
 ): LocationRegion | null => {
   if (lat === null || lng === null) return null;
   if (value === 'china' || value === 'global') return value;
-  return regionForCoordinate(lat, lng);
+  return regionForCoordinate({ lng, lat });
 };

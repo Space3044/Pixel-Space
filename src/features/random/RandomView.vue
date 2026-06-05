@@ -2,86 +2,44 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
-import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from '@/features/images/image-links';
+import { buildImageLinkRows } from '@/features/images/image-links';
 import { paletteFromImage, parseDominantColor, tagsFromImage } from '@/features/images/image-meta';
 import { listImages } from '@/features/images/images.api';
 import ReadOnlyMap from '@/features/images/ReadOnlyMap.vue';
+import { useClipboardFeedback } from '@/features/images/useClipboardFeedback';
+import { useImageZoom } from '@/features/images/useImageZoom';
 
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 const images = ref<ImageRecord[]>([]);
 const image = ref<ImageRecord | null>(null);
-const copiedLabel = ref<string | null>(null);
 
 const origin = typeof window !== 'undefined' ? window.location.origin : '';
-let copyTimer: ReturnType<typeof setTimeout> | null = null;
+const {
+  copiedText: copiedLabel,
+  copyValue,
+  clearCopyTimer,
+} = useClipboardFeedback();
 
 const COPY_ICON = { vb: '0 0 448 512', d: 'M208 0H332.1c12.7 0 24.9 5.1 33.9 14.1l67.9 67.9c9 9 14.1 21.2 14.1 33.9V336c0 26.5-21.5 48-48 48H208c-26.5 0-48-21.5-48-48V48c0-26.5 21.5-48 48-48zM48 128h80v64H64V448H256V416h64v48c0 26.5-21.5 48-48 48H48c-26.5 0-48-21.5-48-48V176c0-26.5 21.5-48 48-48z' };
 const CHECK_ICON = { vb: '0 0 448 512', d: 'M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z' };
 
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 2;
-const ZOOM_STEP = 1.25;
-
-const zoomScale = ref(1);
-const zoomX = ref(0);
-const zoomY = ref(0);
-const isPanning = ref(false);
-let panStart = { x: 0, y: 0, px: 0, py: 0 };
-
-const zoomTransform = computed(
-  () => `translate(${zoomX.value}px, ${zoomY.value}px) scale(${zoomScale.value})`,
-);
-const zoomPercent = computed(() => Math.round(zoomScale.value * 100));
-const canZoomIn = computed(() => zoomScale.value < ZOOM_MAX - 1e-3);
-const canZoomOut = computed(() => zoomScale.value > ZOOM_MIN + 1e-3);
-
-const resetZoom = () => {
-  zoomScale.value = 1;
-  zoomX.value = 0;
-  zoomY.value = 0;
-};
-
-const setZoom = (next: number) => {
-  zoomScale.value = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
-  if (zoomScale.value <= 1) {
-    zoomX.value = 0;
-    zoomY.value = 0;
-  }
-};
-
-const zoomBy = (factor: number) => setZoom(zoomScale.value * factor);
-
-const onImageWheel = (event: WheelEvent) => {
-  event.preventDefault();
-  const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-  setZoom(zoomScale.value * factor);
-};
-
-const onImagePointerDown = (event: PointerEvent) => {
-  if (event.button !== 0 || zoomScale.value <= 1) return;
-  isPanning.value = true;
-  panStart = { x: event.clientX, y: event.clientY, px: zoomX.value, py: zoomY.value };
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-};
-
-const onImagePointerMove = (event: PointerEvent) => {
-  if (!isPanning.value) return;
-  zoomX.value = panStart.px + (event.clientX - panStart.x);
-  zoomY.value = panStart.py + (event.clientY - panStart.y);
-};
-
-const onImagePointerUp = (event: PointerEvent) => {
-  if (!isPanning.value) return;
-  isPanning.value = false;
-  const target = event.currentTarget as HTMLElement;
-  if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-};
-
-const onImageDoubleClick = (event: MouseEvent) => {
-  event.preventDefault();
-  setZoom(zoomScale.value > 1 ? 1 : 2);
-};
+const {
+  ZOOM_STEP,
+  zoomScale,
+  isPanning,
+  zoomTransform,
+  zoomPercent,
+  canZoomIn,
+  canZoomOut,
+  resetZoom,
+  zoomBy,
+  onImageWheel,
+  onImagePointerDown,
+  onImagePointerMove,
+  onImagePointerUp,
+  onImageDoubleClick,
+} = useImageZoom();
 
 const pickRandomImage = (records: ImageRecord[], currentKey: string | null): ImageRecord | null => {
   if (records.length === 0) return null;
@@ -128,28 +86,10 @@ const locationName = computed(() => image.value?.location_name?.trim() || '未�
 const linkRows = computed(() => {
   const current = image.value;
   if (!current) return [];
-  const imageUrl = buildAbsoluteImageUrl(current.public_url, origin);
-  const imageForCopy = { ...current, public_url: imageUrl };
-  return [
-    { label: '图片直链', value: imageUrl },
-    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
-    { label: 'HTML', value: buildHtml(imageForCopy) },
-    { label: '公开页', value: buildPublicPageUrl(current, origin) },
-  ];
+  return buildImageLinkRows(current, origin);
 });
 
-const copyLink = async (label: string, value: string) => {
-  try {
-    await navigator.clipboard.writeText(value);
-  } catch {
-    return;
-  }
-  copiedLabel.value = label;
-  if (copyTimer) clearTimeout(copyTimer);
-  copyTimer = setTimeout(() => {
-    copiedLabel.value = null;
-  }, 1400);
-};
+const copyLink = (label: string, value: string) => copyValue(value, label);
 
 const handleKey = (e: KeyboardEvent) => {
   const tag = (document.activeElement?.tagName || '').toUpperCase();
@@ -169,7 +109,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKey);
-  if (copyTimer) clearTimeout(copyTimer);
+  clearCopyTimer();
 });
 </script>
 

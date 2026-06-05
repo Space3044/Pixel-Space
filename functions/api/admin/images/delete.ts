@@ -1,6 +1,7 @@
 import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
+import { normalizeStringList, parseJsonObject } from '../../../_shared/request';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 
 // 批量删除一组图片：清理 D1 行 + R2 对象 + Telegram 原图消息。
@@ -19,25 +20,10 @@ interface ImageRow {
 const MAX_BATCH = 200;
 
 const parsePayload = async (request: Request): Promise<DeletePayload | null> => {
-  let raw: Record<string, unknown>;
-  try {
-    const data = (await request.json()) as unknown;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    raw = data as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-
-  const keysRaw = raw.keys;
-  if (!Array.isArray(keysRaw) || keysRaw.length === 0 || keysRaw.length > MAX_BATCH) return null;
-  const keys: string[] = [];
-  for (const value of keysRaw) {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    keys.push(trimmed);
-  }
-
+  const raw = await parseJsonObject(request);
+  if (!raw) return null;
+  const keys = normalizeStringList(raw.keys, { min: 1, max: MAX_BATCH });
+  if (!keys) return null;
   return { keys };
 };
 

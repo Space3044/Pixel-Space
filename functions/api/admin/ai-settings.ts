@@ -3,6 +3,7 @@ import { badRequest, json, serverError, unauthorized } from '../../_shared/http'
 import type { AiSettings } from '../../_shared/ai';
 import { getAiSettings } from '../../_shared/ai';
 import { resolveAdmin } from '../../_shared/auth';
+import { parseJsonObject, stringOrEmpty } from '../../_shared/request';
 
 const UPSERT_SQL = `
 INSERT INTO ai_settings (id, proxy_url, model, prompt, updated_at)
@@ -14,24 +15,14 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at = datetime('now')
 `;
 
-const stringOrEmpty = (value: unknown): string => {
-  if (typeof value !== 'string') return '';
-  return value.trim();
-};
-
 const payloadFromRequest = async (request: Request): Promise<AiSettings | null> => {
-  try {
-    const data = (await request.json()) as unknown;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    const raw = data as Record<string, unknown>;
-    return {
-      proxy_url: stringOrEmpty(raw.proxy_url),
-      model: stringOrEmpty(raw.model),
-      prompt: stringOrEmpty(raw.prompt),
-    };
-  } catch {
-    return null;
-  }
+  const raw = await parseJsonObject(request);
+  if (!raw) return null;
+  return {
+    proxy_url: stringOrEmpty(raw.proxy_url),
+    model: stringOrEmpty(raw.model),
+    prompt: stringOrEmpty(raw.prompt),
+  };
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {

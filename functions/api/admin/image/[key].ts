@@ -3,6 +3,13 @@ import { badRequest, json, notFound, serverError, unauthorized } from '../../../
 import { resolveAdmin } from '../../../_shared/auth';
 import type { ImageRow } from '../../../_shared/images';
 import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToRecord } from '../../../_shared/images';
+import {
+  optionalCoordinate,
+  optionalFlag,
+  parseJsonObject,
+  stringOrEmpty,
+  stringOrNull,
+} from '../../../_shared/request';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 
 const DETAIL_SQL = `
@@ -58,45 +65,16 @@ interface EditablePayload {
   location_public: 0 | 1 | null;
 }
 
-const stringOrNull = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
-const stringOrEmpty = (value: unknown): string => stringOrNull(value) ?? '';
-
-const coordinateOrNull = (value: unknown, min: number, max: number): number | null | undefined => {
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) return undefined;
-  return value;
-};
-
-// 缺失字段 -> null（让 SQL COALESCE 保持原值）。
-// 提供布尔/0/1/'0'/'1' -> 规范化为 0 | 1。其它值视为无效，返回 undefined 以触发 400。
-const flagOrPreserve = (value: unknown): 0 | 1 | null | undefined => {
-  if (value === undefined) return null;
-  if (value === true || value === 1 || value === '1') return 1;
-  if (value === false || value === 0 || value === '0') return 0;
-  return undefined;
-};
-
 const payloadFromRequest = async (request: Request): Promise<EditablePayload | null> => {
-  let raw: Record<string, unknown>;
-  try {
-    const data = (await request.json()) as unknown;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    raw = data as Record<string, unknown>;
-  } catch {
-    return null;
-  }
+  const raw = await parseJsonObject(request);
+  if (!raw) return null;
 
-  const locationLat = coordinateOrNull(raw.location_lat, -90, 90);
-  const locationLng = coordinateOrNull(raw.location_lng, -180, 180);
+  const locationLat = optionalCoordinate(raw.location_lat, -90, 90);
+  const locationLng = optionalCoordinate(raw.location_lng, -180, 180);
   if (locationLat === undefined || locationLng === undefined) return null;
 
-  const isPublic = flagOrPreserve(raw.is_public);
-  const locationPublic = flagOrPreserve(raw.location_public);
+  const isPublic = optionalFlag(raw.is_public);
+  const locationPublic = optionalFlag(raw.location_public);
   if (isPublic === undefined || locationPublic === undefined) return null;
 
   return {

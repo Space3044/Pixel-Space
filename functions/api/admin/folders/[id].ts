@@ -6,6 +6,7 @@ import {
   normalizeParentId,
   sanitizeFolderName,
 } from '../../../_shared/folders';
+import { parseJsonObject } from '../../../_shared/request';
 
 interface PatchPayload {
   name?: string;
@@ -13,14 +14,8 @@ interface PatchPayload {
 }
 
 const parsePatchPayload = async (request: Request): Promise<PatchPayload | null> => {
-  let raw: Record<string, unknown>;
-  try {
-    const data = (await request.json()) as unknown;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    raw = data as Record<string, unknown>;
-  } catch {
-    return null;
-  }
+  const raw = await parseJsonObject(request);
+  if (!raw) return null;
 
   const payload: PatchPayload = {};
 

@@ -10,7 +10,6 @@ const props = defineProps<{
   modelValue: string;
   options: Option[];
   ariaLabel?: string;
-  // 浮层最小宽度，默认贴住触发按钮够用即可
   minWidth?: string;
 }>();
 

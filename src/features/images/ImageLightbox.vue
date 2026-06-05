@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import type { ImageRecord } from './image.types';
-import { buildAbsoluteImageUrl, buildHtml, buildMarkdown, buildPublicPageUrl } from './image-links';
-import { formatBytes, paletteFromImage, parseDominantColor, tagsFromImage } from './image-meta';
+import { buildImageLinkRows, buildPublicPageUrl } from './image-links';
+import { formatBytes, formatDateTime, paletteFromImage, parseDominantColor, tagsFromImage } from './image-meta';
 import LocationSearch from './LocationSearch.vue';
 import ReadOnlyMap from './ReadOnlyMap.vue';
 import type { GeocodeResult } from './geocode.api';
@@ -10,6 +10,8 @@ import { mapRegionForStoredCoordinate } from '@/features/upload/map-coordinate';
 import type { MapRegion } from '@/features/upload/map-coordinate';
 import { deleteImage, updateImage } from './images.api';
 import { isAdmin } from '@/shared/auth/useAdmin';
+import { useClipboardFeedback } from './useClipboardFeedback';
+import { useImageZoom } from './useImageZoom';
 
 const props = defineProps<{ open: boolean; image?: ImageRecord | null }>();
 const emit = defineEmits<{ close: []; prev: []; next: []; updated: [image: ImageRecord]; deleted: [key: string] }>();
@@ -43,79 +45,33 @@ const ICONS: Record<IconName, { vb: string; d: string }> = {
   trash: { vb: '0 0 24 24', d: 'M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h10l-1 12H8L7 9zm3 2v8h2v-8h-2zm4 0v8h2v-8h-2z' },
 };
 
-const copied = ref(false);
-const copiedText = ref('');
-let copyTimer: ReturnType<typeof setTimeout> | null = null;
+const {
+  copied,
+  copiedText,
+  copyValue,
+  clearCopyTimer,
+} = useClipboardFeedback();
 const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
 const detailsOpen = ref(false);
 const imageControlsHidden = ref(false);
 
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 2;
-const ZOOM_STEP = 1.25;
-
-const zoomScale = ref(1);
-const zoomX = ref(0);
-const zoomY = ref(0);
-const isPanning = ref(false);
-let panStart = { x: 0, y: 0, px: 0, py: 0 };
-
-const zoomTransform = computed(
-  () => `translate(${zoomX.value}px, ${zoomY.value}px) scale(${zoomScale.value})`,
-);
-const zoomPercent = computed(() => Math.round(zoomScale.value * 100));
-const canZoomIn = computed(() => zoomScale.value < ZOOM_MAX - 1e-3);
-const canZoomOut = computed(() => zoomScale.value > ZOOM_MIN + 1e-3);
-
-const resetZoom = () => {
-  zoomScale.value = 1;
-  zoomX.value = 0;
-  zoomY.value = 0;
-};
-
-const setZoom = (next: number) => {
-  zoomScale.value = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
-  if (zoomScale.value <= 1) {
-    zoomX.value = 0;
-    zoomY.value = 0;
-  }
-};
-
-const zoomBy = (factor: number) => {
-  setZoom(zoomScale.value * factor);
-};
-
-const onImageWheel = (event: WheelEvent) => {
-  event.preventDefault();
-  const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-  setZoom(zoomScale.value * factor);
-};
-
-const onImagePointerDown = (event: PointerEvent) => {
-  if (event.button !== 0 || zoomScale.value <= 1) return;
-  isPanning.value = true;
-  panStart = { x: event.clientX, y: event.clientY, px: zoomX.value, py: zoomY.value };
-  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-};
-
-const onImagePointerMove = (event: PointerEvent) => {
-  if (!isPanning.value) return;
-  zoomX.value = panStart.px + (event.clientX - panStart.x);
-  zoomY.value = panStart.py + (event.clientY - panStart.y);
-};
-
-const onImagePointerUp = (event: PointerEvent) => {
-  if (!isPanning.value) return;
-  isPanning.value = false;
-  const target = event.currentTarget as HTMLElement;
-  if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-};
-
-const onImageDoubleClick = (event: MouseEvent) => {
-  event.preventDefault();
-  setZoom(zoomScale.value > 1 ? 1 : 2);
-};
+const {
+  ZOOM_STEP,
+  zoomScale,
+  isPanning,
+  zoomTransform,
+  zoomPercent,
+  canZoomIn,
+  canZoomOut,
+  resetZoom,
+  zoomBy,
+  onImageWheel,
+  onImagePointerDown,
+  onImagePointerMove,
+  onImagePointerUp,
+  onImageDoubleClick,
+} = useImageZoom();
 const aiEditOpen = ref(false);
 const locationEditOpen = ref(false);
 const saving = ref(false);
@@ -151,31 +107,8 @@ const originalUrl = computed(() => {
 
 const linkRows = computed(() => {
   if (!props.image) return [];
-  const imageUrl = buildAbsoluteImageUrl(props.image.public_url, origin);
-  const imageForCopy = { ...props.image, public_url: imageUrl };
-  return [
-    { label: '图片直链', value: imageUrl },
-    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
-    { label: 'HTML', value: buildHtml(imageForCopy) },
-    { label: '公开页', value: publicPageUrl.value },
-  ];
+  return buildImageLinkRows(props.image, origin);
 });
-
-const formatDateTime = (value: string | null | undefined): string => {
-  if (!value) return '未记录';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).format(date);
-};
 
 const formatExifTakenAt = (value: string | null | undefined): string =>
   formatDateTime(value);
@@ -232,21 +165,6 @@ const mapLat = computed(() => toMapCoordinate(
 const mapLng = computed(() => toMapCoordinate(
   locationEditOpen.value ? editForm.location_lng : props.image?.location_lng,
 ));
-
-const copyValue = async (value: string, label = '链接') => {
-  try {
-    await navigator.clipboard.writeText(value);
-  } catch {
-    return;
-  }
-  copiedText.value = label;
-  copied.value = true;
-  if (copyTimer) clearTimeout(copyTimer);
-  copyTimer = setTimeout(() => {
-    copied.value = false;
-    copiedText.value = '';
-  }, 1400);
-};
 
 const sharePage = async () => {
   if (!props.image) return;
@@ -469,10 +387,7 @@ watch(
       aiEditOpen.value = false;
       locationEditOpen.value = false;
       resetZoom();
-      if (copyTimer) {
-        clearTimeout(copyTimer);
-        copyTimer = null;
-      }
+      clearCopyTimer();
     }
   },
   { immediate: true },
@@ -491,6 +406,7 @@ watch(
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKey);
   document.body.style.overflow = '';
+  clearCopyTimer();
 });
 </script>
 

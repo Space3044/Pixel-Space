@@ -1,14 +1,11 @@
 import { readHttpError } from '@/shared/api/http';
 import { loadAmap } from '@/features/upload/amap';
 import { gcj02ToWgs84, wgs84ToGcj02 } from '@/features/upload/map-coordinate';
+import { dedupeGeocodeResults, validCoordinate, type GeocodeResult } from '../../../shared/geocode';
 import { formatLocationName } from './location-name';
 import type { AMapNamespace } from '@/features/upload/amap';
 
-export interface GeocodeResult {
-  name: string;
-  lat: number;
-  lng: number;
-}
+export type { GeocodeResult };
 
 export type GeocodeRegion = 'cn' | 'global';
 
@@ -57,12 +54,6 @@ interface AmapSearchPayload {
   geocodes?: unknown;
   regeocode?: unknown;
 }
-
-const validCoordinate = (value: unknown, min: number, max: number): number | null => {
-  const number = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
-  if (!Number.isFinite(number) || number < min || number > max) return null;
-  return number;
-};
 
 const parseAmapLngLat = (value: unknown): { lng: number; lat: number } | null => {
   if (!value || typeof value !== 'object') return null;
@@ -116,16 +107,6 @@ const normalizeAmapGeocode = (row: AmapGeocode): GeocodeResult | null => {
   if (!name) return null;
 
   return { name, lat: stored.lat, lng: stored.lng };
-};
-
-const dedupeResults = (results: GeocodeResult[]): GeocodeResult[] => {
-  const seen = new Set<string>();
-  return results.filter((result) => {
-    const key = `${result.name}|${result.lat.toFixed(6)}|${result.lng.toFixed(6)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 };
 
 const amapErrorCode = (status: string, result: unknown): string => {
@@ -198,7 +179,7 @@ const enrichAmapPois = async (amap: AMapNamespace, pois: AmapPoi[]): Promise<Geo
     if (result) results.push(result);
   }
 
-  return dedupeResults(results);
+  return dedupeGeocodeResults(results);
 };
 
 const searchAmapPlaces = async (amap: AMapNamespace, keyword: string): Promise<GeocodeResult[]> => {
@@ -226,7 +207,7 @@ const geocodeAmapAddress = (amap: AMapNamespace, keyword: string): Promise<Geoco
       }
 
       resolve(
-        dedupeResults(
+        dedupeGeocodeResults(
           geocodes.map((geocode) => normalizeAmapGeocode(geocode as AmapGeocode)).filter((row): row is GeocodeResult => row !== null),
         ),
       );

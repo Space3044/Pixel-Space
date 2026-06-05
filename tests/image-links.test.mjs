@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  buildImageLinkRows,
   buildMarkdown,
   buildHtml,
   buildPublicPageUrl,
@@ -83,4 +84,16 @@ test('buildPublicPageUrl trims a trailing slash on origin', () => {
     buildPublicPageUrl({ key: 'abc' }, 'https://imgbed.example.com/'),
     'https://imgbed.example.com/p/abc',
   );
+});
+
+test('buildImageLinkRows centralizes copyable image link rows', () => {
+  assert.deepEqual(buildImageLinkRows(sample, 'https://imgbed.example.com'), [
+    { label: '图片直链', value: 'https://cdn.example.com/img/abc123.webp' },
+    { label: 'Markdown', value: '![Sunset](https://cdn.example.com/img/abc123.webp)' },
+    {
+      label: 'HTML',
+      value: '<img src="https://cdn.example.com/img/abc123.webp" alt="Sunset" width="1024" height="768" />',
+    },
+    { label: '公开页', value: 'https://imgbed.example.com/p/abc123' },
+  ]);
 });

@@ -1,7 +1,3 @@
-// 文件库（分类文件夹）共享工具。
-// 文件夹层级与图片归属解耦：图片只引用一个 folder_id，文件夹自带 parent_id 形成树。
-// 该模块仅服务管理员，调用方在 endpoint 内 requireAdmin 闸门。
-
 export interface FolderRow {
   id: string;
   parent_id: string | null;

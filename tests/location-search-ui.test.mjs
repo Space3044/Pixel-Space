@@ -27,7 +27,8 @@ test('LocationSearch searches only on submit and emits selected coordinates', ()
 });
 
 test('geocode.api uses AMap JS API for domestic search and backend only for global search', () => {
-  assert.match(geocodeApi, /export interface GeocodeResult/);
+  assert.match(geocodeApi, /type GeocodeResult/);
+  assert.match(geocodeApi, /export type \{ GeocodeResult \}/);
   assert.match(geocodeApi, /export type GeocodeRegion = 'cn' \| 'global'/);
   assert.match(geocodeApi, /export async function searchLocations/);
   assert.match(geocodeApi, /loadAmap/);

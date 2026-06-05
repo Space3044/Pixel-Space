@@ -3,6 +3,14 @@ import { badRequest, json, serverError, unauthorized } from '../_shared/http';
 import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
 import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToRecord } from '../_shared/images';
+import {
+  coordinateOrNull,
+  flagOrDefault,
+  integerOrNull,
+  numberOrNull,
+  stringOrEmpty,
+  stringOrNull,
+} from '../_shared/request';
 import { archiveOriginalToTelegram } from '../_shared/telegram';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
@@ -115,44 +123,14 @@ const objectFromJsonField = (formData: FormData, name: string): Record<string, u
   }
 };
 
-const stringOrNull = (value: unknown): string | null => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-};
-
-const stringOrEmpty = (value: unknown): string => stringOrNull(value) ?? '';
-
-const numberOrNull = (value: unknown): number | null => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return value;
-};
-
-const integerOrNull = (value: unknown): number | null => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return Math.round(value);
-};
-
-const normalizeCoordinate = (value: unknown, min: number, max: number): number | null => {
-  const number = numberOrNull(value);
-  if (number === null || number < min || number > max) return null;
-  return number;
-};
-
 const normalizeAiStatus = (value: unknown): UploadMeta['ai_status'] => {
   if (value === 'done' || value === 'failed' || value === 'pending') return value;
   return 'pending';
 };
 
-const normalizeFlag = (value: unknown, fallback: 0 | 1): 0 | 1 => {
-  if (value === true || value === 1 || value === '1') return 1;
-  if (value === false || value === 0 || value === '0') return 0;
-  return fallback;
-};
-
 const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => {
-  const location_lat = normalizeCoordinate(raw.location_lat, -90, 90);
-  const location_lng = normalizeCoordinate(raw.location_lng, -180, 180);
+  const location_lat = coordinateOrNull(raw.location_lat, -90, 90);
+  const location_lng = coordinateOrNull(raw.location_lng, -180, 180);
   return {
     title: stringOrEmpty(raw.title),
     caption: stringOrNull(raw.caption),
@@ -166,8 +144,8 @@ const normalizeMeta = (raw: Record<string, unknown>): UploadMeta => {
     color_palette_json: normalizeColorPaletteJson(raw.palette),
     composition: stringOrNull(raw.composition),
     ai_status: normalizeAiStatus(raw.ai_status),
-    is_public: normalizeFlag(raw.is_public, 1),
-    location_public: normalizeFlag(raw.location_public, 1),
+    is_public: flagOrDefault(raw.is_public, 1),
+    location_public: flagOrDefault(raw.location_public, 1),
     folder_id: stringOrNull(raw.folder_id),
   };
 };

@@ -2,6 +2,7 @@ import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
 import { normalizeParentId, sanitizeFolderName } from '../../../_shared/folders';
+import { parseJsonObject } from '../../../_shared/request';
 
 interface CreatePayload {
   name: string;
@@ -9,14 +10,8 @@ interface CreatePayload {
 }
 
 const parseCreatePayload = async (request: Request): Promise<CreatePayload | null> => {
-  let raw: Record<string, unknown>;
-  try {
-    const data = (await request.json()) as unknown;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    raw = data as Record<string, unknown>;
-  } catch {
-    return null;
-  }
+  const raw = await parseJsonObject(request);
+  if (!raw) return null;
   const name = sanitizeFolderName(raw.name);
   if (!name) return null;
   const parentId = normalizeParentId(raw.parent_id);

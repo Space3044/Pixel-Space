@@ -1,6 +1,3 @@
-// Pages Functions 运行时环境类型。
-// 只声明当前已接入的 binding。
-
 export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;

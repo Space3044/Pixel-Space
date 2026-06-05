@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  formatDateTime,
   formatBytes,
   paletteFromImage,
   parseDominantColor,
@@ -28,4 +29,11 @@ test('image-meta parses dominant color labels and formats bytes with caller-prov
   assert.deepEqual(parseDominantColor(null), { name: '未记录', hex: '' });
   assert.equal(formatBytes(0, '未记录'), '未记录');
   assert.equal(formatBytes(1536, '--'), '1.50 KB');
+});
+
+test('formatDateTime formats image timestamps with caller-provided empty text', () => {
+  assert.equal(formatDateTime(null), '未记录');
+  assert.equal(formatDateTime('', '--'), '--');
+  assert.equal(formatDateTime('not-a-date'), 'not-a-date');
+  assert.equal(formatDateTime('2026-05-20T10:11:12.000Z'), '2026/05/20 18:11:12');
 });

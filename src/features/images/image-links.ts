@@ -1,5 +1,10 @@
 import type { ImageRecord } from './image.types';
 
+export interface ImageLinkRow {
+  label: string;
+  value: string;
+}
+
 const stripBrackets = (s: string): string => s.replace(/[\[\]]/g, '');
 
 const escapeAttr = (s: string): string =>
@@ -29,4 +34,18 @@ export function buildHtml(
 
 export function buildPublicPageUrl(image: Pick<ImageRecord, 'key'>, origin: string): string {
   return `${origin.replace(/\/$/, '')}/p/${image.key}`;
+}
+
+export function buildImageLinkRows(
+  image: Pick<ImageRecord, 'key' | 'title' | 'public_url' | 'width' | 'height'>,
+  origin: string,
+): ImageLinkRow[] {
+  const imageUrl = buildAbsoluteImageUrl(image.public_url, origin);
+  const imageForCopy = { ...image, public_url: imageUrl };
+  return [
+    { label: '图片直链', value: imageUrl },
+    { label: 'Markdown', value: buildMarkdown(imageForCopy) },
+    { label: 'HTML', value: buildHtml(imageForCopy) },
+    { label: '公开页', value: buildPublicPageUrl(image, origin) },
+  ];
 }

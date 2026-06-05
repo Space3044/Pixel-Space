@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const gallery = readFileSync('src/features/images/GalleryView.vue', 'utf8');
 const lightbox = readFileSync('src/features/images/ImageLightbox.vue', 'utf8');
+const imageMeta = readFileSync('src/features/images/image-meta.ts', 'utf8');
 const readOnlyMap = readFileSync('src/features/images/ReadOnlyMap.vue', 'utf8');
 const imagesApi = readFileSync('src/features/images/images.api.ts', 'utf8');
 
@@ -44,7 +45,9 @@ test('images.api exposes admin update and delete helpers', () => {
 });
 
 test('ImageLightbox provides edit, delete, original download, copy links and map management UI', () => {
-  assert.match(lightbox, /import \{[^}]*buildAbsoluteImageUrl[^}]*\} from '\.\/image-links'/s);
+  assert.match(lightbox, /import \{[^}]*buildImageLinkRows[^}]*buildPublicPageUrl[^}]*\} from '\.\/image-links'/s);
+  assert.match(lightbox, /import \{ useClipboardFeedback \} from '\.\/useClipboardFeedback'/);
+  assert.match(lightbox, /import \{ useImageZoom \} from '\.\/useImageZoom'/);
   assert.match(lightbox, /from '\.\/image-meta'/);
   assert.match(lightbox, /import ReadOnlyMap from '\.\/ReadOnlyMap\.vue'/);
   assert.match(lightbox, /updateImage/);
@@ -126,13 +129,9 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /相机/);
   assert.match(lightbox, /焦距/);
   assert.match(lightbox, /\/api\/original\/\$\{encodeURIComponent\(image\.key\)\}/);
-  assert.match(lightbox, /buildMarkdown/);
-  assert.match(lightbox, /buildHtml/);
-  assert.match(lightbox, /const imageUrl = buildAbsoluteImageUrl\(props\.image\.public_url,\s*origin\)/);
-  assert.match(lightbox, /const imageForCopy = \{ \.\.\.props\.image, public_url: imageUrl \}/);
-  assert.match(lightbox, /\{ label: '图片直链', value: imageUrl \}/);
-  assert.match(lightbox, /buildMarkdown\(imageForCopy\)/);
-  assert.match(lightbox, /buildHtml\(imageForCopy\)/);
+  assert.match(lightbox, /buildImageLinkRows\(props\.image,\s*origin\)/);
+  assert.doesNotMatch(lightbox, /const imageUrl = buildAbsoluteImageUrl\(props\.image\.public_url,\s*origin\)/);
+  assert.doesNotMatch(lightbox, /const imageForCopy = \{ \.\.\.props\.image, public_url: imageUrl \}/);
   assert.match(lightbox, /confirm\('确认删除这张图片？'\)/);
   assert.doesNotMatch(lightbox, /内容安全/);
   assert.doesNotMatch(lightbox, /阶段 11 接入 AI 描述|全屏（阶段|ICONS\.expand/);
@@ -141,7 +140,9 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
 });
 
 test('ImageLightbox formats detail timestamps in Beijing time', () => {
-  assert.match(lightbox, /new Intl\.DateTimeFormat\('zh-CN',\s*\{[\s\S]*timeZone:\s*'Asia\/Shanghai'/);
+  assert.match(lightbox, /formatDateTime/);
+  assert.match(imageMeta, /new Intl\.DateTimeFormat\('zh-CN',\s*\{[\s\S]*timeZone,/);
+  assert.match(imageMeta, /timeZone = 'Asia\/Shanghai'/);
   assert.doesNotMatch(lightbox, /D1_UTC_DATE_TIME_PATTERN|assumeUtc/);
   assert.match(lightbox, /const formatExifTakenAt = \(value: string \| null \| undefined\): string =>\s*formatDateTime\(value\)/);
   assert.match(lightbox, /const formatImageTimestamp = \(value: string \| null \| undefined\): string =>\s*formatDateTime\(value\)/);
@@ -150,6 +151,7 @@ test('ImageLightbox formats detail timestamps in Beijing time', () => {
 });
 
 test('ImageLightbox uses the PixelPunk-style viewer scale and icon controls', () => {
+  assert.match(lightbox, /useImageZoom\(\)/);
   assert.match(lightbox, /class="cyber-image-viewer"/);
   assert.match(lightbox, /class="navigation-bar"/);
   assert.match(lightbox, /class="image-canvas"/);
