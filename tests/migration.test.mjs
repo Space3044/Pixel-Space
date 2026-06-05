@@ -32,8 +32,13 @@ const tableBody = (tableName) => {
   return match[1];
 };
 
-test('migrations keep the consolidated init plus the location_region delta', () => {
-  assert.deepEqual(migrationFiles, ['0001_init.sql', '0002_location_region.sql']);
+test('migrations keep the consolidated init plus focused delta migrations', () => {
+  assert.deepEqual(migrationFiles, [
+    '0001_init.sql',
+    '0002_location_region.sql',
+    '0003_download_grants.sql',
+    '0004_download_grant_codes.sql',
+  ]);
   assert.doesNotMatch(sqlBody, /\balter\s+table\b/);
   assert.doesNotMatch(sqlBody, /\bimages_next\b/);
 });
@@ -45,6 +50,33 @@ test('0002 adds and backfills location_region', () => {
   assert.match(delta, /location_region\s*=/);
   assert.match(delta, /'global'/);
   assert.match(delta, /'china'/);
+});
+
+test('0003 creates download grant tables', () => {
+  const delta = stripComments(readFileSync(join(migrationDir, '0003_download_grants.sql'), 'utf8')).toLowerCase();
+
+  assert.match(delta, /create\s+table\s+download_grants/);
+  assert.match(delta, /\bid\s+text\s+primary\s+key\s+not\s+null/);
+  assert.match(delta, /\bcode_hash\s+text\s+not\s+null\s+unique/);
+  assert.match(delta, /\bexpires_at\s+text\s+not\s+null/);
+  assert.match(delta, /\bcreated_at\s+text\s+not\s+null\s+default\s+\(datetime\('now'\)\)/);
+  assert.match(delta, /create\s+index\s+idx_download_grants_expires_at/);
+
+  assert.match(delta, /create\s+table\s+download_grant_images/);
+  assert.match(delta, /\bgrant_id\s+text\s+not\s+null/);
+  assert.match(delta, /\bimage_key\s+text\s+not\s+null/);
+  assert.match(delta, /primary\s+key\s*\(\s*grant_id\s*,\s*image_key\s*\)/);
+  assert.match(delta, /foreign\s+key\s*\(\s*grant_id\s*\)\s+references\s+download_grants\s*\(\s*id\s*\)\s+on\s+delete\s+cascade/);
+  assert.match(delta, /foreign\s+key\s*\(\s*image_key\s*\)\s+references\s+images\s*\(\s*key\s*\)\s+on\s+delete\s+cascade/);
+  assert.match(delta, /create\s+index\s+idx_download_grant_images_image_key/);
+});
+
+test('0004 adds display codes for download grant management', () => {
+  const delta = stripComments(readFileSync(join(migrationDir, '0004_download_grant_codes.sql'), 'utf8')).toLowerCase();
+
+  assert.match(delta, /alter\s+table\s+download_grants\s+add\s+column\s+code\s+text/);
+  assert.doesNotMatch(delta, /add\s+column\s+code\s+text\s+unique/);
+  assert.match(delta, /create\s+unique\s+index\s+idx_download_grants_code\s+on\s+download_grants\s*\(\s*code\s*\)/);
 });
 
 test('migration creates the final images table', () => {
