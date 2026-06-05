@@ -34,7 +34,6 @@ test('RandomView detail cards are file detail, ai analysis, and copyable links',
 
 test('RandomView exposes image metadata and ai fields', () => {
   assert.match(view, /from '@\/features\/images\/image-meta'/);
-  assert.match(view, /original_filename/);
   assert.match(view, /exif_iso/);
   assert.match(view, /exif_aperture/);
   assert.match(view, /exif_shutter/);
@@ -74,14 +73,14 @@ test('RandomView file detail keeps selected fields and renders a location map', 
   assert.match(view, /const locationName = computed/);
   assert.match(view, /\{\{ locationName \}\}/);
   assert.match(view, />位置<\/span>/);
-  assert.match(view, /label:\s*'文件名'/);
-  assert.match(view, /label:\s*'尺寸'/);
   assert.match(view, /\.detail-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s);
   assert.doesNotMatch(view, /\.detail-row:first-child/);
   assert.match(view, /label:\s*'快门'/);
   assert.match(view, /label:\s*'ISO'/);
   assert.match(view, /label:\s*'光圈'/);
   assert.match(view, /label:\s*'焦距'/);
+  assert.doesNotMatch(view, /label:\s*'文件名'/);
+  assert.doesNotMatch(view, /label:\s*'尺寸'/);
   assert.doesNotMatch(view, /label:\s*'大小'/);
   assert.doesNotMatch(view, /label:\s*'格式'/);
   assert.doesNotMatch(view, /label:\s*'相机'/);

@@ -69,8 +69,6 @@ const detailRows = computed(() => {
   const current = image.value;
   if (!current) return [];
   return [
-    { label: '文件名', value: current.original_filename || current.key },
-    { label: '尺寸', value: `${current.width} × ${current.height}` },
     { label: '快门', value: current.exif_shutter || '未记录' },
     { label: 'ISO', value: current.exif_iso === null ? '未记录' : `ISO ${current.exif_iso}` },
     { label: '光圈', value: current.exif_aperture === null ? '未记录' : `f/${current.exif_aperture}` },
@@ -544,7 +542,7 @@ onUnmounted(() => {
 }
 
 .location-map-block :deep(.readonly-map) {
-  height: 176px;
+  height: 260px;
   border-radius: 4px;
 }
 
