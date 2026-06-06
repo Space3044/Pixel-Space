@@ -166,6 +166,10 @@ const mapLng = computed(() => toMapCoordinate(
   locationEditOpen.value ? editForm.location_lng : props.image?.location_lng,
 ));
 
+const mapRegion = computed(() =>
+  locationEditOpen.value ? editForm.location_region : toRegion(props.image?.location_region),
+);
+
 const sharePage = async () => {
   if (!props.image) return;
   await copyValue(publicPageUrl.value, '分享链接');
@@ -850,6 +854,7 @@ onBeforeUnmount(() => {
                     class="mt-3"
                     :lat="mapLat"
                     :lng="mapLng"
+                    :region="mapRegion"
                     :label="image.location_name || image.title"
                     :interactive="locationEditOpen"
                     @pick="updateLocationFromMap"

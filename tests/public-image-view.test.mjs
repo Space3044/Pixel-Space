@@ -31,6 +31,7 @@ test('PublicImageView always reserves the location card and falls back to a plac
   assert.match(view, /import ReadOnlyMap from '\.\/ReadOnlyMap\.vue'/);
   assert.match(view, /:lat="image\.location_public === 0 \? null : image\.location_lat"/);
   assert.match(view, /:lng="image\.location_public === 0 \? null : image\.location_lng"/);
+  assert.match(view, /:region="image\.location_public === 0 \? null : image\.location_region"/);
 });
 
 test('PublicImageView lays out the image and information side by side on desktop', () => {

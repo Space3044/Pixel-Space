@@ -20,6 +20,7 @@ import {
 import { createImageKey } from '../_shared/keys';
 import { archiveOriginalAfterUpload } from '../_shared/archive';
 import { requireSameOrigin } from '../_shared/security';
+import { createStaticMapCacheTask } from '../_shared/static-map';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -253,6 +254,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       )
       .run();
     d1ImageInserted = true;
+
+    if (meta.is_public === 1 && meta.location_public === 1) {
+      const staticMapTask = createStaticMapCacheTask(env, meta.location_lat, meta.location_lng, meta.location_region);
+      if (staticMapTask) {
+        if (typeof context.waitUntil === 'function') {
+          context.waitUntil(staticMapTask);
+        } else {
+          await staticMapTask;
+        }
+      }
+    }
 
     const archiveTask = archiveOriginalAfterUpload(env, original, key);
     if (typeof context.waitUntil === 'function') {

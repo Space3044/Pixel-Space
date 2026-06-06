@@ -216,6 +216,7 @@ onUnmounted(() => {
               <ReadOnlyMap
                 :lat="image.location_lat"
                 :lng="image.location_lng"
+                :region="image.location_region"
                 :label="image.location_name || image.title"
               />
             </div>

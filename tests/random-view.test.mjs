@@ -70,6 +70,7 @@ test('RandomView file detail keeps selected fields and renders a location map', 
   assert.match(view, /<ReadOnlyMap/);
   assert.match(view, /:lat="image\.location_lat"/);
   assert.match(view, /:lng="image\.location_lng"/);
+  assert.match(view, /:region="image\.location_region"/);
   assert.match(view, /const locationName = computed/);
   assert.match(view, /\{\{ locationName \}\}/);
   assert.match(view, />位置<\/span>/);

@@ -13,7 +13,7 @@ const test = async (name, fn) => {
 
 await test('GET /api/mapbox-config returns the browser Mapbox token', async () => {
   const res = await onRequestGet({
-    env: { MAPBOX_TOKEN: 'pk.test-token' },
+    env: { MAPBOX_PUBLIC_TOKEN: 'pk.test-token' },
     request: new Request('http://local/api/mapbox-config'),
     params: {},
   });
@@ -30,5 +30,16 @@ await test('GET /api/mapbox-config rejects a missing Mapbox token', async () => 
   });
 
   assert.equal(res.status, 500);
-  assert.match(await res.text(), /mapbox_token_missing/);
+  assert.match(await res.text(), /mapbox_public_token_missing/);
+});
+
+await test('GET /api/mapbox-config rejects a non-public Mapbox token', async () => {
+  const res = await onRequestGet({
+    env: { MAPBOX_PUBLIC_TOKEN: 'sk.secret-token' },
+    request: new Request('http://local/api/mapbox-config'),
+    params: {},
+  });
+
+  assert.equal(res.status, 500);
+  assert.match(await res.text(), /mapbox_public_token_invalid/);
 });

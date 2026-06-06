@@ -119,6 +119,7 @@ const exifRows = computed(() => {
               <ReadOnlyMap
                 :lat="image.location_public === 0 ? null : image.location_lat"
                 :lng="image.location_public === 0 ? null : image.location_lng"
+                :region="image.location_public === 0 ? null : image.location_region"
                 :label="image.location_name || image.title"
               />
             </section>

@@ -13,6 +13,7 @@ import {
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 import { keyFromRouteParam } from '../../../_shared/keys';
 import { requireSameOrigin } from '../../../_shared/security';
+import { createStaticMapCacheTask } from '../../../_shared/static-map';
 
 const DETAIL_SQL = `
 SELECT ${IMAGE_SELECT_COLUMNS}
@@ -131,6 +132,16 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
 
     const row = await env.DB.prepare(DETAIL_SQL).bind(key).first<ImageRow>();
     if (!row) return notFound();
+    if (row.is_public === 1 && row.location_public === 1) {
+      const staticMapTask = createStaticMapCacheTask(env, row.location_lat, row.location_lng, row.location_region);
+      if (staticMapTask) {
+        if (typeof context.waitUntil === 'function') {
+          context.waitUntil(staticMapTask);
+        } else {
+          await staticMapTask;
+        }
+      }
+    }
     return json(rowToRecord(row, env.PUBLIC_BASE_URL));
   } catch (error) {
     console.error(`PATCH /api/admin/image/${key} failed`, error);

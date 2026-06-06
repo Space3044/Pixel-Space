@@ -1,4 +1,5 @@
 import { json, serverError } from '../_shared/http';
+import { readMapboxPublicToken } from '../_shared/mapbox';
 import type { Env } from '../types';
 
 // 浏览器端 MapLibre 加载 Mapbox 栅格瓦片需要 access token。
@@ -8,9 +9,9 @@ interface MapboxConfigResponse {
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
-  const token = env.MAPBOX_TOKEN?.trim();
-  if (!token) return serverError('mapbox_token_missing');
+  const tokenResult = readMapboxPublicToken(env);
+  if ('error' in tokenResult) return serverError(tokenResult.error);
 
-  const payload: MapboxConfigResponse = { token };
+  const payload: MapboxConfigResponse = { token: tokenResult.token };
   return json(payload);
 };

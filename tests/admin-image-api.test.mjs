@@ -15,6 +15,8 @@ const test = async (name, fn) => {
 const makeEnv = (row) => {
   const calls = {
     deletedObjects: [],
+    gets: [],
+    puts: [],
     selectedKeys: [],
     updates: [],
     deletes: [],
@@ -25,6 +27,13 @@ const makeEnv = (row) => {
     PUBLIC_BASE_URL: 'https://cdn.test',
     TG_BOT_TOKEN: 'token-test',
     BUCKET: {
+      get: async (key) => {
+        calls.gets.push(key);
+        return null;
+      },
+      put: async (key, body, options) => {
+        calls.puts.push({ key, body, options });
+      },
       delete: async (key) => {
         calls.deletedObjects.push(key);
       },
@@ -63,6 +72,11 @@ const withMockedFetch = async (fetchImpl, fn) => {
   }
 };
 
+const pngResponse = () =>
+  new Response(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }), {
+    headers: { 'content-type': 'image/png' },
+  });
+
 const imageRow = {
   key: 'img-key',
   title: '旧标题',
@@ -75,6 +89,7 @@ const imageRow = {
   location_name: '旧位置',
   location_lat: 31,
   location_lng: 121,
+  location_region: 'china',
   exif_taken_at: '2025-08-26T02:08:37.000Z',
   exif_camera: 'Nikon Zf',
   exif_iso: 400,
@@ -209,6 +224,91 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
     null,
     'img-key',
   ]);
+});
+
+await test('PATCH /api/admin/image/:key pre-caches the updated location static map in R2', async () => {
+  const { env, calls } = makeEnv({
+    ...imageRow,
+    title: '新标题',
+    caption: null,
+    location_name: '上海',
+    location_lat: 31.2304,
+    location_lng: 121.4737,
+  });
+  env.MAPBOX_PUBLIC_TOKEN = 'pk.mb-token';
+  env.AMAP_WEB_KEY = 'amap-web-key';
+  const staticMapRequests = [];
+
+  const response = await withMockedFetch(
+    async (url) => {
+      staticMapRequests.push(String(url));
+      return pngResponse();
+    },
+    () =>
+      onRequestPatch({
+        env,
+        params: { key: 'img-key' },
+        request: new Request('http://localhost/api/admin/image/img-key', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            title: '新标题',
+            caption: '',
+            location_name: '上海',
+            location_lat: 31.2304,
+            location_lng: 121.4737,
+          }),
+        }),
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(staticMapRequests.length, 1);
+  assert.equal(new URL(staticMapRequests[0]).origin, 'https://restapi.amap.com');
+  const staticMapKey = 'staticmap/amap_31.230400_121.473700_z12_600x360.png';
+  assert.equal(calls.gets.includes(staticMapKey), true);
+  const staticMapPut = calls.puts.find((put) => put.key === staticMapKey);
+  assert.ok(staticMapPut, 'updated location static map must be written to R2');
+  assert.equal(staticMapPut.options.httpMetadata.contentType, 'image/png');
+});
+
+await test('PATCH /api/admin/image/:key does not pre-cache hidden visitor locations', async () => {
+  const { env, calls } = makeEnv({
+    ...imageRow,
+    location_name: '隐藏位置',
+    location_lat: 31.2304,
+    location_lng: 121.4737,
+    location_public: 0,
+  });
+  env.MAPBOX_PUBLIC_TOKEN = 'pk.mb-token';
+  env.AMAP_WEB_KEY = 'amap-web-key';
+  const staticMapRequests = [];
+
+  const response = await withMockedFetch(
+    async (url) => {
+      staticMapRequests.push(String(url));
+      return pngResponse();
+    },
+    () =>
+      onRequestPatch({
+        env,
+        params: { key: 'img-key' },
+        request: new Request('http://localhost/api/admin/image/img-key', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            title: '新标题',
+            caption: '',
+            location_name: '隐藏位置',
+            location_lat: 31.2304,
+            location_lng: 121.4737,
+            location_public: 0,
+          }),
+        }),
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(staticMapRequests.length, 0);
+  assert.equal(calls.puts.some((put) => String(put.key).startsWith('staticmap/')), false);
 });
 
 await test('PATCH /api/admin/image/:key rejects invalid coordinates before updating', async () => {

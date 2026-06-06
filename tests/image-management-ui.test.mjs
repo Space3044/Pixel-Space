@@ -187,6 +187,9 @@ test('ReadOnlyMap supports empty coordinates and interactive coordinate picking'
   assert.match(readOnlyMap, /const DEFAULT_CENTER/);
   assert.match(readOnlyMap, /lat\?: number \| null/);
   assert.match(readOnlyMap, /lng\?: number \| null/);
+  assert.match(readOnlyMap, /region\?: string \| null/);
+  assert.match(readOnlyMap, /const region = getRegion\(\)/);
+  assert.match(readOnlyMap, /\/api\/staticmap\?lat=\$\{coordinates\.lat\}&lng=\$\{coordinates\.lng\}&region=\$\{region\}/);
   assert.match(readOnlyMap, /interactive\?: boolean/);
   assert.match(readOnlyMap, /defineEmits<\{ pick:/);
   assert.match(readOnlyMap, /emit\('pick'/);
@@ -196,4 +199,6 @@ test('ReadOnlyMap supports empty coordinates and interactive coordinate picking'
   assert.match(readOnlyMap, /dragEnable: props\.interactive/);
   assert.match(readOnlyMap, /storedLngLatFromMap/);
   assert.match(readOnlyMap, /readonly-map-placeholder/);
+  assert.match(lightbox, /const mapRegion = computed/);
+  assert.match(lightbox, /:region="mapRegion"/);
 });

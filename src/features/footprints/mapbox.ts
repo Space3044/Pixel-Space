@@ -1,6 +1,6 @@
 import type { Map as MaplibreMap, Marker as MaplibreMarker, StyleSpecification } from 'maplibre-gl';
 
-// 足迹页交互地图统一用 Mapbox 栅格瓦片（dark-v11），和 /api/staticmap 静态图同源同风格。
+// 海外足迹页交互地图用 Mapbox 栅格瓦片（dark-v11），和 global 静态图同源同风格。
 // 坐标全程 WGS-84，无需 GCJ-02 偏移，marker 与底图天然对齐，海外街道也准。
 
 const MAPBOX_STYLE_ID = 'mapbox/dark-v11';

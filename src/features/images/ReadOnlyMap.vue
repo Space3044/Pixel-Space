@@ -12,11 +12,13 @@ const DEFAULT_CENTER = { lat: 31.2304, lng: 121.4737 };
 const props = withDefaults(defineProps<{
   lat?: number | null;
   lng?: number | null;
+  region?: string | null;
   label?: string | null;
   interactive?: boolean;
 }>(), {
   lat: null,
   lng: null,
+  region: null,
   label: null,
   interactive: false,
 });
@@ -44,13 +46,19 @@ const getCoordinates = () => {
   return { lat: props.lat, lng: props.lng };
 };
 
+const getRegion = () => {
+  if (props.region === 'china' || props.region === 'global') return props.region;
+  return null;
+};
+
 const staticError = ref(false);
 
 // 只读态用静态地图代理（命中 R2 缓存则零高德调用），完全不加载 JS SDK。
 const staticMapUrl = computed(() => {
   const coordinates = getCoordinates();
-  if (!coordinates) return null;
-  return `/api/staticmap?lat=${coordinates.lat}&lng=${coordinates.lng}`;
+  const region = getRegion();
+  if (!coordinates || !region) return null;
+  return `/api/staticmap?lat=${coordinates.lat}&lng=${coordinates.lng}&region=${region}`;
 });
 
 const onStaticError = () => {

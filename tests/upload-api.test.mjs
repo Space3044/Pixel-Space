@@ -36,6 +36,11 @@ const withMutedConsoleError = async (fn) => {
   }
 };
 
+const pngResponse = () =>
+  new Response(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }), {
+    headers: { 'content-type': 'image/png' },
+  });
+
 const makeUploadRequest = (overrides = {}) => {
   const formData = new FormData();
   formData.append(
@@ -85,6 +90,7 @@ const makeUploadRequest = (overrides = {}) => {
 const makeEnv = (options = {}) => {
   const calls = {
     events: [],
+    gets: [],
     puts: [],
     deletedObjects: [],
     insert: null,
@@ -98,7 +104,13 @@ const makeEnv = (options = {}) => {
     TG_BOT_TOKEN: 'token-test',
     TG_CHAT_ID: '-100123',
     PROXY_KEY: 'proxy-key-test',
+    MAPBOX_PUBLIC_TOKEN: options.mapboxToken,
+    AMAP_WEB_KEY: options.amapWebKey,
     BUCKET: {
+      get: async (key) => {
+        calls.gets.push(key);
+        return options.cachedObjects?.get(key) ?? null;
+      },
       put: async (key, body, options) => {
         calls.events.push('r2');
         calls.puts.push({ key, body, options });
@@ -288,6 +300,49 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(calls.insert.values[24], 'done');
   assert.equal(calls.insert.values[25], 'pending');
   assert.equal(calls.selectedKey, data.key);
+});
+
+await test('POST /api/upload pre-caches the stored location static map in R2', async () => {
+  const { env, calls } = makeEnv({ amapWebKey: 'amap-web-key', mapboxToken: 'pk.mb-token' });
+  const request = makeUploadRequest();
+  const staticMapRequests = [];
+
+  const response = await withMockedFetch(async (url, init) => {
+    const requestUrl = String(url);
+    if (requestUrl.startsWith('https://restapi.amap.com/') || requestUrl.startsWith('https://api.mapbox.com/')) {
+      staticMapRequests.push(requestUrl);
+      return pngResponse();
+    }
+    return telegramSuccessFetch(calls)(url, init);
+  }, () => uploadPost({ env, request, params: {} }));
+
+  assert.equal(response.status, 201);
+  assert.equal(staticMapRequests.length, 1);
+  assert.equal(new URL(staticMapRequests[0]).origin, 'https://restapi.amap.com');
+  const staticMapKey = 'staticmap/amap_31.230400_121.473700_z12_600x360.png';
+  assert.equal(calls.gets.includes(staticMapKey), true);
+  const staticMapPut = calls.puts.find((put) => put.key === staticMapKey);
+  assert.ok(staticMapPut, 'static map must be written to R2 during upload');
+  assert.equal(staticMapPut.options.httpMetadata.contentType, 'image/png');
+});
+
+await test('POST /api/upload does not pre-cache hidden visitor locations', async () => {
+  const { env, calls } = makeEnv({ mapboxToken: 'pk.mb-token' });
+  const request = makeUploadRequest({ meta: { location_public: 0 } });
+  const staticMapRequests = [];
+
+  const response = await withMockedFetch(async (url, init) => {
+    const requestUrl = String(url);
+    if (requestUrl.startsWith('https://restapi.amap.com/') || requestUrl.startsWith('https://api.mapbox.com/')) {
+      staticMapRequests.push(requestUrl);
+      return pngResponse();
+    }
+    return telegramSuccessFetch(calls)(url, init);
+  }, () => uploadPost({ env, request, params: {} }));
+
+  assert.equal(response.status, 201);
+  assert.equal(staticMapRequests.length, 0);
+  assert.equal(calls.puts.some((put) => String(put.key).startsWith('staticmap/')), false);
 });
 
 await test('POST /api/upload archives the original file to Telegram after D1 insert', async () => {
