@@ -32,6 +32,22 @@ test('WorldBoundaryGlobe uses the original Three and WASM boundary pipeline', ()
   assert.doesNotMatch(component, /Path2D|CanvasRenderingContext2D|ctx\.|projectPoint|latLngToVector/);
 });
 
+test('WorldBoundaryGlobe defers heavy initialization until the globe is near the viewport', () => {
+  assert.match(component, /let visibilityObserver: IntersectionObserver \| null = null/);
+  assert.match(component, /let initializationStarted = false/);
+  assert.match(component, /const startWhenVisible = \(\) => \{/);
+  assert.match(component, /new IntersectionObserver/);
+  assert.match(component, /rootMargin:\s*'240px 0px'/);
+  assert.match(component, /visibilityObserver\.observe\(stageRef\.value\)/);
+  assert.doesNotMatch(component, /onMounted\(\(\) => \{\s*mounted = true;\s*void initializeGlobe\(\);/s);
+});
+
+test('WorldBoundaryGlobe allows static map JSON to use normal browser cache', () => {
+  assert.match(component, /fetch\('\/maps\/world\.zh\.json'\)/);
+  assert.match(component, /fetch\('\/maps\/china\.json'\)/);
+  assert.doesNotMatch(component, /Cache-Control': 'no-cache'|Cache-Control": "no-cache"/);
+});
+
 test('WorldBoundaryGlobe resolves lit regions from latitude and longitude before processing boundaries', () => {
   assert.match(component, /interface VisitedCoordinate\s*\{\s*lat:\s*number;\s*lng:\s*number;\s*\}/s);
   assert.match(component, /import \{ buildGeoHitIndex,\s*findRegionByLngLat,\s*vectorToLngLat \} from '\.\/geo-hit'/);

@@ -79,6 +79,8 @@ let mapDataCache: MapData | null = null;
 let mounted = false;
 let initVersion = 0;
 let lastMouseEvent: MouseEvent | null = null;
+let visibilityObserver: IntersectionObserver | null = null;
+let initializationStarted = false;
 
 let handleResize = () => {};
 let handleMouseMove = (_event: MouseEvent) => {};
@@ -115,8 +117,8 @@ const loadMapData = async () => {
   if (mapDataCache) return mapDataCache;
 
   const [worldResponse, chinaResponse] = await Promise.all([
-    fetch('/maps/world.zh.json', { headers: { 'Cache-Control': 'no-cache' } }),
-    fetch('/maps/china.json', { headers: { 'Cache-Control': 'no-cache' } }),
+    fetch('/maps/world.zh.json'),
+    fetch('/maps/china.json'),
   ]);
 
   if (!worldResponse.ok || !chinaResponse.ok) {
@@ -604,9 +606,32 @@ const initializeGlobe = async () => {
   }
 };
 
+const startInitialization = () => {
+  if (!mounted || initializationStarted) return;
+  initializationStarted = true;
+  visibilityObserver?.disconnect();
+  visibilityObserver = null;
+  void initializeGlobe();
+};
+
+const startWhenVisible = () => {
+  if (!stageRef.value || typeof IntersectionObserver === 'undefined') {
+    startInitialization();
+    return;
+  }
+
+  visibilityObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) startInitialization();
+    },
+    { rootMargin: '240px 0px' },
+  );
+  visibilityObserver.observe(stageRef.value);
+};
+
 onMounted(() => {
   mounted = true;
-  void initializeGlobe();
+  startWhenVisible();
 });
 
 watch(
@@ -615,7 +640,7 @@ watch(
     props.visitedCoordinates?.map((coordinate) => `${coordinate.lat},${coordinate.lng}`).join('\u0000') ?? '',
   ].join('\u0001'),
   () => {
-    if (!mounted) return;
+    if (!mounted || !initializationStarted) return;
     void initializeGlobe();
   },
 );
@@ -623,6 +648,8 @@ watch(
 onBeforeUnmount(() => {
   mounted = false;
   initVersion += 1;
+  visibilityObserver?.disconnect();
+  visibilityObserver = null;
   cleanupScene();
   disposeGeoProcessor();
 });
