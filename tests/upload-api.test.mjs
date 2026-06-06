@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { onRequestPost as uploadPost } from '../functions/api/upload.ts';
+import { onRequestPost as adminUploadPost } from '../functions/api/admin/upload.ts';
 
 const test = async (name, fn) => {
   try {
@@ -300,6 +301,19 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(calls.insert.values[24], 'done');
   assert.equal(calls.insert.values[25], 'pending');
   assert.equal(calls.selectedKey, data.key);
+});
+
+await test('POST /api/admin/upload returns admin object URLs for uploaded images', async () => {
+  const { env, calls } = makeEnv();
+  const request = makeUploadRequest();
+
+  const response = await withMockedFetch(telegramSuccessFetch(calls), () =>
+    adminUploadPost({ env, request, params: {} }),
+  );
+
+  assert.equal(response.status, 201);
+  const data = await response.json();
+  assert.equal(data.public_url, `/api/admin/public/${data.key}`);
 });
 
 await test('POST /api/upload pre-caches the stored location static map in R2', async () => {

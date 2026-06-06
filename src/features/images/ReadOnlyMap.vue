@@ -15,12 +15,14 @@ const props = withDefaults(defineProps<{
   region?: string | null;
   label?: string | null;
   interactive?: boolean;
+  admin?: boolean;
 }>(), {
   lat: null,
   lng: null,
   region: null,
   label: null,
   interactive: false,
+  admin: false,
 });
 
 const emit = defineEmits<{ pick: [coords: { lat: number; lng: number }] }>();
@@ -58,7 +60,8 @@ const staticMapUrl = computed(() => {
   const coordinates = getCoordinates();
   const region = getRegion();
   if (!coordinates || !region) return null;
-  return `/api/staticmap?lat=${coordinates.lat}&lng=${coordinates.lng}&region=${region}`;
+  const basePath = props.admin ? '/api/admin/staticmap' : '/api/staticmap';
+  return `${basePath}?lat=${coordinates.lat}&lng=${coordinates.lng}&region=${region}`;
 });
 
 const onStaticError = () => {

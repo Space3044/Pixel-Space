@@ -42,6 +42,13 @@ test('images.api exposes admin update and delete helpers', () => {
   assert.match(imagesApi, /from '@\/shared\/api\/http'/);
   assert.match(imagesApi, /export function listImages\(query = '', options: ListImagesOptions = \{\}\)/);
   assert.match(imagesApi, /export function listImagesPage\(query = '', options: ListImagesPageOptions\)/);
+  assert.match(imagesApi, /export function listAdminImages\(query = '', options: ListImagesOptions = \{\}\)/);
+  assert.match(imagesApi, /export function listAdminImagesPage\(query = '', options: ListImagesPageOptions\)/);
+  assert.match(imagesApi, /export function fetchAdminImage\(key: string\): Promise<ImageRecord>/);
+  assert.match(imagesApi, /export async function checkAdminImageHash\(hash: string\): Promise<ImageRecord \| null>/);
+  assert.match(imagesApi, /apiPath\(qs \? `\/admin\/list\?\$\{qs\}` : '\/admin\/list'\)/);
+  assert.match(imagesApi, /apiPath\(`\/admin\/image\/\$\{encodeURIComponent\(key\)\}`\)/);
+  assert.match(imagesApi, /apiPath\(`\/admin\/check-hash\?hash=\$\{encodeURIComponent\(hash\)\}`\)/);
   assert.match(imagesApi, /params\.set\('limit', String\(options\.limit\)\)/);
   assert.match(imagesApi, /cursor/);
   assert.match(imagesApi, /URLSearchParams/);
@@ -135,7 +142,7 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightbox, /拍摄时间/);
   assert.match(lightbox, /相机/);
   assert.match(lightbox, /焦距/);
-  assert.match(lightbox, /\/api\/original\/\$\{encodeURIComponent\(image\.key\)\}/);
+  assert.match(lightbox, /\/api\/admin\/original\/\$\{encodeURIComponent\(image\.key\)\}/);
   assert.match(lightbox, /buildImageLinkRows\(props\.image,\s*origin\)/);
   assert.doesNotMatch(lightbox, /const imageUrl = buildAbsoluteImageUrl\(props\.image\.public_url,\s*origin\)/);
   assert.doesNotMatch(lightbox, /const imageForCopy = \{ \.\.\.props\.image, public_url: imageUrl \}/);
@@ -189,7 +196,9 @@ test('ReadOnlyMap supports empty coordinates and interactive coordinate picking'
   assert.match(readOnlyMap, /lng\?: number \| null/);
   assert.match(readOnlyMap, /region\?: string \| null/);
   assert.match(readOnlyMap, /const region = getRegion\(\)/);
-  assert.match(readOnlyMap, /\/api\/staticmap\?lat=\$\{coordinates\.lat\}&lng=\$\{coordinates\.lng\}&region=\$\{region\}/);
+  assert.match(readOnlyMap, /const basePath = props\.admin \? '\/api\/admin\/staticmap' : '\/api\/staticmap'/);
+  assert.match(readOnlyMap, /`\$\{basePath\}\?lat=\$\{coordinates\.lat\}&lng=\$\{coordinates\.lng\}&region=\$\{region\}`/);
+  assert.match(readOnlyMap, /admin\?: boolean/);
   assert.match(readOnlyMap, /interactive\?: boolean/);
   assert.match(readOnlyMap, /defineEmits<\{ pick:/);
   assert.match(readOnlyMap, /emit\('pick'/);
@@ -201,4 +210,5 @@ test('ReadOnlyMap supports empty coordinates and interactive coordinate picking'
   assert.match(readOnlyMap, /readonly-map-placeholder/);
   assert.match(lightbox, /const mapRegion = computed/);
   assert.match(lightbox, /:region="mapRegion"/);
+  assert.match(lightbox, /:admin="isAdmin"/);
 });

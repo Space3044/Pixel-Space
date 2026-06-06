@@ -146,6 +146,23 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
   };
 }
 
+export const ADMIN_PUBLIC_BASE_URL = '/api/admin/public';
+
+export function adminPublicUrlForKey(key: string): string {
+  return `${ADMIN_PUBLIC_BASE_URL}/${key.replace(/^\/+/, '')}`;
+}
+
+export function withAdminPublicUrl(record: ImageRecord): ImageRecord {
+  return {
+    ...record,
+    public_url: adminPublicUrlForKey(record.key),
+  };
+}
+
+export function rowToAdminRecord(row: ImageRow): ImageRecord {
+  return rowToRecord(row, ADMIN_PUBLIC_BASE_URL);
+}
+
 // 把记录按访客视角清洗：location_public=0 时擦掉地名与经纬度。
 // 管理员视角不应调用此函数。
 export function scrubRecordForVisitor(record: ImageRecord): ImageRecord {

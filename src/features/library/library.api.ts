@@ -74,6 +74,10 @@ export function fetchFolders(): Promise<FolderRecord[]> {
   return jsonFetch<FoldersResponse>('/api/folders').then((data) => data.folders);
 }
 
+export function fetchAdminFolders(): Promise<FolderRecord[]> {
+  return jsonFetch<FoldersResponse>('/api/admin/folders').then((data) => data.folders);
+}
+
 export function fetchAiSettings(): Promise<AiSettings> {
   return jsonFetch<AiSettings>('/api/admin/ai-settings');
 }

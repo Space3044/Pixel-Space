@@ -14,7 +14,7 @@ export async function previewAiAnnotation(image: File): Promise<AiPreviewResult>
   const formData = new FormData();
   formData.append('image', image, image.name);
 
-  const response = await fetch('/api/ai/preview', {
+  const response = await fetch('/api/admin/ai/preview', {
     method: 'POST',
     body: formData,
   });

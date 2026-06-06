@@ -59,6 +59,13 @@ export function listImages(query = '', options: ListImagesOptions = {}): Promise
   return fetchJson<ImageRecord[]>(apiPath(qs ? `/list?${qs}` : '/list'));
 }
 
+export function listAdminImages(query = '', options: ListImagesOptions = {}): Promise<ImageRecord[]> {
+  const params = new URLSearchParams();
+  appendListImageParams(params, query, options);
+  const qs = params.toString();
+  return fetchJson<ImageRecord[]>(apiPath(qs ? `/admin/list?${qs}` : '/admin/list'));
+}
+
 export function listImagesPage(query = '', options: ListImagesPageOptions): Promise<ListImagesPage> {
   const params = new URLSearchParams();
   appendListImageParams(params, query, options);
@@ -67,12 +74,33 @@ export function listImagesPage(query = '', options: ListImagesPageOptions): Prom
   return fetchJson<ListImagesPage>(apiPath(`/list?${params.toString()}`));
 }
 
+export function listAdminImagesPage(query = '', options: ListImagesPageOptions): Promise<ListImagesPage> {
+  const params = new URLSearchParams();
+  appendListImageParams(params, query, options);
+  params.set('limit', String(options.limit));
+  if (options.cursor) params.set('cursor', options.cursor);
+  return fetchJson<ListImagesPage>(apiPath(`/admin/list?${params.toString()}`));
+}
+
 export function fetchImage(key: string): Promise<ImageRecord> {
   return fetchJson<ImageRecord>(apiPath(`/image/${encodeURIComponent(key)}`));
 }
 
+export function fetchAdminImage(key: string): Promise<ImageRecord> {
+  return fetchJson<ImageRecord>(apiPath(`/admin/image/${encodeURIComponent(key)}`));
+}
+
 export async function checkImageHash(hash: string): Promise<ImageRecord | null> {
   const response = await fetch(apiPath(`/check-hash?hash=${encodeURIComponent(hash)}`));
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`check-hash failed: ${await readHttpError(response)}`);
+  }
+  return (await response.json()) as ImageRecord;
+}
+
+export async function checkAdminImageHash(hash: string): Promise<ImageRecord | null> {
+  const response = await fetch(apiPath(`/admin/check-hash?hash=${encodeURIComponent(hash)}`));
   if (response.status === 404) return null;
   if (!response.ok) {
     throw new Error(`check-hash failed: ${await readHttpError(response)}`);

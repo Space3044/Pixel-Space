@@ -5,7 +5,7 @@ import LoadingState from '@/shared/ui/LoadingState.vue';
 import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { imageSortOptions, sortImagesByMode, type ImageSortMode } from '@/features/images/image-sort';
-import { listImages } from '@/features/images/images.api';
+import { listAdminImages } from '@/features/images/images.api';
 import DownloadGrantDialog from './DownloadGrantDialog.vue';
 import DownloadGrantManager from './DownloadGrantManager.vue';
 import { buildDownloadGrantExpiry } from './download-grant-expiry';
@@ -15,9 +15,9 @@ import {
   deleteDownloadGrant,
   deleteFolder,
   deleteImages,
+  fetchAdminFolders,
   fetchAiSettings,
   fetchDownloadGrants,
-  fetchFolders,
   moveImages,
   updateAiSettings,
   updateDownloadGrant,
@@ -177,8 +177,8 @@ const refreshAll = async () => {
   loadError.value = null;
   try {
     const [folderList, imageList, aiSettings, grantList] = await Promise.all([
-      fetchFolders(),
-      listImages(),
+      fetchAdminFolders(),
+      listAdminImages(),
       fetchAiSettings(),
       fetchDownloadGrants(),
     ]);

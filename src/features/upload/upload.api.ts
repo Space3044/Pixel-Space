@@ -2,7 +2,7 @@ import type { ImageRecord } from '@/features/images/image.types';
 import { readHttpError } from '@/shared/api/http';
 
 export async function uploadImage(formData: FormData): Promise<ImageRecord> {
-  const response = await fetch('/api/upload', {
+  const response = await fetch('/api/admin/upload', {
     method: 'POST',
     body: formData,
   });

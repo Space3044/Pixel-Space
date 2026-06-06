@@ -42,13 +42,21 @@ test('LibraryView loads and saves AI settings through library API helpers', () =
   assert.match(view, /import \{[\s\S]*fetchAiSettings,[\s\S]*updateAiSettings,[\s\S]*type AiSettings,[\s\S]*\} from '\.\/library\.api'/);
   assert.match(view, /const aiSettingsForm = reactive<AiSettings>\(\{\s*proxy_url:\s*'',\s*model:\s*'',\s*prompt:\s*'',\s*\}\)/);
   assert.match(view, /const aiSettingsSaving = ref\(false\)/);
-  assert.match(view, /Promise\.all\(\[\s*fetchFolders\(\),\s*listImages\(\),\s*fetchAiSettings\(\),\s*fetchDownloadGrants\(\),\s*\]\)/);
+  assert.match(view, /import \{\s*listAdminImages\s*\} from '@\/features\/images\/images\.api'/);
+  assert.match(view, /Promise\.all\(\[\s*fetchAdminFolders\(\),\s*listAdminImages\(\),\s*fetchAiSettings\(\),\s*fetchDownloadGrants\(\),\s*\]\)/);
   assert.match(view, /aiSettingsForm\.proxy_url = aiSettings\.proxy_url/);
   assert.match(view, /aiSettingsForm\.model = aiSettings\.model/);
   assert.match(view, /aiSettingsForm\.prompt = aiSettings\.prompt/);
   assert.match(view, /const saved = await updateAiSettings\(\{\s*proxy_url:\s*aiSettingsForm\.proxy_url,\s*model:\s*aiSettingsForm\.model,\s*prompt:\s*aiSettingsForm\.prompt,\s*\}\)/);
   assert.match(view, /aiSettingsForm\.prompt = saved\.prompt/);
   assert.match(view, /actionMessage\.value = 'AI 配置已保存'/);
+});
+
+test('library.api keeps public and admin folder loaders separate', () => {
+  assert.match(api, /export function fetchFolders\(\): Promise<FolderRecord\[\]>/);
+  assert.match(api, /jsonFetch<FoldersResponse>\('\/api\/folders'\)/);
+  assert.match(api, /export function fetchAdminFolders\(\): Promise<FolderRecord\[\]>/);
+  assert.match(api, /jsonFetch<FoldersResponse>\('\/api\/admin\/folders'\)/);
 });
 
 test('LibraryView renders virtual folders as folder-style cards with image counts', () => {

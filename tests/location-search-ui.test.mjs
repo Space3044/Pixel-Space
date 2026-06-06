@@ -35,7 +35,7 @@ test('geocode.api uses AMap JS API for domestic search and backend only for glob
   assert.match(geocodeApi, /gcj02ToWgs84/);
   assert.match(geocodeApi, /if \(region === 'cn'\) return await searchAmapLocations\(trimmed\)/);
   assert.match(geocodeApi, /URLSearchParams\(\{ q: keyword, region: 'global' \}\)/);
-  assert.match(geocodeApi, /\/api\/geocode\?\$\{params\.toString\(\)\}/);
+  assert.match(geocodeApi, /\/api\/admin\/geocode\?\$\{params\.toString\(\)\}/);
 });
 
 test('geocode.api enriches domestic POI names with reverse geocoded administrative regions', () => {

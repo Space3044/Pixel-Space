@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { onRequestGet } from '../functions/api/staticmap.ts';
+import { onRequestGet as adminStaticMapGet } from '../functions/api/admin/staticmap.ts';
 
 const test = async (name, fn) => {
   try {
@@ -58,6 +59,7 @@ const makeEnv = ({ cached = null, token = 'pk.mb-token', amapWebKey = 'amap-web-
 };
 
 const call = (env, url, init) => onRequestGet({ env, params: {}, request: new Request(url, init) });
+const callAdmin = (env, url, init) => adminStaticMapGet({ env, params: {}, request: new Request(url, init) });
 
 await test('GET /api/staticmap rejects requests without valid coordinates', async () => {
   let fetchCalled = false;
@@ -134,6 +136,23 @@ await test('GET /api/staticmap returns 404 for visitor cache misses without call
   assert.equal(puts.length, 0);
 });
 
+await test('GET /api/staticmap stays read-only on localhost public route', async () => {
+  let fetchCalled = false;
+  const { env, puts } = makeEnv();
+  const response = await withMockedFetch(
+    async () => {
+      fetchCalled = true;
+      return pngResponse();
+    },
+    () => call(env, 'http://localhost/api/staticmap?lat=31.2304&lng=121.4737&region=china'),
+  );
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: 'not_found' });
+  assert.equal(fetchCalled, false);
+  assert.equal(puts.length, 0);
+});
+
 await test('GET /api/staticmap does not serve cached maps for private or hidden visitor locations', async () => {
   let fetchCalled = false;
   const { env, puts } = makeEnv({
@@ -160,7 +179,7 @@ await test('GET /api/staticmap does not serve cached maps for private or hidden 
   assert.equal(puts.length, 0);
 });
 
-await test('GET /api/staticmap lets admins generate and cache a missing China static map with AMap', async () => {
+await test('GET /api/admin/staticmap lets admins generate and cache a missing China static map with AMap', async () => {
   const requests = [];
   const { env, puts } = makeEnv();
   const response = await withMockedFetch(
@@ -168,7 +187,7 @@ await test('GET /api/staticmap lets admins generate and cache a missing China st
       requests.push(String(url));
       return pngResponse();
     },
-    () => call(env, 'http://localhost/api/staticmap?lat=31.2304&lng=121.4737&region=china'),
+    () => callAdmin(env, 'http://localhost/api/admin/staticmap?lat=31.2304&lng=121.4737&region=china'),
   );
 
   assert.equal(response.status, 200);
@@ -190,7 +209,7 @@ await test('GET /api/staticmap lets admins generate and cache a missing China st
   assert.equal(puts[0].options.httpMetadata.contentType, 'image/png');
 });
 
-await test('GET /api/staticmap lets admins generate and cache a missing global static map with Mapbox', async () => {
+await test('GET /api/admin/staticmap lets admins generate and cache a missing global static map with Mapbox', async () => {
   const requests = [];
   const { env, puts } = makeEnv();
   const response = await withMockedFetch(
@@ -198,7 +217,7 @@ await test('GET /api/staticmap lets admins generate and cache a missing global s
       requests.push(String(url));
       return pngResponse();
     },
-    () => call(env, 'http://localhost/api/staticmap?lat=48.8566&lng=2.3522&region=global'),
+    () => callAdmin(env, 'http://localhost/api/admin/staticmap?lat=48.8566&lng=2.3522&region=global'),
   );
 
   assert.equal(response.status, 200);
@@ -217,7 +236,7 @@ await test('GET /api/staticmap lets admins generate and cache a missing global s
   assert.equal(puts[0].options.httpMetadata.contentType, 'image/png');
 });
 
-await test('GET /api/staticmap fails clearly when the AMap Web key is missing for China maps', async () => {
+await test('GET /api/admin/staticmap fails clearly when the AMap Web key is missing for China maps', async () => {
   let fetchCalled = false;
   const { env } = makeEnv({ amapWebKey: null });
   const response = await withMockedFetch(
@@ -225,14 +244,14 @@ await test('GET /api/staticmap fails clearly when the AMap Web key is missing fo
       fetchCalled = true;
       return pngResponse();
     },
-    () => call(env, 'http://localhost/api/staticmap?lat=31.2304&lng=121.4737&region=china'),
+    () => callAdmin(env, 'http://localhost/api/admin/staticmap?lat=31.2304&lng=121.4737&region=china'),
   );
   assert.equal(response.status, 500);
   assert.match(await response.text(), /amap_web_key_missing/);
   assert.equal(fetchCalled, false);
 });
 
-await test('GET /api/staticmap fails clearly when the Mapbox token is missing', async () => {
+await test('GET /api/admin/staticmap fails clearly when the Mapbox token is missing', async () => {
   let fetchCalled = false;
   const { env } = makeEnv({ token: null });
   const response = await withMockedFetch(
@@ -240,14 +259,14 @@ await test('GET /api/staticmap fails clearly when the Mapbox token is missing', 
       fetchCalled = true;
       return pngResponse();
     },
-    () => call(env, 'http://localhost/api/staticmap?lat=48.8566&lng=2.3522&region=global'),
+    () => callAdmin(env, 'http://localhost/api/admin/staticmap?lat=48.8566&lng=2.3522&region=global'),
   );
   assert.equal(response.status, 500);
   assert.match(await response.text(), /mapbox_public_token_missing/);
   assert.equal(fetchCalled, false);
 });
 
-await test('GET /api/staticmap rejects a non-public Mapbox token', async () => {
+await test('GET /api/admin/staticmap rejects a non-public Mapbox token', async () => {
   let fetchCalled = false;
   const { env } = makeEnv({ token: 'sk.secret-token' });
   const response = await withMockedFetch(
@@ -255,18 +274,18 @@ await test('GET /api/staticmap rejects a non-public Mapbox token', async () => {
       fetchCalled = true;
       return pngResponse();
     },
-    () => call(env, 'http://localhost/api/staticmap?lat=48.8566&lng=2.3522&region=global'),
+    () => callAdmin(env, 'http://localhost/api/admin/staticmap?lat=48.8566&lng=2.3522&region=global'),
   );
   assert.equal(response.status, 500);
   assert.match(await response.text(), /mapbox_public_token_invalid/);
   assert.equal(fetchCalled, false);
 });
 
-await test('GET /api/staticmap rejects non-image upstream responses', async () => {
+await test('GET /api/admin/staticmap rejects non-image upstream responses', async () => {
   const { env, puts } = makeEnv();
   const response = await withMockedFetch(
     async () => Response.json({ message: 'Not Authorized - Invalid Token' }, { status: 401 }),
-    () => call(env, 'http://localhost/api/staticmap?lat=48.8566&lng=2.3522&region=global'),
+    () => callAdmin(env, 'http://localhost/api/admin/staticmap?lat=48.8566&lng=2.3522&region=global'),
   );
   assert.equal(response.status, 500);
   assert.match(await response.text(), /mapbox_staticmap_failed/);

@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const view = readFileSync('src/features/upload/UploadView.vue', 'utf8').replace(/\r\n/g, '\n');
+const uploadApi = readFileSync('src/features/upload/upload.api.ts', 'utf8');
+const aiPreviewApi = readFileSync('src/features/upload/ai-preview.api.ts', 'utf8');
+const geocodeApi = readFileSync('src/features/images/geocode.api.ts', 'utf8');
 const plan = readFileSync('docs/PLAN.md', 'utf8');
 
 const test = (name, fn) => {
@@ -110,7 +113,7 @@ test('upload page stays on the upload screen and stores results on each queue en
 });
 
 test('upload page surfaces Telegram archive status after fast upload responses', () => {
-  assert.match(view, /import\s+\{\s*checkImageHash,\s*fetchImage\s*\}\s+from\s+'@\/features\/images\/images\.api'/);
+  assert.match(view, /import\s+\{\s*checkAdminImageHash,\s*fetchAdminImage\s*\}\s+from\s+'@\/features\/images\/images\.api'/);
   assert.match(view, /const\s+TELEGRAM_ARCHIVE_POLL_ATTEMPTS\s*=\s*60/);
   assert.match(view, /const\s+watchTelegramArchive\s*=\s*async\s*\(entry:\s*UploadEntry,\s*key:\s*string\)/);
   assert.match(view, /latest\.tg_status/);
@@ -122,6 +125,16 @@ test('upload page surfaces Telegram archive status after fast upload responses',
   assert.match(view, /已上传，原图归档失败/);
   assert.match(view, /归档中/);
   assert.match(view, /已归档/);
+});
+
+test('upload page uses admin API helpers and paths', () => {
+  assert.match(view, /import \{ fetchAdminFolders, type FolderRecord \} from '@\/features\/library\/library\.api'/);
+  assert.match(view, /folders\.value = await fetchAdminFolders\(\)/);
+  assert.match(view, /const latest = await fetchAdminImage\(key\)/);
+  assert.match(view, /const existing = await checkAdminImageHash\(hash\)/);
+  assert.match(uploadApi, /fetch\('\/api\/admin\/upload'/);
+  assert.match(aiPreviewApi, /fetch\('\/api\/admin\/ai\/preview'/);
+  assert.match(geocodeApi, /fetch\(`\/api\/admin\/geocode\?\$\{params\.toString\(\)\}`\)/);
 });
 
 test('upload page keeps Telegram archive polling alive for slow archive results', () => {
@@ -193,8 +206,8 @@ test('upload page sends a smaller derived image to AI preview', () => {
 });
 
 test('upload duplicate check failure is not silently treated as a new image', () => {
-  assert.doesNotMatch(view, /checkImageHash\(hash\)\.catch\(\(\)\s*=>\s*null\)/);
-  assert.match(view, /const existing = await checkImageHash\(hash\)/);
+  assert.doesNotMatch(view, /checkAdminImageHash\(hash\)\.catch\(\(\)\s*=>\s*null\)/);
+  assert.match(view, /const existing = await checkAdminImageHash\(hash\)/);
 });
 
 test('upload location region follows the manually selected search region instead of coordinate bounds', () => {

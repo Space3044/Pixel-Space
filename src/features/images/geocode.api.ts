@@ -224,7 +224,7 @@ const searchAmapLocations = async (keyword: string): Promise<GeocodeResult[]> =>
 
 const searchGlobalLocations = async (keyword: string): Promise<GeocodeResult[]> => {
   const params = new URLSearchParams({ q: keyword, region: 'global' });
-  const response = await fetch(`/api/geocode?${params.toString()}`);
+  const response = await fetch(`/api/admin/geocode?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`位置搜索失败：${await readHttpError(response)}`);
   }

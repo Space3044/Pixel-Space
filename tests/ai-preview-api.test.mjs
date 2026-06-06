@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { onRequestPost } from '../functions/api/ai/preview.ts';
+import { onRequestPost } from '../functions/api/admin/ai/preview.ts';
 
 const test = async (name, fn) => {
   try {
@@ -24,7 +24,7 @@ const withMockedFetch = async (fetchImpl, fn) => {
 const makeRequest = (file = new File(['webp-bytes'], 'cat.webp', { type: 'image/webp' })) => {
   const formData = new FormData();
   formData.append('image', file);
-  return new Request('http://localhost/api/ai/preview', { method: 'POST', body: formData });
+  return new Request('http://localhost/api/admin/ai/preview', { method: 'POST', body: formData });
 };
 
 const DATABASE_PROMPT = '数据库系统提示词：只输出 JSON';
@@ -55,7 +55,7 @@ const makeEnv = (
   return { env, calls };
 };
 
-await test('POST /api/ai/preview calls CPA with configured URL and model and returns normalized JSON', async () => {
+await test('POST /api/admin/ai/preview calls CPA with configured URL and model and returns normalized JSON', async () => {
   const { env, calls } = makeEnv();
   const proxyRequests = [];
 
@@ -111,7 +111,7 @@ await test('POST /api/ai/preview calls CPA with configured URL and model and ret
   });
 });
 
-await test('POST /api/ai/preview rejects missing AI settings before calling CPA', async () => {
+await test('POST /api/admin/ai/preview rejects missing AI settings before calling CPA', async () => {
   const { env } = makeEnv({ proxy_url: '', model: '' });
   let called = false;
 
@@ -128,7 +128,7 @@ await test('POST /api/ai/preview rejects missing AI settings before calling CPA'
   assert.deepEqual(await response.json(), { error: 'missing_ai_settings' });
 });
 
-await test('POST /api/ai/preview uses the editable prompt from ai_settings', async () => {
+await test('POST /api/admin/ai/preview uses the editable prompt from ai_settings', async () => {
   const { env } = makeEnv({
     proxy_url: 'https://cpa.test/v1/chat/completions',
     model: 'image-tagger',

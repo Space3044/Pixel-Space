@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { onRequestGet as publicObjectGet } from '../functions/api/public/[[key]].ts';
+import { onRequestGet as adminObjectGet } from '../functions/api/admin/public/[[key]].ts';
 
 const test = async (name, fn) => {
   try {
@@ -86,4 +87,44 @@ await test('GET /api/public/*key does not stream private image objects to visito
 
   assert.equal(response.status, 404);
   assert.deepEqual(calls.r2Gets, []);
+});
+
+await test('GET /api/public/*key stays visitor-scoped on localhost public route', async () => {
+  const { env, calls } = makeEnv({
+    body: new Blob(['private-webp'], { type: 'image/webp' }).stream(),
+    httpEtag: '"etag-private"',
+    writeHttpMetadata(headers) {
+      headers.set('content-type', 'image/webp');
+    },
+  }, { isPublic: 0 });
+
+  const response = await publicObjectGet({
+    env,
+    params: { key: ['images', 'cat-key'] },
+    request: new Request('http://localhost/api/public/images/cat-key'),
+  });
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(calls.r2Gets, []);
+});
+
+await test('GET /api/admin/public/*key streams private image objects for admins', async () => {
+  const { env, calls } = makeEnv({
+    body: new Blob(['private-webp'], { type: 'image/webp' }).stream(),
+    httpEtag: '"etag-private"',
+    writeHttpMetadata(headers) {
+      headers.set('content-type', 'image/webp');
+    },
+  }, { isPublic: 0 });
+
+  const response = await adminObjectGet({
+    env,
+    params: { key: ['images', 'cat-key'] },
+    request: new Request('http://localhost/api/admin/public/images/cat-key'),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls.r2Gets, ['images/cat-key']);
+  assert.equal(response.headers.get('content-type'), 'image/webp');
+  assert.equal(await response.text(), 'private-webp');
 });

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { onRequestGet as listGet } from '../functions/api/list.ts';
 import { onRequestGet as imageGet } from '../functions/api/image/[key].ts';
+import { onRequestGet as adminListGet } from '../functions/api/admin/list.ts';
+import { onRequestGet as adminImageGet } from '../functions/api/admin/image/[key].ts';
 
 const test = async (name, fn) => {
   try {
@@ -35,6 +37,7 @@ const EXPECTED_RECORD_KEYS = [
   'location_lng',
   'location_name',
   'location_public',
+  'location_region',
   'original_filename',
   'public_url',
   'tags_json',
@@ -56,6 +59,7 @@ const sampleRow = {
   location_name: '上海',
   location_lat: 31.2304,
   location_lng: 121.4737,
+  location_region: 'china',
   exif_taken_at: '2025-08-26T02:08:37.000Z',
   exif_camera: 'Nikon Zf',
   exif_iso: 400,
@@ -146,6 +150,30 @@ await test('GET /api/list returns empty array when D1 has no rows', async () => 
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.deepEqual(data, []);
+});
+
+await test('GET /api/list stays visitor-scoped on localhost public route', async () => {
+  const { env, calls } = makeEnv(sampleRow, [sampleRow]);
+  const res = await listGet({ env, params: {}, request: new Request('http://localhost/api/list') });
+  assert.equal(res.status, 200);
+  assert.match(calls.prepared[0], /WHERE\s+is_public\s*=\s*1/i);
+  const data = await res.json();
+  assert.equal(data[0].public_url, 'https://cdn.test/abc');
+});
+
+await test('GET /api/admin/list returns admin records with admin object URLs', async () => {
+  const privateRow = { ...sampleRow, is_public: 0, location_public: 0 };
+  const { env, calls } = makeEnv(privateRow, [privateRow]);
+  const res = await adminListGet({ env, params: {}, request: new Request('http://localhost/api/admin/list') });
+
+  assert.equal(res.status, 200);
+  assert.doesNotMatch(calls.prepared[0], /\bis_public\s*=\s*1/i);
+  const data = await res.json();
+  assert.equal(data[0].is_public, 0);
+  assert.equal(data[0].location_name, '上海');
+  assert.equal(data[0].location_lat, 31.2304);
+  assert.equal(data[0].location_lng, 121.4737);
+  assert.equal(data[0].public_url, '/api/admin/public/abc');
 });
 
 await test('GET /api/list searches title caption original filename and location by q parameter', async () => {
@@ -248,6 +276,32 @@ await test('GET /api/image/:key returns 404 for private images viewed by visitor
   });
 
   assert.equal(res.status, 404);
+});
+
+await test('GET /api/image/:key stays visitor-scoped on localhost public route', async () => {
+  const { env } = makeEnv({ ...sampleRow, is_public: 0 }, []);
+  const res = await imageGet({
+    env,
+    params: { key: 'abc' },
+    request: new Request('http://localhost/api/image/abc'),
+  });
+
+  assert.equal(res.status, 404);
+});
+
+await test('GET /api/admin/image/:key returns private admin record with admin object URL', async () => {
+  const { env } = makeEnv({ ...sampleRow, is_public: 0, location_public: 0 }, []);
+  const res = await adminImageGet({
+    env,
+    params: { key: 'abc' },
+    request: new Request('http://localhost/api/admin/image/abc'),
+  });
+
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.is_public, 0);
+  assert.equal(data.location_name, '上海');
+  assert.equal(data.public_url, '/api/admin/public/abc');
 });
 
 await test('GET /api/image/:key returns 404 when row missing', async () => {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { onRequestGet as originalGet } from '../functions/api/original/[key].ts';
+import { onRequestGet as originalGet } from '../functions/api/admin/original/[key].ts';
 
 const test = async (name, fn) => {
   try {
@@ -52,7 +52,7 @@ const makeEnv = (row) => {
   return { env, calls };
 };
 
-await test('GET /api/original/:key streams the Telegram original as an attachment', async () => {
+await test('GET /api/admin/original/:key streams the Telegram original as an attachment', async () => {
   const { env, calls } = makeEnv({
     key: 'img-key',
     title: '猫猫',
@@ -80,7 +80,7 @@ await test('GET /api/original/:key streams the Telegram original as an attachmen
       originalGet({
         env,
         params: { key: 'img-key' },
-        request: makeAdminRequest('http://localhost/api/original/img-key'),
+        request: makeAdminRequest('http://localhost/api/admin/original/img-key'),
       }),
   );
 
@@ -96,7 +96,7 @@ await test('GET /api/original/:key streams the Telegram original as an attachmen
   assert.equal(response.headers.get('content-disposition'), 'attachment; filename="cat.jpg"');
 });
 
-await test('GET /api/original/:key returns 404 when the image is missing', async () => {
+await test('GET /api/admin/original/:key returns 404 when the image is missing', async () => {
   const { env } = makeEnv(null);
   let fetchCount = 0;
 
@@ -109,7 +109,7 @@ await test('GET /api/original/:key returns 404 when the image is missing', async
       originalGet({
         env,
         params: { key: 'missing-key' },
-        request: makeAdminRequest('http://localhost/api/original/missing-key'),
+        request: makeAdminRequest('http://localhost/api/admin/original/missing-key'),
       }),
   );
 
@@ -117,13 +117,13 @@ await test('GET /api/original/:key returns 404 when the image is missing', async
   assert.equal(fetchCount, 0);
 });
 
-await test('GET /api/original/:key returns 404 when the original is not archived', async () => {
+await test('GET /api/admin/original/:key returns 404 when the original is not archived', async () => {
   const { env } = makeEnv({ key: 'img-key', title: '猫猫', original_filename: 'cat.jpg', tg_file_id: null });
 
   const response = await originalGet({
     env,
     params: { key: 'img-key' },
-    request: makeAdminRequest('http://localhost/api/original/img-key'),
+    request: makeAdminRequest('http://localhost/api/admin/original/img-key'),
   });
 
   assert.equal(response.status, 404);

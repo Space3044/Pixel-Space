@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { onRequestGet } from '../functions/api/geocode.ts';
+import { onRequestGet } from '../functions/api/admin/geocode.ts';
 
 const test = async (name, fn) => {
   try {
@@ -23,7 +23,7 @@ const withMockedFetch = async (fetchImpl, fn) => {
 
 const makeEnv = (env = {}) => env;
 
-await test('GET /api/geocode rejects production visitors before calling upstream providers', async () => {
+await test('GET /api/admin/geocode rejects production visitors before calling upstream providers', async () => {
   let fetchCalled = false;
 
   const response = await withMockedFetch(
@@ -33,7 +33,7 @@ await test('GET /api/geocode rejects production visitors before calling upstream
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=Tokyo&region=global'),
+        request: new Request('https://imgbed.example.com/api/admin/geocode?q=Tokyo&region=global'),
         env: makeEnv(),
         params: {},
       }),
@@ -44,7 +44,7 @@ await test('GET /api/geocode rejects production visitors before calling upstream
   assert.equal(fetchCalled, false);
 });
 
-await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 results', async () => {
+await test('GET /api/admin/geocode proxies Nominatim and returns normalized WGS84 results', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
@@ -57,7 +57,7 @@ await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 resu
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/geocode?q=%E5%A4%96%E6%BB%A9&region=global'),
+        request: new Request('http://localhost/api/admin/geocode?q=%E5%A4%96%E6%BB%A9&region=global'),
         env: makeEnv(),
         params: {},
       }),
@@ -86,7 +86,7 @@ await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 resu
   assert.equal(headers.get('referer'), 'http://localhost/');
 });
 
-await test('GET /api/geocode keeps domestic searches out of the backend', async () => {
+await test('GET /api/admin/geocode keeps domestic searches out of the backend', async () => {
   let fetchCalled = false;
 
   const response = await withMockedFetch(
@@ -96,7 +96,7 @@ await test('GET /api/geocode keeps domestic searches out of the backend', async 
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/geocode?q=%E5%8E%A6%E9%97%A8&region=cn'),
+        request: new Request('http://localhost/api/admin/geocode?q=%E5%8E%A6%E9%97%A8&region=cn'),
         env: makeEnv({ MAPTILER_KEY: 'maptiler-key' }),
         params: {},
       }),
@@ -107,7 +107,7 @@ await test('GET /api/geocode keeps domestic searches out of the backend', async 
   assert.equal(fetchCalled, false);
 });
 
-await test('GET /api/geocode uses MapTiler first for global searches', async () => {
+await test('GET /api/admin/geocode uses MapTiler first for global searches', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
@@ -126,7 +126,7 @@ await test('GET /api/geocode uses MapTiler first for global searches', async () 
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/geocode?q=Tokyo%20Tower&region=global'),
+        request: new Request('http://localhost/api/admin/geocode?q=Tokyo%20Tower&region=global'),
         env: makeEnv({ MAPTILER_KEY: 'maptiler-key' }),
         params: {},
       }),
@@ -149,7 +149,7 @@ await test('GET /api/geocode uses MapTiler first for global searches', async () 
   assert.equal(requestUrl.searchParams.get('limit'), '5');
 });
 
-await test('GET /api/geocode falls back to Photon when Nominatim is unreachable', async () => {
+await test('GET /api/admin/geocode falls back to Photon when Nominatim is unreachable', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
@@ -173,7 +173,7 @@ await test('GET /api/geocode falls back to Photon when Nominatim is unreachable'
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
+        request: new Request('http://localhost/api/admin/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
         env: makeEnv(),
         params: {},
       }),
@@ -191,7 +191,7 @@ await test('GET /api/geocode falls back to Photon when Nominatim is unreachable'
   assert.equal(new URL(requests[1].url).origin, 'https://photon.komoot.io');
 });
 
-await test('GET /api/geocode retries Photon with city-spaced Chinese query when exact query is empty', async () => {
+await test('GET /api/admin/geocode retries Photon with city-spaced Chinese query when exact query is empty', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
@@ -217,7 +217,7 @@ await test('GET /api/geocode retries Photon with city-spaced Chinese query when 
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
+        request: new Request('http://localhost/api/admin/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
         env: makeEnv(),
         params: {},
       }),
@@ -235,7 +235,7 @@ await test('GET /api/geocode retries Photon with city-spaced Chinese query when 
   assert.equal(new URL(requests[2]).searchParams.get('q'), '厦门 清水宫');
 });
 
-await test('GET /api/geocode rejects empty query before calling Nominatim', async () => {
+await test('GET /api/admin/geocode rejects empty query before calling Nominatim', async () => {
   let fetchCalled = false;
 
   const response = await withMockedFetch(
@@ -245,7 +245,7 @@ await test('GET /api/geocode rejects empty query before calling Nominatim', asyn
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/geocode?q='),
+        request: new Request('http://localhost/api/admin/geocode?q='),
         env: makeEnv(),
         params: {},
       }),

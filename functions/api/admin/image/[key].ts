@@ -2,7 +2,7 @@ import type { Env } from '../../../types';
 import { badRequest, json, notFound, serverError, unauthorized } from '../../../_shared/http';
 import { resolveAdmin } from '../../../_shared/auth';
 import type { ImageRow } from '../../../_shared/images';
-import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToRecord } from '../../../_shared/images';
+import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToAdminRecord } from '../../../_shared/images';
 import {
   optionalCoordinate,
   optionalFlag,
@@ -99,6 +99,22 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
 const keyFromParams = (params: EventContext<Env, string, unknown>['params']): string =>
   keyFromRouteParam(params.key);
 
+export const onRequestGet: PagesFunction<Env> = async ({ env, params, request }) => {
+  if (!(await resolveAdmin(request, env))) return unauthorized();
+
+  const key = keyFromParams(params);
+  if (!key) return notFound();
+
+  try {
+    const row = await env.DB.prepare(DETAIL_SQL).bind(key).first<ImageRow>();
+    if (!row) return notFound();
+    return json(rowToAdminRecord(row));
+  } catch (error) {
+    console.error(`GET /api/admin/image/${key} failed`, error);
+    return serverError('image_failed');
+  }
+};
+
 export const onRequestPatch: PagesFunction<Env> = async (context) => {
   const { request, env, params } = context;
   const originError = requireSameOrigin(request);
@@ -142,7 +158,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
         }
       }
     }
-    return json(rowToRecord(row, env.PUBLIC_BASE_URL));
+    return json(rowToAdminRecord(row));
   } catch (error) {
     console.error(`PATCH /api/admin/image/${key} failed`, error);
     return serverError('image_update_failed');

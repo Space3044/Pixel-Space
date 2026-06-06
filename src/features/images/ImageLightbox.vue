@@ -98,7 +98,7 @@ const publicPageUrl = computed(() => {
   return buildPublicPageUrl(props.image, origin);
 });
 
-const originalImageUrl = (image: ImageRecord) => `/api/original/${encodeURIComponent(image.key)}`;
+const originalImageUrl = (image: ImageRecord) => `/api/admin/original/${encodeURIComponent(image.key)}`;
 
 const originalUrl = computed(() => {
   if (!props.image) return '';
@@ -857,6 +857,7 @@ onBeforeUnmount(() => {
                     :region="mapRegion"
                     :label="image.location_name || image.title"
                     :interactive="locationEditOpen"
+                    :admin="isAdmin"
                     @pick="updateLocationFromMap"
                   />
 

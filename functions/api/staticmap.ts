@@ -1,16 +1,13 @@
 import type { Env } from '../types';
-import { resolveAdmin } from '../_shared/auth';
 import { badRequest, notFound, serverError } from '../_shared/http';
 import {
-  generateAndCacheStaticMap,
   getCachedStaticMap,
   type StaticMapLocation,
-  StaticMapError,
   staticMapLocationFromUrl,
   staticMapObjectResponse,
 } from '../_shared/static-map';
 
-// 公开访问只读取已生成的 R2 静态图；只有管理员缓存未命中时才允许请求 Mapbox 并回写 R2。
+// 公开访问只读取已生成的 R2 静态图。管理员生成走 /api/admin/staticmap。
 
 const PUBLIC_LOCATION_SQL = `
 SELECT key
@@ -36,14 +33,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   if ('error' in parsed) return badRequest(parsed.error);
   const { location } = parsed;
 
-  const isAdmin = (await resolveAdmin(request, env)) !== null;
-  if (!isAdmin) {
-    try {
-      if (!(await hasPublicLocation(env.DB, location))) return notFound();
-    } catch (error) {
-      console.error('GET /api/staticmap visibility check failed', error);
-      return serverError('staticmap_visibility_failed');
-    }
+  try {
+    if (!(await hasPublicLocation(env.DB, location))) return notFound();
+  } catch (error) {
+    console.error('GET /api/staticmap visibility check failed', error);
+    return serverError('staticmap_visibility_failed');
   }
 
   try {
@@ -54,13 +48,5 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     return serverError('staticmap_cache_failed');
   }
 
-  if (!isAdmin) return notFound();
-
-  try {
-    return await generateAndCacheStaticMap(env, location);
-  } catch (error) {
-    console.error('GET /api/staticmap generation failed', error instanceof Error ? error.message : error);
-    if (error instanceof StaticMapError) return serverError(error.message);
-    return serverError('mapbox_staticmap_failed');
-  }
+  return notFound();
 };

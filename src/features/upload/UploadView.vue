@@ -7,11 +7,11 @@ import AppShell from '@/shared/ui/AppShell.vue';
 import TaskProgress from '@/shared/ui/TaskProgress.vue';
 import LocationSearch from '@/features/images/LocationSearch.vue';
 import FolderPickerPopover from '@/features/images/FolderPickerPopover.vue';
-import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
+import { fetchAdminFolders, type FolderRecord } from '@/features/library/library.api';
 import { reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
-import { checkImageHash, fetchImage } from '@/features/images/images.api';
+import { checkAdminImageHash, fetchAdminImage } from '@/features/images/images.api';
 import type { MapRegion } from './map-coordinate';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter } from './pick-map';
@@ -308,7 +308,7 @@ const broadcastLocationToAll = () => {
 
 const loadFolders = async () => {
   try {
-    folders.value = await fetchFolders();
+    folders.value = await fetchAdminFolders();
   } catch (error) {
     globalError.value = `文件夹加载失败：${(error as Error).message}`;
   }
@@ -446,7 +446,7 @@ const watchTelegramArchive = async (entry: UploadEntry, key: string) => {
     await delay(TELEGRAM_ARCHIVE_POLL_INTERVAL_MS);
 
     try {
-      const latest = await fetchImage(key);
+      const latest = await fetchAdminImage(key);
       if (!entries.value.some((live) => live.id === entry.id)) return;
       if (!entry.uploadResult || entry.uploadResult.key !== key) return;
 
@@ -494,7 +494,7 @@ const runAiPreview = async (entry: UploadEntry) => {
 const processEntry = async (entry: UploadEntry) => {
   try {
     const hash = await sha256HexFromFile(entry.file);
-    const existing = await checkImageHash(hash);
+    const existing = await checkAdminImageHash(hash);
     if (existing) {
       entry.uploadResult = existing;
       entry.duplicate = true;
