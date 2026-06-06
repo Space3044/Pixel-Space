@@ -159,6 +159,8 @@ test('keeps package scripts and dependencies minimal', () => {
     '@cloudflare/workers-types must be installed from stage 4',
   );
   assert.ok(pkg.devDependencies['@types/three'], '@types/three is needed by the Three.js globe');
+  assert.equal(pkg.scripts['db:migrate:local'], 'wrangler d1 migrations apply pixel-space --local');
+  assert.equal(pkg.scripts['db:migrate:remote'], 'wrangler d1 migrations apply pixel-space --remote');
   assert.match(read('wrangler.toml'), /PUBLIC_BASE_URL\s*=\s*"\/api\/public"/);
   assert.match(read('.gitignore'), /^\.dev\.vars$/m);
   assert.match(read('README.md'), /TG_BOT_TOKEN/);

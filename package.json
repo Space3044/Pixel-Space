@@ -11,8 +11,8 @@
     "preview": "vite preview",
     "test": "node --import=tsx tests/run-tests.mjs",
     "typecheck": "vue-tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.functions.json --noEmit",
-    "db:migrate:local": "wrangler d1 migrations apply imgbed --local",
-    "db:migrate:remote": "wrangler d1 migrations apply imgbed --remote"
+    "db:migrate:local": "wrangler d1 migrations apply pixel-space --local",
+    "db:migrate:remote": "wrangler d1 migrations apply pixel-space --remote"
   },
   "dependencies": {
     "browser-image-compression": "^2.0.2",
