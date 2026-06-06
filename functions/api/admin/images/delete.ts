@@ -3,6 +3,7 @@ import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
 import { normalizeStringList, parseJsonObject } from '../../../_shared/request';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
+import { requireSameOrigin } from '../../../_shared/security';
 
 // 批量删除一组图片：清理 D1 行 + R2 对象 + Telegram 原图消息。
 // 单次最多 200 张，超出请前端分片调用。
@@ -33,7 +34,9 @@ const parsePayload = async (request: Request): Promise<DeletePayload | null> => 
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const payload = await parsePayload(request);
   if (!payload) return badRequest('invalid_delete_payload');

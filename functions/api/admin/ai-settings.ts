@@ -4,6 +4,7 @@ import type { AiSettings } from '../../_shared/ai';
 import { getAiSettings } from '../../_shared/ai';
 import { resolveAdmin } from '../../_shared/auth';
 import { parseJsonObject, stringOrEmpty } from '../../_shared/request';
+import { requireSameOrigin } from '../../_shared/security';
 
 const UPSERT_SQL = `
 INSERT INTO ai_settings (id, proxy_url, model, prompt, updated_at)
@@ -26,7 +27,7 @@ const payloadFromRequest = async (request: Request): Promise<AiSettings | null> 
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   try {
     return json(await getAiSettings(env));
@@ -37,7 +38,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 };
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const payload = await payloadFromRequest(request);
   if (!payload) return badRequest('invalid_ai_settings_payload');

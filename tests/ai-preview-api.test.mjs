@@ -41,6 +41,12 @@ const makeEnv = (
       prepare(sql) {
         calls.prepared.push(sql);
         return {
+          bind() {
+            return {
+              first: async () => null,
+              run: async () => ({ success: true, meta: { changes: 1 } }),
+            };
+          },
           first: async () => settings,
         };
       },
@@ -78,7 +84,8 @@ await test('POST /api/ai/preview calls CPA with configured URL and model and ret
   );
 
   assert.equal(response.status, 200);
-  assert.match(calls.prepared[0], /FROM ai_settings/i);
+  assert.ok(calls.prepared.some((sql) => /FROM ai_settings/i.test(sql)));
+  assert.equal(calls.prepared.some((sql) => /rate_limits/i.test(sql)), false);
   assert.equal(proxyRequests.length, 1);
   assert.equal(proxyRequests[0].url, 'https://cpa.test/v1/chat/completions');
   assert.equal(proxyRequests[0].init.headers.Authorization, 'Bearer proxy-key-test');

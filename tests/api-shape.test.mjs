@@ -239,6 +239,17 @@ await test('GET /api/image/:key returns single ImageRecord', async () => {
   assert.equal(data.updated_at, '2026-05-21T12:13:14.000Z');
 });
 
+await test('GET /api/image/:key returns 404 for private images viewed by visitors', async () => {
+  const { env } = makeEnv({ ...sampleRow, is_public: 0 }, []);
+  const res = await imageGet({
+    env,
+    params: { key: 'abc' },
+    request: new Request('https://imgbed.example.com/api/image/abc'),
+  });
+
+  assert.equal(res.status, 404);
+});
+
 await test('GET /api/image/:key returns 404 when row missing', async () => {
   const { env } = makeEnv(null, []);
   const res = await imageGet({

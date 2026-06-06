@@ -4,10 +4,14 @@ import { parseJsonObject } from '../../../_shared/request';
 import { imageBelongsToGrant, resolveActiveGrant } from '../../../_shared/download-grants';
 import { streamTelegramOriginal, type OriginalImageRow } from '../../../_shared/original';
 import { keyFromRouteParam } from '../../../_shared/keys';
+import { requireSameOrigin } from '../../../_shared/security';
 
 const ORIGINAL_SQL = 'SELECT key, original_filename, tg_file_id FROM images WHERE key = ?';
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }) => {
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+
   const key = keyFromRouteParam(params.key);
   if (!key) return notFound();
 

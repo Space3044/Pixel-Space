@@ -2,6 +2,7 @@ import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
 import { normalizeOptionalString, normalizeStringList, parseJsonObject } from '../../../_shared/request';
+import { requireSameOrigin } from '../../../_shared/security';
 
 // 批量把一组图片移动到目标 folder_id（null 表示根 / 未分类）。
 // 单次最多 200 张，超出请前端分片调用。
@@ -25,7 +26,9 @@ const parsePayload = async (request: Request): Promise<MovePayload | null> => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const payload = await parsePayload(request);
   if (!payload) return badRequest('invalid_move_payload');

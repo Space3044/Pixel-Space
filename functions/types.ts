@@ -5,6 +5,8 @@ export interface Env {
   TG_BOT_TOKEN: string;
   TG_CHAT_ID: string;
   PROXY_KEY: string;
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
   AMAP_JS_KEY?: string;
   AMAP_SECURITY_JS_CODE?: string;
   // 高德 Web 服务 API key，静态地图代理用，与 JS API key 不同源，需单独申请。

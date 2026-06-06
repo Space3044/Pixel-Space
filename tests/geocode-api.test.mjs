@@ -21,6 +21,29 @@ const withMockedFetch = async (fetchImpl, fn) => {
   }
 };
 
+const makeEnv = (env = {}) => env;
+
+await test('GET /api/geocode rejects production visitors before calling upstream providers', async () => {
+  let fetchCalled = false;
+
+  const response = await withMockedFetch(
+    async () => {
+      fetchCalled = true;
+      return Response.json([]);
+    },
+    () =>
+      onRequestGet({
+        request: new Request('https://imgbed.example.com/api/geocode?q=Tokyo&region=global'),
+        env: makeEnv(),
+        params: {},
+      }),
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: 'unauthorized' });
+  assert.equal(fetchCalled, false);
+});
+
 await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 results', async () => {
   const requests = [];
 
@@ -34,8 +57,8 @@ await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 resu
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%A4%96%E6%BB%A9&region=global'),
-        env: {},
+        request: new Request('http://localhost/api/geocode?q=%E5%A4%96%E6%BB%A9&region=global'),
+        env: makeEnv(),
         params: {},
       }),
   );
@@ -60,7 +83,7 @@ await test('GET /api/geocode proxies Nominatim and returns normalized WGS84 resu
 
   const headers = new Headers(requests[0].init.headers);
   assert.match(headers.get('user-agent'), /imgbed-geocoder/i);
-  assert.equal(headers.get('referer'), 'https://imgbed.example.com/');
+  assert.equal(headers.get('referer'), 'http://localhost/');
 });
 
 await test('GET /api/geocode keeps domestic searches out of the backend', async () => {
@@ -73,8 +96,8 @@ await test('GET /api/geocode keeps domestic searches out of the backend', async 
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%8E%A6%E9%97%A8&region=cn'),
-        env: { MAPTILER_KEY: 'maptiler-key' },
+        request: new Request('http://localhost/api/geocode?q=%E5%8E%A6%E9%97%A8&region=cn'),
+        env: makeEnv({ MAPTILER_KEY: 'maptiler-key' }),
         params: {},
       }),
   );
@@ -103,8 +126,8 @@ await test('GET /api/geocode uses MapTiler first for global searches', async () 
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=Tokyo%20Tower&region=global'),
-        env: { MAPTILER_KEY: 'maptiler-key' },
+        request: new Request('http://localhost/api/geocode?q=Tokyo%20Tower&region=global'),
+        env: makeEnv({ MAPTILER_KEY: 'maptiler-key' }),
         params: {},
       }),
   );
@@ -150,8 +173,8 @@ await test('GET /api/geocode falls back to Photon when Nominatim is unreachable'
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
-        env: {},
+        request: new Request('http://localhost/api/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
+        env: makeEnv(),
         params: {},
       }),
   );
@@ -194,8 +217,8 @@ await test('GET /api/geocode retries Photon with city-spaced Chinese query when 
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
-        env: {},
+        request: new Request('http://localhost/api/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
+        env: makeEnv(),
         params: {},
       }),
   );
@@ -222,8 +245,8 @@ await test('GET /api/geocode rejects empty query before calling Nominatim', asyn
     },
     () =>
       onRequestGet({
-        request: new Request('https://imgbed.example.com/api/geocode?q='),
-        env: {},
+        request: new Request('http://localhost/api/geocode?q='),
+        env: makeEnv(),
         params: {},
       }),
   );

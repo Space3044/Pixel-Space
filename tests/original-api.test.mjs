@@ -21,12 +21,7 @@ const withMockedFetch = async (fetchImpl, fn) => {
   }
 };
 
-const makeAdminRequest = (url) =>
-  new Request(url, {
-    headers: {
-      'Cf-Access-Authenticated-User-Email': 'owner@example.test',
-    },
-  });
+const makeAdminRequest = (url) => new Request(url);
 
 const makeEnv = (row) => {
   const calls = {
@@ -85,7 +80,7 @@ await test('GET /api/original/:key streams the Telegram original as an attachmen
       originalGet({
         env,
         params: { key: 'img-key' },
-        request: makeAdminRequest('http://x/api/original/img-key'),
+        request: makeAdminRequest('http://localhost/api/original/img-key'),
       }),
   );
 
@@ -114,7 +109,7 @@ await test('GET /api/original/:key returns 404 when the image is missing', async
       originalGet({
         env,
         params: { key: 'missing-key' },
-        request: makeAdminRequest('http://x/api/original/missing-key'),
+        request: makeAdminRequest('http://localhost/api/original/missing-key'),
       }),
   );
 
@@ -128,7 +123,7 @@ await test('GET /api/original/:key returns 404 when the original is not archived
   const response = await originalGet({
     env,
     params: { key: 'img-key' },
-    request: makeAdminRequest('http://x/api/original/img-key'),
+    request: makeAdminRequest('http://localhost/api/original/img-key'),
   });
 
   assert.equal(response.status, 404);

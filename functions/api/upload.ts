@@ -19,6 +19,7 @@ import {
 } from '../_shared/request';
 import { createImageKey } from '../_shared/keys';
 import { archiveOriginalAfterUpload } from '../_shared/archive';
+import { requireSameOrigin } from '../_shared/security';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -161,7 +162,9 @@ const sha256Hex = async (file: File): Promise<string> => {
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   let formData: FormData;
   try {

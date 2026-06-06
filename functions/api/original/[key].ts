@@ -11,7 +11,7 @@ interface OriginalRow extends OriginalImageRow {
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, params, request }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const key = keyFromRouteParam(params.key);
   if (!key) return notFound();

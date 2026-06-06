@@ -96,7 +96,7 @@ const parseFolderParam = async (
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
-    const isAdmin = resolveAdmin(request, env) !== null;
+    const isAdmin = (await resolveAdmin(request, env)) !== null;
     const search = normalizeSearch(request);
     const pagination = parsePagination(request);
     if (pagination === 'invalid') return badRequest('invalid_pagination');

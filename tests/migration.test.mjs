@@ -41,6 +41,7 @@ test('migrations keep the consolidated init plus focused delta migrations', () =
   ]);
   assert.doesNotMatch(sqlBody, /\balter\s+table\b/);
   assert.doesNotMatch(sqlBody, /\bimages_next\b/);
+  assert.doesNotMatch(migrationFiles.join('\n'), /rate_limits/);
 });
 
 test('0002 adds and backfills location_region', () => {

@@ -1,4 +1,5 @@
-import { badRequest, json, serverError } from '../_shared/http';
+import { resolveAdmin } from '../_shared/auth';
+import { badRequest, json, serverError, unauthorized } from '../_shared/http';
 import type { Env } from '../types';
 import { dedupeGeocodeResults, validCoordinate, type GeocodeResult } from '../../shared/geocode';
 
@@ -236,6 +237,8 @@ const providerOrder = (
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  if (!(await resolveAdmin(request, env))) return unauthorized();
+
   const query = normalizeQuery(request);
   if (!query) return badRequest('missing_geocode_query');
 

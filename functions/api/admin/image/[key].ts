@@ -12,6 +12,7 @@ import {
 } from '../../../_shared/request';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 import { keyFromRouteParam } from '../../../_shared/keys';
+import { requireSameOrigin } from '../../../_shared/security';
 
 const DETAIL_SQL = `
 SELECT ${IMAGE_SELECT_COLUMNS}
@@ -97,8 +98,11 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
 const keyFromParams = (params: EventContext<Env, string, unknown>['params']): string =>
   keyFromRouteParam(params.key);
 
-export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+export const onRequestPatch: PagesFunction<Env> = async (context) => {
+  const { request, env, params } = context;
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const key = keyFromParams(params);
   if (!key) return notFound();
@@ -135,7 +139,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
 };
 
 export const onRequestDelete: PagesFunction<Env> = async ({ env, params, request }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const key = keyFromParams(params);
   if (!key) return notFound();

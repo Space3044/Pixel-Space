@@ -10,7 +10,7 @@ const SELECT_BY_HASH_SQL =
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const hash = (new URL(request.url).searchParams.get('hash') ?? '').trim().toLowerCase();
   if (!HASH_PATTERN.test(hash)) return badRequest('invalid_hash');

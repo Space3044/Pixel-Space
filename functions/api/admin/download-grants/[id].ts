@@ -2,6 +2,7 @@ import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, notFound, serverError, unauthorized } from '../../../_shared/http';
 import { normalizeFutureIso } from '../../../_shared/download-grants';
+import { requireSameOrigin } from '../../../_shared/security';
 import { parseJsonObject, stringOrNull } from '../../../_shared/request';
 
 const grantIdFromParams = (params: EventContext<Env, string, unknown>['params']): string | null => {
@@ -10,7 +11,9 @@ const grantIdFromParams = (params: EventContext<Env, string, unknown>['params'])
 };
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const id = grantIdFromParams(params);
   if (!id) return badRequest('invalid_download_grant_id');
@@ -35,7 +38,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
 };
 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const id = grantIdFromParams(params);
   if (!id) return badRequest('invalid_download_grant_id');

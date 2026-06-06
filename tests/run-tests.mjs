@@ -7,6 +7,7 @@ for (const path of [
   './location-name.test.mjs',
   './http-api.test.mjs',
   './request-helpers.test.mjs',
+  './auth-security.test.mjs',
   './download-grants-helpers.test.mjs',
   './migration.test.mjs',
   './access-ui.test.mjs',

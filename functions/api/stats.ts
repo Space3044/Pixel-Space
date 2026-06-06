@@ -34,7 +34,7 @@ interface SummaryRow {
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
-    const isAdmin = resolveAdmin(request, env) !== null;
+    const isAdmin = (await resolveAdmin(request, env)) !== null;
     const [summary, latest] = await Promise.all([
       env.DB.prepare(SUMMARY_SQL).first<SummaryRow>(),
       env.DB.prepare(LATEST_SQL).all<ImageRow>(),

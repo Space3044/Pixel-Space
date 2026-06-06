@@ -22,6 +22,10 @@ export function unauthorized(message = 'unauthorized'): Response {
   return json({ error: message }, 401);
 }
 
+export function forbidden(message = 'forbidden'): Response {
+  return json({ error: message }, 403);
+}
+
 export function serverError(message = 'server_error'): Response {
   return json({ error: message }, 500);
 }

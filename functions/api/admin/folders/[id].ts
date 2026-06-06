@@ -7,6 +7,7 @@ import {
   sanitizeFolderName,
 } from '../../../_shared/folders';
 import { parseJsonObject } from '../../../_shared/request';
+import { requireSameOrigin } from '../../../_shared/security';
 
 interface PatchPayload {
   name?: string;
@@ -39,7 +40,9 @@ const keyFromParams = (params: EventContext<Env, string, unknown>['params']): st
   String(params.id ?? '');
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const id = keyFromParams(params);
   if (!id) return notFound();
@@ -84,7 +87,9 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
 };
 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const id = keyFromParams(params);
   if (!id) return notFound();

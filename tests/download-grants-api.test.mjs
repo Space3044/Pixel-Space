@@ -347,6 +347,7 @@ const makeVisitorEnv = ({
                 return null;
               },
               all: async () => ({ results: [grantImageRow] }),
+              run: async () => ({ success: true, meta: { changes: 1 } }),
             };
           },
         };
@@ -367,7 +368,7 @@ const withMockedFetch = async (fetchImpl, fn) => {
 };
 
 await test('POST /api/download-grants/verify returns authorized visitor-safe images', async () => {
-  const { env } = makeVisitorEnv();
+  const { env, calls } = makeVisitorEnv();
   const response = await verifyGrant({
     env,
     request: makeGrantRequest('https://example.test/api/download-grants/verify', { code: 'A7K9P2QX' }),
@@ -379,6 +380,7 @@ await test('POST /api/download-grants/verify returns authorized visitor-safe ima
   assert.equal(data.images.length, 1);
   assert.equal(data.images[0].key, 'img-1');
   assert.equal(data.images[0].location_name, null);
+  assert.equal(calls.prepared.some((sql) => /rate_limits/i.test(sql)), false);
 });
 
 await test('POST /api/download-grants/verify rejects invalid or expired codes', async () => {
@@ -392,8 +394,27 @@ await test('POST /api/download-grants/verify rejects invalid or expired codes', 
   assert.deepEqual(await response.json(), { error: 'download_grant_not_found' });
 });
 
+await test('POST /api/download-grants/verify rejects cross-site browser origins before checking codes', async () => {
+  const { env, calls } = makeVisitorEnv();
+  const response = await verifyGrant({
+    env,
+    request: new Request('https://example.test/api/download-grants/verify', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://evil.example',
+      },
+      body: JSON.stringify({ code: 'A7K9P2QX' }),
+    }),
+  });
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: 'invalid_origin' });
+  assert.equal(calls.prepared.some((sql) => /from\s+download_grants/i.test(sql)), false);
+});
+
 await test('POST /api/download-grants/original/:key streams an authorized original', async () => {
-  const { env } = makeVisitorEnv();
+  const { env, calls } = makeVisitorEnv();
   const requests = [];
 
   const response = await withMockedFetch(
@@ -419,6 +440,7 @@ await test('POST /api/download-grants/original/:key streams an authorized origin
   ]);
   assert.equal(await response.text(), 'original-bytes');
   assert.equal(response.headers.get('content-disposition'), 'attachment; filename="cat.jpg"');
+  assert.equal(calls.prepared.some((sql) => /rate_limits/i.test(sql)), false);
 });
 
 await test('POST /api/download-grants/original/:key rejects images outside the grant', async () => {

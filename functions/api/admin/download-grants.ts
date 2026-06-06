@@ -5,6 +5,7 @@ import { normalizeStringList, parseJsonObject, stringOrNull } from '../../_share
 import { codeHash, generateAccessCode, normalizeFutureIso } from '../../_shared/download-grants';
 import type { ImageRecord, ImageRow } from '../../_shared/images';
 import { IMAGE_SELECT_COLUMNS, rowToRecord } from '../../_shared/images';
+import { requireSameOrigin } from '../../_shared/security';
 
 interface CreatePayload {
   keys: string[];
@@ -112,7 +113,7 @@ const loadGrantRecords = async (env: Env): Promise<DownloadGrantRecord[]> => {
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   try {
     return json({ grants: await loadGrantRecords(env) });
@@ -123,7 +124,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const payload = await parsePayload(request);
   if (!payload) return badRequest('invalid_download_grant_payload');

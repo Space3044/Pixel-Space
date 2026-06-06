@@ -5,6 +5,7 @@ import type { ImageRow } from '../../../../_shared/images';
 import { IMAGE_SELECT_COLUMNS, rowToRecord } from '../../../../_shared/images';
 import { keyFromRouteParam } from '../../../../_shared/keys';
 import { archiveOriginalAfterUpload, markTelegramArchivePending } from '../../../../_shared/archive';
+import { requireSameOrigin } from '../../../../_shared/security';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -34,7 +35,9 @@ const originalFromRequest = async (request: Request): Promise<File | null> => {
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { env, request, params } = context;
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const key = keyFromParams(params);
   if (!key) return notFound();

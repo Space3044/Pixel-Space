@@ -3,6 +3,7 @@ import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
 import { normalizeParentId, sanitizeFolderName } from '../../../_shared/folders';
 import { parseJsonObject } from '../../../_shared/request';
+import { requireSameOrigin } from '../../../_shared/security';
 
 interface CreatePayload {
   name: string;
@@ -27,7 +28,9 @@ const cryptoUUID = (): string => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!resolveAdmin(request, env)) return unauthorized();
+  const originError = requireSameOrigin(request);
+  if (originError) return originError;
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const payload = await parseCreatePayload(request);
   if (!payload) return badRequest('invalid_folder_payload');
