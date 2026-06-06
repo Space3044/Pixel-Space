@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const test = (name, fn) => {
@@ -14,6 +14,7 @@ const test = (name, fn) => {
 
 const migrationDir = join(process.cwd(), 'db/migrations');
 const migrationFiles = readdirSync(migrationDir).filter((name) => name.endsWith('.sql')).sort();
+const schemaPath = join(process.cwd(), 'db/schema.sql');
 const sql = readFileSync(join(migrationDir, '0001_init.sql'), 'utf8');
 
 const stripComments = (s) =>
@@ -28,6 +29,13 @@ const stripComments = (s) =>
 const sqlBody = stripComments(sql).toLowerCase();
 const tableBody = (tableName) => {
   const match = sqlBody.match(new RegExp(`create\\s+table\\s+${tableName}\\s*\\(([\\s\\S]*?)\\);`));
+  assert.ok(match, `${tableName} table definition missing`);
+  return match[1];
+};
+
+const tableBodyFrom = (source, tableName) => {
+  const body = stripComments(source).toLowerCase();
+  const match = body.match(new RegExp(`create\\s+table\\s+${tableName}\\s*\\(([\\s\\S]*?)\\);`));
   assert.ok(match, `${tableName} table definition missing`);
   return match[1];
 };
@@ -171,4 +179,19 @@ test('migration creates final indexes', () => {
   assert.match(sqlBody, /create\s+index\s+idx_images_hash/);
   assert.match(sqlBody, /create\s+index\s+idx_images_is_public_created_at/);
   assert.match(sqlBody, /create\s+index\s+idx_images_folder_id/);
+});
+
+test('schema.sql is a D1 console-ready fresh database schema', () => {
+  assert.equal(existsSync(schemaPath), true);
+  const schema = readFileSync(schemaPath, 'utf8');
+  const body = stripComments(schema).toLowerCase();
+  const images = tableBodyFrom(schema, 'images');
+  const downloadGrants = tableBodyFrom(schema, 'download_grants');
+
+  assert.doesNotMatch(body, /\balter\s+table\b/);
+  assert.match(images, /\blocation_region\s+text\b/);
+  assert.match(downloadGrants, /\bcode\s+text\b/);
+  assert.match(body, /create\s+table\s+download_grant_images/);
+  assert.match(body, /create\s+unique\s+index\s+idx_download_grants_code/);
+  assert.match(schema, /INSERT INTO ai_settings \(id, proxy_url, model, prompt\) VALUES \(1, '', '', '# 图片结构化分析专家/);
 });
