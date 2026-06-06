@@ -165,6 +165,56 @@ await test('GET /api/list searches title caption original filename and location 
   assert.deepEqual(calls.binds[0], ['%上海%', '%上海%', '%上海%', '%上海%', '%上海%', '%上海%', '%上海%']);
 });
 
+await test('GET /api/list supports opt-in cursor pagination without changing legacy array shape', async () => {
+  const rows = [
+    { ...sampleRow, key: 'img-3', created_at: '2026-05-22 10:11:12' },
+    { ...sampleRow, key: 'img-2', created_at: '2026-05-21 10:11:12' },
+    { ...sampleRow, key: 'img-1', created_at: '2026-05-20 10:11:12' },
+  ];
+  const { env, calls } = makeEnv(sampleRow, rows);
+  const res = await listGet({
+    env,
+    params: {},
+    request: new Request('http://x/api/list?limit=2'),
+  });
+
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.deepEqual(Object.keys(data).sort(), ['items', 'nextCursor']);
+  assert.equal(data.items.length, 2);
+  assert.equal(data.items[0].key, 'img-3');
+  assert.equal(data.items[1].key, 'img-2');
+  assert.equal(typeof data.nextCursor, 'string');
+  assert.match(calls.prepared[0], /ORDER BY created_at DESC,\s*key DESC\s+LIMIT \?/i);
+  assert.deepEqual(calls.binds[0], [3]);
+});
+
+await test('GET /api/list cursor pagination adds a keyset condition after existing filters', async () => {
+  const cursor = encodeURIComponent(JSON.stringify(['2026-05-21 10:11:12', 'img-2']));
+  const { env, calls } = makeEnv(sampleRow, [sampleRow]);
+  const res = await listGet({
+    env,
+    params: {},
+    request: new Request(`http://x/api/list?q=cat&limit=2&cursor=${cursor}`),
+  });
+
+  assert.equal(res.status, 200);
+  assert.match(calls.prepared[0], /\(created_at < \? OR \(created_at = \? AND key < \?\)\)/i);
+  assert.deepEqual(calls.binds[0], [
+    '%cat%',
+    '%cat%',
+    '%cat%',
+    '%cat%',
+    '%cat%',
+    '%cat%',
+    '%cat%',
+    '2026-05-21 10:11:12',
+    '2026-05-21 10:11:12',
+    'img-2',
+    3,
+  ]);
+});
+
 await test('GET /api/image/:key returns single ImageRecord', async () => {
   const { env } = makeEnv(sampleRow, []);
   const res = await imageGet({

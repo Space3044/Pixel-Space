@@ -19,7 +19,11 @@ const test = (name, fn) => {
 
 test('GalleryView wires the search box to listImages(query)', () => {
   assert.match(gallery, /const searchQuery = ref/);
-  assert.match(gallery, /listImages\(searchQuery\.value,\s*\{ folderId \}\)/);
+  assert.match(gallery, /listImagesPage\(searchQuery\.value,\s*\{ folderId,\s*limit: GALLERY_PAGE_SIZE \}\)/);
+  assert.match(gallery, /const GALLERY_PAGE_SIZE = 48/);
+  assert.match(gallery, /const nextCursor = ref<string \| null>\(null\)/);
+  assert.match(gallery, /const loadMoreImages = async \(\) => \{/);
+  assert.match(gallery, /加载更多/);
   assert.match(gallery, /@submit\.prevent="loadImages"/);
   assert.match(gallery, /placeholder="搜索标题、描述、文件名或位置"/);
   assert.match(gallery, /class="explore-header"/);
@@ -37,6 +41,9 @@ test('GalleryView wires the search box to listImages(query)', () => {
 test('images.api exposes admin update and delete helpers', () => {
   assert.match(imagesApi, /from '@\/shared\/api\/http'/);
   assert.match(imagesApi, /export function listImages\(query = '', options: ListImagesOptions = \{\}\)/);
+  assert.match(imagesApi, /export function listImagesPage\(query = '', options: ListImagesPageOptions\)/);
+  assert.match(imagesApi, /params\.set\('limit', String\(options\.limit\)\)/);
+  assert.match(imagesApi, /cursor/);
   assert.match(imagesApi, /URLSearchParams/);
   assert.match(imagesApi, /export function updateImage/);
   assert.match(imagesApi, /method: 'PATCH'/);

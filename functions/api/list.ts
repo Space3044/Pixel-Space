@@ -1,5 +1,5 @@
 import type { Env } from '../types';
-import { json, serverError } from '../_shared/http';
+import { badRequest, json, serverError } from '../_shared/http';
 import { resolveAdmin } from '../_shared/auth';
 import { collectDescendantIds } from '../_shared/folders';
 import type { ImageRow } from '../_shared/images';
@@ -11,6 +11,50 @@ import { IMAGE_SELECT_COLUMNS, rowToRecord, scrubRecordForVisitor } from '../_sh
 const normalizeSearch = (request: Request): string => {
   const value = new URL(request.url).searchParams.get('q') ?? '';
   return value.trim().slice(0, 100);
+};
+
+const MAX_PAGE_SIZE = 96;
+
+interface PageCursor {
+  createdAt: string;
+  key: string;
+}
+
+interface Pagination {
+  limit: number;
+  cursor: PageCursor | null;
+}
+
+const encodeCursor = (row: ImageRow): string =>
+  encodeURIComponent(JSON.stringify([row.created_at, row.key]));
+
+const decodeCursor = (value: string): PageCursor | null => {
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value)) as unknown;
+    if (!Array.isArray(parsed) || parsed.length !== 2) return null;
+    const [createdAt, key] = parsed;
+    if (typeof createdAt !== 'string' || typeof key !== 'string') return null;
+    if (!createdAt || !key) return null;
+    return { createdAt, key };
+  } catch {
+    return null;
+  }
+};
+
+const parsePagination = (request: Request): Pagination | null | 'invalid' => {
+  const url = new URL(request.url);
+  const rawLimit = url.searchParams.get('limit');
+  if (rawLimit === null) return null;
+
+  const parsedLimit = Number(rawLimit);
+  if (!Number.isFinite(parsedLimit)) return 'invalid';
+  const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(parsedLimit)));
+
+  const rawCursor = url.searchParams.get('cursor');
+  if (!rawCursor) return { limit, cursor: null };
+
+  const cursor = decodeCursor(rawCursor);
+  return cursor ? { limit, cursor } : 'invalid';
 };
 
 interface FolderFilter {
@@ -54,11 +98,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   try {
     const isAdmin = resolveAdmin(request, env) !== null;
     const search = normalizeSearch(request);
+    const pagination = parsePagination(request);
+    if (pagination === 'invalid') return badRequest('invalid_pagination');
 
     const folderFilter = await parseFolderParam(request, env.DB);
     if (folderFilter === 'invalid') {
       // 文件夹不存在时直接返回空列表，跟前端期望一致（不抛错）。
-      return json([]);
+      return json(pagination ? { items: [], nextCursor: null } : []);
     }
 
     const conditions: string[] = [];
@@ -90,15 +136,34 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       }
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const sql = `SELECT ${IMAGE_SELECT_COLUMNS} FROM images ${whereClause} ORDER BY created_at DESC`;
+    if (pagination?.cursor) {
+      conditions.push('(created_at < ? OR (created_at = ? AND key < ?))');
+      binds.push(pagination.cursor.createdAt, pagination.cursor.createdAt, pagination.cursor.key);
+    }
 
-    const result = await env.DB.prepare(sql).bind(...binds).all<ImageRow>();
-    const records = (result.results ?? []).map((row) => {
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const sql = pagination
+      ? `SELECT ${IMAGE_SELECT_COLUMNS} FROM images ${whereClause} ORDER BY created_at DESC, key DESC LIMIT ?`
+      : `SELECT ${IMAGE_SELECT_COLUMNS} FROM images ${whereClause} ORDER BY created_at DESC`;
+    const queryBinds = pagination ? [...binds, pagination.limit + 1] : binds;
+
+    const result = await env.DB.prepare(sql).bind(...queryBinds).all<ImageRow>();
+    const rows = result.results ?? [];
+    const pageRows = pagination ? rows.slice(0, pagination.limit) : rows;
+    const records = pageRows.map((row) => {
       const record = rowToRecord(row, env.PUBLIC_BASE_URL);
       return isAdmin ? record : scrubRecordForVisitor(record);
     });
-    return json(records);
+
+    if (!pagination) return json(records);
+
+    return json({
+      items: records,
+      nextCursor:
+        rows.length > pagination.limit && pageRows.length > 0
+          ? encodeCursor(pageRows[pageRows.length - 1])
+          : null,
+    });
   } catch (error) {
     console.error('GET /api/list failed', error);
     return serverError('list_failed');

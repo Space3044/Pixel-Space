@@ -27,8 +27,21 @@ export interface ListImagesOptions {
   recursive?: boolean;
 }
 
-export function listImages(query = '', options: ListImagesOptions = {}): Promise<ImageRecord[]> {
-  const params = new URLSearchParams();
+export interface ListImagesPageOptions extends ListImagesOptions {
+  limit: number;
+  cursor?: string | null;
+}
+
+export interface ListImagesPage {
+  items: ImageRecord[];
+  nextCursor: string | null;
+}
+
+const appendListImageParams = (
+  params: URLSearchParams,
+  query: string,
+  options: ListImagesOptions,
+) => {
   const trimmed = query.trim();
   if (trimmed) params.set('q', trimmed);
   if (options.folderId === null) {
@@ -37,8 +50,21 @@ export function listImages(query = '', options: ListImagesOptions = {}): Promise
     params.set('folder', options.folderId);
     if (options.recursive === false) params.set('recursive', '0');
   }
+};
+
+export function listImages(query = '', options: ListImagesOptions = {}): Promise<ImageRecord[]> {
+  const params = new URLSearchParams();
+  appendListImageParams(params, query, options);
   const qs = params.toString();
   return fetchJson<ImageRecord[]>(apiPath(qs ? `/list?${qs}` : '/list'));
+}
+
+export function listImagesPage(query = '', options: ListImagesPageOptions): Promise<ListImagesPage> {
+  const params = new URLSearchParams();
+  appendListImageParams(params, query, options);
+  params.set('limit', String(options.limit));
+  if (options.cursor) params.set('cursor', options.cursor);
+  return fetchJson<ListImagesPage>(apiPath(`/list?${params.toString()}`));
 }
 
 export function fetchImage(key: string): Promise<ImageRecord> {

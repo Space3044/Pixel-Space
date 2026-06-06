@@ -5,17 +5,20 @@ import AppShell from '@/shared/ui/AppShell.vue';
 import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from './image.types';
 import { imageSortOptions, sortImagesByMode, type ImageSortMode } from './image-sort';
-import { listImages } from './images.api';
+import { listImagesPage } from './images.api';
 import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
 import FolderPickerPopover from './FolderPickerPopover.vue';
 
 const ImageLightbox = defineAsyncComponent(() => import('./ImageLightbox.vue'));
+const GALLERY_PAGE_SIZE = 48;
 
 const images = ref<ImageRecord[]>([]);
 const loading = ref(true);
+const loadingMore = ref(false);
 const loadError = ref<string | null>(null);
 const folderLoadError = ref<string | null>(null);
 const searchQuery = ref('');
+const nextCursor = ref<string | null>(null);
 
 const sortMode = ref<ImageSortMode>('created-desc');
 
@@ -32,10 +35,13 @@ const containerWidth = ref(0);
 const lightboxOpen = ref(false);
 const lightboxImage = ref<ImageRecord | null>(null);
 
+const hasMore = computed(() => nextCursor.value !== null);
+const countLabel = computed(() => `${images.value.length}${hasMore.value ? '+' : ''}`);
+
 const resultLabel = computed(() => {
   if (loading.value) return '同步中';
-  if (searchQuery.value.trim()) return `${images.value.length} 个结果`;
-  return `${images.value.length} 张图片`;
+  if (searchQuery.value.trim()) return `${countLabel.value} 个结果`;
+  return `${countLabel.value} 张图片`;
 });
 
 const displayImages = computed<ImageRecord[]>(() => sortImagesByMode(images.value, sortMode.value));
@@ -64,13 +70,36 @@ const folderFilterToOptions = () => {
 const loadImages = async () => {
   loading.value = true;
   loadError.value = null;
+  nextCursor.value = null;
   try {
     const folderId = folderFilterToOptions();
-    images.value = await listImages(searchQuery.value, { folderId });
+    const page = await listImagesPage(searchQuery.value, { folderId, limit: GALLERY_PAGE_SIZE });
+    images.value = page.items;
+    nextCursor.value = page.nextCursor;
   } catch (e) {
     loadError.value = (e as Error).message;
   } finally {
     loading.value = false;
+  }
+};
+
+const loadMoreImages = async () => {
+  if (!nextCursor.value || loading.value || loadingMore.value) return;
+  loadingMore.value = true;
+  loadError.value = null;
+  try {
+    const folderId = folderFilterToOptions();
+    const page = await listImagesPage(searchQuery.value, {
+      folderId,
+      limit: GALLERY_PAGE_SIZE,
+      cursor: nextCursor.value,
+    });
+    images.value = [...images.value, ...page.items];
+    nextCursor.value = page.nextCursor;
+  } catch (e) {
+    loadError.value = (e as Error).message;
+  } finally {
+    loadingMore.value = false;
   }
 };
 
@@ -213,6 +242,16 @@ const clearSearch = async () => {
       <p v-if="loading" class="px-1 text-sm text-slate-500">加载中…</p>
       <p v-else-if="loadError" class="px-1 text-sm text-rose-400">加载失败：{{ loadError }}</p>
       <p v-else-if="images.length === 0" class="px-1 text-sm text-slate-500">还没有公开图片。</p>
+      <div v-if="hasMore && !loadError" class="load-more-row">
+        <button
+          type="button"
+          class="load-more-button"
+          :disabled="loading || loadingMore"
+          @click="loadMoreImages"
+        >
+          {{ loadingMore ? '加载中…' : '加载更多' }}
+        </button>
+      </div>
     </section>
 
     <ImageLightbox
@@ -340,6 +379,34 @@ const clearSearch = async () => {
 .gallery-search-button {
   background: rgba(53, 243, 255, 0.1);
   color: rgb(165, 243, 252);
+}
+
+.load-more-row {
+  display: flex;
+  justify-content: center;
+  padding: 0.25rem 0 1rem;
+}
+
+.load-more-button {
+  min-width: 9rem;
+  height: 36px;
+  border: 1px solid rgba(53, 243, 255, 0.22);
+  border-radius: 6px;
+  background: rgba(53, 243, 255, 0.08);
+  color: rgb(165, 243, 252);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.load-more-button:hover:not(:disabled) {
+  border-color: rgba(53, 243, 255, 0.62);
+  color: white;
+}
+
+.load-more-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 @media (max-width: 900px) {
