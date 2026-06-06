@@ -96,7 +96,7 @@ test('upload footer uses an upload action label instead of debug FormData copy',
 });
 
 test('upload page calls the real upload API instead of console-only FormData logging', () => {
-  assert.match(view, /import\s+\{\s*uploadImage\s*\}\s+from\s+'\.\/upload\.api'/);
+  assert.match(view, /import\s+\{\s*retryTelegramArchive,\s*uploadImage\s*\}\s+from\s+'\.\/upload\.api'/);
   assert.match(view, /await\s+uploadImage\(formData\)/);
   assert.doesNotMatch(view, /console\.group|console\.log|console\.groupEnd/);
 });
@@ -107,6 +107,38 @@ test('upload page stays on the upload screen and stores results on each queue en
   assert.match(view, /entry\.uploadResult\s*=\s*record/);
   assert.match(view, /entry\.uploadResult\s*=\s*existing/);
   assert.match(view, /doneEntries\s*=\s*computed/);
+});
+
+test('upload page surfaces Telegram archive status after fast upload responses', () => {
+  assert.match(view, /import\s+\{\s*checkImageHash,\s*fetchImage\s*\}\s+from\s+'@\/features\/images\/images\.api'/);
+  assert.match(view, /const\s+TELEGRAM_ARCHIVE_POLL_ATTEMPTS\s*=\s*60/);
+  assert.match(view, /const\s+watchTelegramArchive\s*=\s*async\s*\(entry:\s*UploadEntry,\s*key:\s*string\)/);
+  assert.match(view, /latest\.tg_status/);
+  assert.match(view, /entry\.uploadResult\s*=\s*\{\s*\.\.\.entry\.uploadResult,\s*tg_status:\s*latest\.tg_status\s*\}/);
+  assert.match(view, /void\s+watchTelegramArchive\(entry,\s*record\.key\)/);
+  assert.match(view, /archiveStatusLabel\(currentEntry\)/);
+  assert.match(view, /已上传，原图归档中/);
+  assert.match(view, /已上传，原图已归档/);
+  assert.match(view, /已上传，原图归档失败/);
+  assert.match(view, /归档中/);
+  assert.match(view, /已归档/);
+});
+
+test('upload page keeps Telegram archive polling alive for slow archive results', () => {
+  assert.match(view, /const\s+TELEGRAM_ARCHIVE_POLL_ATTEMPTS\s*=\s*60/);
+  assert.doesNotMatch(view, /catch\s*\{\s*return;\s*\}/);
+  assert.match(view, /catch\s*\{\s*continue;\s*\}/);
+});
+
+test('upload page can retry failed Telegram archive with the local original file', () => {
+  assert.match(view, /archiveRetrying:\s*boolean/);
+  assert.match(view, /archiveRetryError:\s*string\s*\|\s*null/);
+  assert.match(view, /const\s+retryArchiveForCurrent\s*=\s*async\s*\(\)/);
+  assert.match(view, /await\s+retryTelegramArchive\(entry\.uploadResult\.key,\s*entry\.file\)/);
+  assert.match(view, /void\s+watchTelegramArchive\(entry,\s*record\.key\)/);
+  assert.match(view, /重试归档/);
+  assert.match(view, /archive-retry-button/);
+  assert.match(view, /archiveRetryError/);
 });
 
 test('upload page submits compressed image dimensions with the form data', () => {
@@ -134,6 +166,30 @@ test('upload page runs AI preview after compression and keeps fields editable', 
   assert.doesNotMatch(view, /v-model="meta\.ocr_text"/);
   assert.doesNotMatch(view, /<span class="field-label">OCR<\/span>/);
   assert.match(view, /entry\.meta\.ai_status\s*=\s*'done'/);
+});
+
+test('upload page limits processing AI and upload concurrency instead of serializing whole batches', () => {
+  assert.match(view, /const\s+PROCESS_CONCURRENCY\s*=\s*2/);
+  assert.match(view, /const\s+AI_CONCURRENCY\s*=\s*2/);
+  assert.match(view, /const\s+UPLOAD_CONCURRENCY\s*=\s*2/);
+  assert.match(view, /let\s+processWorkers\s*=\s*0/);
+  assert.match(view, /processWorkers\s*<\s*PROCESS_CONCURRENCY/);
+  assert.match(view, /let\s+aiWorkers\s*=\s*0/);
+  assert.match(view, /aiWorkers\s*<\s*AI_CONCURRENCY/);
+  assert.match(view, /aiQueue\.some\(\(queued\)\s*=>\s*queued\.id\s*===\s*entry\.id\)/);
+  assert.match(view, /runConcurrentEntries\(uploadCandidates,\s*UPLOAD_CONCURRENCY,\s*uploadEntry\)/);
+  assert.doesNotMatch(view, /for\s*\(const entry of entries\.value\)\s*\{\s*if\s*\(entry\.status !== 'ready'\) continue;\s*await uploadEntry\(entry\);/);
+});
+
+test('upload page sends a smaller derived image to AI preview', () => {
+  assert.match(view, /const\s+AI_PREVIEW_MAX_EDGE\s*=\s*1280/);
+  assert.match(view, /const\s+AI_PREVIEW_RECOMPRESS_BYTES\s*=\s*768\s*\*\s*1024/);
+  assert.match(view, /aiPreviewFile:\s*File\s*\|\s*null/);
+  assert.match(view, /const\s+prepareAiPreviewFile\s*=\s*async\s*\(file:\s*File\):\s*Promise<File>/);
+  assert.match(view, /maxWidthOrHeight:\s*AI_PREVIEW_MAX_EDGE/);
+  assert.match(view, /initialQuality:\s*0\.72/);
+  assert.match(view, /entry\.aiPreviewFile\s*=\s*aiImage/);
+  assert.match(view, /previewAiAnnotation\(aiImage\)/);
 });
 
 test('upload duplicate check failure is not silently treated as a new image', () => {

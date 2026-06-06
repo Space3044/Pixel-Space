@@ -23,6 +23,7 @@ export interface ImageRecord {
   color_palette_json: string | null;
   composition: string | null;
   ai_status: string;
+  tg_status: string;
   created_at: string;
   updated_at: string;
   is_public: number;

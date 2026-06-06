@@ -22,6 +22,7 @@ for (const path of [
   './stats-api.test.mjs',
   './telegram.test.mjs',
   './upload-api.test.mjs',
+  './archive-retry-api.test.mjs',
   './original-api.test.mjs',
   './download-grants-api.test.mjs',
   './amap-config-api.test.mjs',
@@ -43,6 +44,7 @@ for (const path of [
   './world-boundary-globe.test.mjs',
   './footprints-view.test.mjs',
   './redundancy-cleanup.test.mjs',
+  './progress-ui.test.mjs',
 ]) {
   await import(path);
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
+import LoadingState from '@/shared/ui/LoadingState.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { listImages } from '@/features/images/images.api';
 import { groupFootprints, type FootprintGroup } from './footprint';
@@ -90,12 +91,8 @@ onMounted(() => {
         </div>
       </header>
 
-      <div v-if="loading" class="page-state cyber-panel">
-        正在加载旅行足迹…
-      </div>
-      <div v-else-if="loadError" class="page-state is-error cyber-panel">
-        加载失败：{{ loadError }}
-      </div>
+      <LoadingState v-if="loading" title="正在加载旅行足迹" message="同步足迹地图数据" />
+      <LoadingState v-else-if="loadError" title="旅行足迹加载失败" :error="loadError" />
 
       <div class="stacked-map-layout">
         <div class="dual-map-grid">

@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import justifiedLayout from 'justified-layout';
 import AppShell from '@/shared/ui/AppShell.vue';
+import LoadingState from '@/shared/ui/LoadingState.vue';
 import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from './image.types';
 import { imageSortOptions, sortImagesByMode, type ImageSortMode } from './image-sort';
@@ -239,8 +240,8 @@ const clearSearch = async () => {
       </div>
 
       <p v-if="folderLoadError" class="px-1 text-sm text-rose-400">文件夹加载失败：{{ folderLoadError }}</p>
-      <p v-if="loading" class="px-1 text-sm text-slate-500">加载中…</p>
-      <p v-else-if="loadError" class="px-1 text-sm text-rose-400">加载失败：{{ loadError }}</p>
+      <LoadingState v-if="loading" title="正在加载图库" message="同步图片列表" />
+      <LoadingState v-else-if="loadError" title="图库加载失败" :error="loadError" />
       <p v-else-if="images.length === 0" class="px-1 text-sm text-slate-500">还没有公开图片。</p>
       <div v-if="hasMore && !loadError" class="load-more-row">
         <button

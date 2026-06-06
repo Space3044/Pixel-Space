@@ -27,6 +27,7 @@ export interface ImageRecord {
   color_palette_json: string | null;
   composition: string | null;
   ai_status: string;
+  tg_status: string;
   created_at: string;
   updated_at: string;
   is_public: number;
@@ -35,7 +36,7 @@ export interface ImageRecord {
 }
 
 export const IMAGE_SELECT_COLUMNS =
-  'key, title, caption, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, location_region, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, created_at, updated_at, is_public, location_public, folder_id';
+  'key, title, caption, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, location_region, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, tg_status, created_at, updated_at, is_public, location_public, folder_id';
 
 // D1 表里的原始行形状（只声明 list / detail 接口会用到的列）。
 export interface ImageRow {
@@ -62,6 +63,7 @@ export interface ImageRow {
   color_palette_json: string | null;
   composition: string | null;
   ai_status: string;
+  tg_status: string;
   created_at: string;
   updated_at: string;
   is_public: number;
@@ -135,6 +137,7 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     color_palette_json: row.color_palette_json,
     composition: row.composition,
     ai_status: row.ai_status,
+    tg_status: row.tg_status,
     created_at: normalizeD1UtcTimestamp(row.created_at),
     updated_at: normalizeD1UtcTimestamp(row.updated_at),
     is_public: row.is_public,

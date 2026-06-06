@@ -4,23 +4,31 @@ import imageCompression from 'browser-image-compression';
 import exifr from 'exifr';
 
 import AppShell from '@/shared/ui/AppShell.vue';
+import TaskProgress from '@/shared/ui/TaskProgress.vue';
 import LocationSearch from '@/features/images/LocationSearch.vue';
 import FolderPickerPopover from '@/features/images/FolderPickerPopover.vue';
 import { fetchFolders, type FolderRecord } from '@/features/library/library.api';
 import { reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult } from '@/features/images/geocode.api';
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
-import { checkImageHash } from '@/features/images/images.api';
+import { checkImageHash, fetchImage } from '@/features/images/images.api';
 import type { MapRegion } from './map-coordinate';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter } from './pick-map';
 import { previewAiAnnotation } from './ai-preview.api';
-import { uploadImage } from './upload.api';
+import { retryTelegramArchive, uploadImage } from './upload.api';
 import { buildUploadFormData } from './upload-form';
 import type { UploadDimensions, UploadExif, UploadMeta } from './upload.types';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 const MAX_EDGE = 2048;
+const AI_PREVIEW_MAX_EDGE = 1280;
+const AI_PREVIEW_RECOMPRESS_BYTES = 768 * 1024;
+const PROCESS_CONCURRENCY = 2;
+const AI_CONCURRENCY = 2;
+const UPLOAD_CONCURRENCY = 2;
+const TELEGRAM_ARCHIVE_POLL_ATTEMPTS = 60;
+const TELEGRAM_ARCHIVE_POLL_INTERVAL_MS = 1200;
 
 type EntryStatus = 'processing' | 'ready' | 'uploading' | 'done' | 'error';
 type AiStatus = 'idle' | 'pending' | 'done' | 'failed';
@@ -33,6 +41,7 @@ interface UploadEntry {
   previewObjectUrl: string | null;
   compressedFile: File | null;
   compressedDimensions: UploadDimensions | null;
+  aiPreviewFile: File | null;
   exif: UploadExif;
   meta: UploadMeta;
   status: EntryStatus;
@@ -41,6 +50,8 @@ interface UploadEntry {
   aiError: string | null;
   aiRequestId: number;
   uploadResult: ImageRecord | null;
+  archiveRetrying: boolean;
+  archiveRetryError: string | null;
   duplicate: boolean;
 }
 
@@ -85,6 +96,7 @@ const createEntry = (file: File): UploadEntry => {
     previewObjectUrl,
     compressedFile: null,
     compressedDimensions: null,
+    aiPreviewFile: null,
     exif: emptyExif(),
     meta: createMeta(file),
     status: 'processing',
@@ -93,6 +105,8 @@ const createEntry = (file: File): UploadEntry => {
     aiError: null,
     aiRequestId: 0,
     uploadResult: null,
+    archiveRetrying: false,
+    archiveRetryError: null,
     duplicate: false,
   };
 };
@@ -126,6 +140,7 @@ const emptyEntry = ref<UploadEntry>({
   previewObjectUrl: null,
   compressedFile: null,
   compressedDimensions: null,
+  aiPreviewFile: null,
   exif: emptyExif(),
   meta: createMeta(new File([], '')),
   status: 'ready',
@@ -134,6 +149,8 @@ const emptyEntry = ref<UploadEntry>({
   aiError: null,
   aiRequestId: 0,
   uploadResult: null,
+  archiveRetrying: false,
+  archiveRetryError: null,
   duplicate: false,
 });
 
@@ -179,6 +196,30 @@ const statusVariant = computed<'is-idle' | 'is-busy' | 'is-ok' | 'is-error' | 'i
   return 'is-idle';
 });
 
+const uploadTaskTotal = computed(() => {
+  const uploadingCount = entries.value.filter((entry) => entry.status === 'uploading').length;
+  return Math.max(1, readyEntries.value.length + uploadingCount + doneEntries.value.length);
+});
+
+const taskProgressMax = computed(() => (isBatchUploading.value ? uploadTaskTotal.value : Math.max(1, entries.value.length)));
+
+const taskProgressValue = computed<number | null>(() => {
+  if (globalError.value) return null;
+  if (isBatchUploading.value) return doneEntries.value.length;
+  if (processingCount.value > 0) return entries.value.length - processingCount.value;
+  if (hasEntries.value && doneEntries.value.length === entries.value.length) return entries.value.length;
+  if (canSubmit.value) return readyEntries.value.length;
+  return 0;
+});
+
+const taskProgressStatus = computed<'idle' | 'loading' | 'success' | 'error'>(() => {
+  if (globalError.value) return 'error';
+  if (isBatchUploading.value || processingCount.value > 0) return 'loading';
+  if (hasEntries.value && doneEntries.value.length === entries.value.length) return 'success';
+  if (canSubmit.value) return 'loading';
+  return 'idle';
+});
+
 const display = (value: string | number | null): string => {
   if (value === null || value === '') return '--';
   return String(value);
@@ -187,6 +228,36 @@ const display = (value: string | number | null): string => {
 const formatFocalLength = (value: number | null): string => {
   if (value === null) return '--';
   return `${Number(value.toFixed(2))} mm`;
+};
+
+const archiveStatusLabel = (entry: UploadEntry): string => {
+  if (entry.archiveRetrying) return '正在重试原图归档';
+  if (entry.uploadResult?.tg_status === 'pending') return '已上传，原图归档中';
+  if (entry.uploadResult?.tg_status === 'done') return '已上传，原图已归档';
+  if (entry.uploadResult?.tg_status === 'failed') return '已上传，原图归档失败';
+  return '已上传';
+};
+
+const archiveStatusClass = (entry: UploadEntry): string => {
+  if (entry.archiveRetrying) return 'preview-busy';
+  if (entry.uploadResult?.tg_status === 'failed') return 'preview-error';
+  if (entry.uploadResult?.tg_status === 'pending') return 'preview-busy';
+  return 'preview-ok';
+};
+
+const archiveThumbLabel = (entry: UploadEntry): string => {
+  if (entry.archiveRetrying) return '重试中';
+  if (entry.uploadResult?.tg_status === 'pending') return '归档中';
+  if (entry.uploadResult?.tg_status === 'done') return '已归档';
+  if (entry.uploadResult?.tg_status === 'failed') return '归档失败';
+  return '已上传';
+};
+
+const archiveThumbClass = (entry: UploadEntry): string => {
+  if (entry.archiveRetrying) return 'is-busy';
+  if (entry.uploadResult?.tg_status === 'failed') return 'is-error';
+  if (entry.uploadResult?.tg_status === 'pending') return 'is-busy';
+  return 'is-ok';
 };
 
 const releaseEntryPreview = (entry: UploadEntry) => {
@@ -313,6 +384,23 @@ const compressToWebp = async (file: File): Promise<File> => {
   return new File([compressed], outputName, { type: 'image/webp', lastModified: Date.now() });
 };
 
+const prepareAiPreviewFile = async (file: File): Promise<File> => {
+  if (file.size <= AI_PREVIEW_RECOMPRESS_BYTES) return file;
+
+  const compressed = await imageCompression(file, {
+    maxWidthOrHeight: AI_PREVIEW_MAX_EDGE,
+    useWebWorker: true,
+    fileType: 'image/webp',
+    initialQuality: 0.72,
+    preserveExif: false,
+  });
+
+  if (compressed.size >= file.size) return file;
+
+  const outputName = file.name.replace(/\.[^.]+$/, '.ai.webp');
+  return new File([compressed], outputName, { type: 'image/webp', lastModified: Date.now() });
+};
+
 const sha256HexFromFile = async (file: File): Promise<string> => {
   const buffer = await file.arrayBuffer();
   const digest = await crypto.subtle.digest('SHA-256', buffer);
@@ -344,6 +432,32 @@ const readImageDimensions = (file: File): Promise<UploadDimensions> =>
     image.src = objectUrl;
   });
 
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
+const watchTelegramArchive = async (entry: UploadEntry, key: string) => {
+  for (let attempt = 0; attempt < TELEGRAM_ARCHIVE_POLL_ATTEMPTS; attempt += 1) {
+    if (!entries.value.some((live) => live.id === entry.id)) return;
+    if (!entry.uploadResult || entry.uploadResult.key !== key) return;
+    if (entry.uploadResult.tg_status !== 'pending') return;
+
+    await delay(TELEGRAM_ARCHIVE_POLL_INTERVAL_MS);
+
+    try {
+      const latest = await fetchImage(key);
+      if (!entries.value.some((live) => live.id === entry.id)) return;
+      if (!entry.uploadResult || entry.uploadResult.key !== key) return;
+
+      entry.uploadResult = { ...entry.uploadResult, tg_status: latest.tg_status };
+      if (latest.tg_status !== 'pending') return;
+    } catch {
+      continue;
+    }
+  }
+};
+
 const runAiPreview = async (entry: UploadEntry) => {
   const compressed = entry.compressedFile;
   if (!compressed) return;
@@ -353,7 +467,11 @@ const runAiPreview = async (entry: UploadEntry) => {
   entry.meta.ai_status = 'pending';
 
   try {
-    const result = await previewAiAnnotation(compressed);
+    const aiImage = entry.aiPreviewFile ?? await prepareAiPreviewFile(compressed);
+    if (requestId !== entry.aiRequestId) return;
+    entry.aiPreviewFile = aiImage;
+
+    const result = await previewAiAnnotation(aiImage);
     if (requestId !== entry.aiRequestId) return;
 
     entry.meta.title = result.title || entry.meta.title;
@@ -410,11 +528,11 @@ const processEntry = async (entry: UploadEntry) => {
 };
 
 const processQueue: UploadEntry[] = [];
-let processBusy = false;
+let processWorkers = 0;
 
-const runProcessLoop = async () => {
-  if (processBusy) return;
-  processBusy = true;
+const runProcessWorker = async () => {
+  if (processWorkers >= PROCESS_CONCURRENCY) return;
+  processWorkers += 1;
   try {
     while (processQueue.length > 0) {
       const queued = processQueue.shift()!;
@@ -423,21 +541,28 @@ const runProcessLoop = async () => {
       await processEntry(live);
     }
   } finally {
-    processBusy = false;
+    processWorkers -= 1;
+    if (processQueue.length > 0) pumpProcessQueue();
+  }
+};
+
+const pumpProcessQueue = () => {
+  while (processWorkers < PROCESS_CONCURRENCY && processQueue.length > 0) {
+    void runProcessWorker();
   }
 };
 
 const enqueueProcess = (entry: UploadEntry) => {
   processQueue.push(entry);
-  void runProcessLoop();
+  pumpProcessQueue();
 };
 
 const aiQueue: UploadEntry[] = [];
-let aiBusy = false;
+let aiWorkers = 0;
 
-const runAiLoop = async () => {
-  if (aiBusy) return;
-  aiBusy = true;
+const runAiWorker = async () => {
+  if (aiWorkers >= AI_CONCURRENCY) return;
+  aiWorkers += 1;
   try {
     while (aiQueue.length > 0) {
       const queued = aiQueue.shift()!;
@@ -446,13 +571,22 @@ const runAiLoop = async () => {
       await runAiPreview(live);
     }
   } finally {
-    aiBusy = false;
+    aiWorkers -= 1;
+    if (aiQueue.length > 0) pumpAiQueue();
+  }
+};
+
+const pumpAiQueue = () => {
+  while (aiWorkers < AI_CONCURRENCY && aiQueue.length > 0) {
+    void runAiWorker();
   }
 };
 
 const enqueueAi = (entry: UploadEntry) => {
+  if (entry.aiStatus === 'pending') return;
+  if (aiQueue.some((queued) => queued.id === entry.id)) return;
   aiQueue.push(entry);
-  void runAiLoop();
+  pumpAiQueue();
 };
 
 const addFiles = (files: File[]) => {
@@ -587,10 +721,50 @@ const uploadEntry = async (entry: UploadEntry) => {
     const record = await uploadImage(formData);
     entry.uploadResult = record;
     entry.status = 'done';
+    if (record.tg_status === 'pending') void watchTelegramArchive(entry, record.key);
   } catch (error) {
     entry.errorMessage = (error as Error).message || '上传失败。';
     entry.status = 'error';
   }
+};
+
+const retryArchiveForCurrent = async () => {
+  const entry = currentEntry.value;
+  if (!entry?.uploadResult || entry.uploadResult.tg_status !== 'failed' || entry.archiveRetrying) return;
+
+  entry.archiveRetrying = true;
+  entry.archiveRetryError = null;
+  try {
+    const record = await retryTelegramArchive(entry.uploadResult.key, entry.file);
+    if (!entries.value.some((live) => live.id === entry.id)) return;
+
+    entry.uploadResult = record;
+    if (record.tg_status === 'pending') void watchTelegramArchive(entry, record.key);
+  } catch (error) {
+    entry.archiveRetryError = (error as Error).message || '归档重试失败。';
+  } finally {
+    entry.archiveRetrying = false;
+  }
+};
+
+const runConcurrentEntries = async (
+  uploadCandidates: UploadEntry[],
+  concurrency: number,
+  worker: (entry: UploadEntry) => Promise<void>,
+) => {
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, uploadCandidates.length) },
+    async () => {
+      while (nextIndex < uploadCandidates.length) {
+        const entry = uploadCandidates[nextIndex];
+        nextIndex += 1;
+        await worker(entry);
+      }
+    },
+  );
+
+  await Promise.all(workers);
 };
 
 const submitUploadAll = async () => {
@@ -598,10 +772,8 @@ const submitUploadAll = async () => {
   isBatchUploading.value = true;
   globalError.value = null;
   try {
-    for (const entry of entries.value) {
-      if (entry.status !== 'ready') continue;
-      await uploadEntry(entry);
-    }
+    const uploadCandidates = entries.value.filter((entry) => entry.status === 'ready');
+    await runConcurrentEntries(uploadCandidates, UPLOAD_CONCURRENCY, uploadEntry);
   } finally {
     isBatchUploading.value = false;
   }
@@ -722,8 +894,14 @@ onBeforeUnmount(() => {
             </div>
 
             <aside class="action-pill" :class="statusVariant">
-              <span class="state-dot" aria-hidden="true" />
-              <span class="status-text">{{ statusLabel }}</span>
+              <TaskProgress
+                class="action-progress"
+                :label="statusLabel"
+                :value="taskProgressValue"
+                :max="taskProgressMax"
+                :status="taskProgressStatus"
+                compact
+              />
               <button
                 type="button"
                 class="cyber-button submit-button"
@@ -780,7 +958,13 @@ onBeforeUnmount(() => {
                   <span v-if="entry.status === 'processing'" class="thumb-badge is-busy">处理中</span>
                   <span v-else-if="entry.status === 'uploading'" class="thumb-badge is-busy">上传中</span>
                   <span v-else-if="entry.duplicate" class="thumb-badge is-dup">已存在</span>
-                  <span v-else-if="entry.status === 'done'" class="thumb-badge is-ok">已上传</span>
+                  <span
+                    v-else-if="entry.status === 'done'"
+                    class="thumb-badge"
+                    :class="archiveThumbClass(entry)"
+                  >
+                    {{ archiveThumbLabel(entry) }}
+                  </span>
                   <span v-else-if="entry.status === 'error'" class="thumb-badge is-error">失败</span>
                 </button>
                 <button
@@ -828,7 +1012,23 @@ onBeforeUnmount(() => {
                 <span v-if="currentEntry.status === 'processing'" class="preview-busy">处理中</span>
                 <span v-else-if="currentEntry.status === 'uploading'" class="preview-busy">上传中</span>
                 <span v-else-if="currentEntry.duplicate" class="preview-dup">已存在，跳过上传</span>
-                <span v-else-if="currentEntry.status === 'done'" class="preview-ok">已上传</span>
+                <span
+                  v-else-if="currentEntry.status === 'done'"
+                  class="preview-status-group"
+                >
+                  <span :class="archiveStatusClass(currentEntry)">
+                    {{ archiveStatusLabel(currentEntry) }}
+                  </span>
+                  <button
+                    v-if="currentEntry.uploadResult?.tg_status === 'failed'"
+                    type="button"
+                    class="archive-retry-button"
+                    :disabled="currentEntry.archiveRetrying"
+                    @click="retryArchiveForCurrent"
+                  >
+                    {{ currentEntry.archiveRetrying ? '重试中' : '重试归档' }}
+                  </button>
+                </span>
                 <span v-else-if="currentEntry.status === 'error'" class="preview-error">{{ currentEntry.errorMessage || '处理失败' }}</span>
                 <span v-else-if="currentEntry.compressedFile" class="preview-ok">已压缩</span>
               </figcaption>
@@ -864,6 +1064,9 @@ onBeforeUnmount(() => {
                   <dd class="font-mono">{{ compressedSize }}</dd>
                 </div>
               </dl>
+              <p v-if="currentEntry?.archiveRetryError" class="archive-retry-error">
+                {{ currentEntry.archiveRetryError }}
+              </p>
             </section>
 
             <section class="meta-section">
@@ -1385,45 +1588,9 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(16px) saturate(160%);
 }
 
-.action-pill .state-dot {
-  flex-shrink: 0;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: rgba(148, 163, 184, 0.6);
-  box-shadow: 0 0 8px rgba(148, 163, 184, 0.4);
-}
-.action-pill.is-busy .state-dot {
-  background: rgb(53, 243, 255);
-  box-shadow: 0 0 10px rgba(53, 243, 255, 0.55);
-  animation: pulse-dot 1.4s ease-in-out infinite;
-}
-.action-pill.is-pending .state-dot {
-  background: rgb(255, 232, 156);
-  box-shadow: 0 0 10px rgba(255, 232, 156, 0.5);
-}
-.action-pill.is-ok .state-dot {
-  background: rgb(132, 247, 153);
-  box-shadow: 0 0 10px rgba(132, 247, 153, 0.5);
-}
-.action-pill.is-error .state-dot {
-  background: rgb(248, 113, 113);
-  box-shadow: 0 0 10px rgba(248, 113, 113, 0.5);
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.action-pill .status-text {
+.action-progress {
   flex: 1;
   min-width: 0;
-  font-size: 0.78rem;
-  color: rgb(203, 213, 225);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .submit-button {
@@ -1729,6 +1896,12 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   color: rgb(226, 232, 240);
 }
+.preview-status-group {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
 .preview-busy {
   color: rgb(53, 243, 255);
 }
@@ -1740,6 +1913,36 @@ onBeforeUnmount(() => {
 }
 .preview-error {
   color: rgb(248, 113, 113);
+}
+
+.archive-retry-button {
+  flex-shrink: 0;
+  min-height: 1.45rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(248, 113, 113, 0.34);
+  background: rgba(248, 113, 113, 0.1);
+  color: rgb(254, 205, 211);
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.archive-retry-button:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.64);
+  background: rgba(248, 113, 113, 0.16);
+  color: white;
+}
+
+.archive-retry-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.archive-retry-error {
+  margin-top: 0.55rem;
+  color: rgb(248, 113, 113);
+  font-size: 11px;
 }
 
 .preview-placeholder {

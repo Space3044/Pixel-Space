@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
+import LoadingState from '@/shared/ui/LoadingState.vue';
 import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { imageSortOptions, sortImagesByMode, type ImageSortMode } from '@/features/images/image-sort';
@@ -581,8 +582,8 @@ onMounted(refreshAll);
 
       <p v-if="actionMessage" class="action-toast">{{ actionMessage }}</p>
 
-      <div v-if="loading" class="state-card">加载中…</div>
-      <div v-else-if="loadError" class="state-card is-error">加载失败：{{ loadError }}</div>
+      <LoadingState v-if="loading" title="正在加载控制台" message="同步文件夹、图片和授权信息" />
+      <LoadingState v-else-if="loadError" title="控制台加载失败" :error="loadError" />
 
       <template v-else>
         <DownloadGrantManager

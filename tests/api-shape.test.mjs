@@ -38,6 +38,7 @@ const EXPECTED_RECORD_KEYS = [
   'original_filename',
   'public_url',
   'tags_json',
+  'tg_status',
   'title',
   'updated_at',
   'width',
@@ -67,6 +68,7 @@ const sampleRow = {
   composition: '中心构图',
   search_content: null,
   ai_status: 'pending',
+  tg_status: 'pending',
   created_at: '2026-05-20 10:11:12',
   updated_at: '2026-05-21 12:13:14',
   is_public: 1,
@@ -120,6 +122,7 @@ await test('GET /api/list returns ImageRecord[] with expected field set', async 
   assert.equal(data[0].exif_camera, 'Nikon Zf');
   assert.equal(data[0].exif_focal_length, 40);
   assert.equal(data[0].ai_status, 'pending');
+  assert.equal(data[0].tg_status, 'pending');
   assert.equal(data[0].created_at, '2026-05-20T10:11:12.000Z');
   assert.equal(data[0].updated_at, '2026-05-21T12:13:14.000Z');
   assert.equal(data[0].is_public, 1);

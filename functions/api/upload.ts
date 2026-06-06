@@ -17,8 +17,8 @@ import {
   stringOrEmpty,
   stringOrNull,
 } from '../_shared/request';
-import { archiveOriginalToTelegram } from '../_shared/telegram';
 import { createImageKey } from '../_shared/keys';
+import { archiveOriginalAfterUpload } from '../_shared/archive';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -61,25 +61,6 @@ const SELECT_SQL =
 
 const SELECT_BY_HASH_SQL =
   `SELECT ${IMAGE_SELECT_COLUMNS} FROM images WHERE hash = ? LIMIT 1`;
-
-const UPDATE_TG_DONE_SQL = `
-UPDATE images
-SET tg_file_id = ?,
-    tg_message_id = ?,
-    tg_chat_id = ?,
-    tg_status = 'done',
-    tg_error = NULL,
-    updated_at = datetime('now')
-WHERE key = ?
-`;
-
-const UPDATE_TG_FAILED_SQL = `
-UPDATE images
-SET tg_status = 'failed',
-    tg_error = ?,
-    updated_at = datetime('now')
-WHERE key = ?
-`;
 
 interface UploadMeta {
   title: string;
@@ -176,28 +157,6 @@ const normalizeDimensions = (raw: Record<string, unknown>): UploadDimensions | n
 const sha256Hex = async (file: File): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
-
-const errorMessage = (error: unknown): string => {
-  if (error instanceof Error && error.message.trim()) return error.message.slice(0, 300);
-  return 'telegram_archive_failed';
-};
-
-const archiveOriginalAfterUpload = async (env: Env, original: File, key: string): Promise<void> => {
-  try {
-    const archive = await archiveOriginalToTelegram({
-      token: env.TG_BOT_TOKEN,
-      chatId: env.TG_CHAT_ID,
-      file: original,
-      key,
-    });
-    await env.DB.prepare(UPDATE_TG_DONE_SQL)
-      .bind(archive.file_id, archive.message_id, archive.chat_id, key)
-      .run();
-  } catch (archiveError) {
-    console.error('Telegram original archive failed', archiveError);
-    await env.DB.prepare(UPDATE_TG_FAILED_SQL).bind(errorMessage(archiveError), key).run();
-  }
 };
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
