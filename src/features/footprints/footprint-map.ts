@@ -1,8 +1,8 @@
 import { loadAmap } from '@/features/upload/amap';
 import type { AMapMap, AMapMarker, AMapNamespace } from '@/features/upload/amap';
 import { mapLngLatFromStored } from '@/features/upload/map-coordinate';
-import { loadMapboxToken, mapboxRasterStyle, maplibregl } from './mapbox';
-import type { MaplibreMap, MaplibreMarker } from './mapbox';
+import { loadMapboxToken, loadMaplibre, mapboxRasterStyle } from './mapbox';
+import type { MaplibreMap, MaplibreMarker, MaplibreNamespace } from './mapbox';
 
 // 两张足迹平面图共用一套交互（标点、选中、缩放滑块），地图源差异收敛到 adapter：
 // 高德管国内（GCJ-02、国内访问快、暗色 grey），Mapbox 管世界（WGS-84、海外详细）。
@@ -121,6 +121,7 @@ const WORLD_FOCUS_ZOOM = 10;
 // Mapbox adapter：MapLibre + dark-v11 栅格，WGS-84 直接用，marker 自动跟随地图。
 export const createWorldAdapter = (): FootprintMapAdapter => {
   let map: MaplibreMap | null = null;
+  let maplibre: MaplibreNamespace | null = null;
   const markers = new Map<string, MaplibreMarker>();
 
   const focus = (lng: number, lat: number, zoom = WORLD_FOCUS_ZOOM) => {
@@ -133,7 +134,9 @@ export const createWorldAdapter = (): FootprintMapAdapter => {
     zoomMax: WORLD_ZOOM_MAX,
     async init(container, onReady, onZoom) {
       const token = await loadMapboxToken();
+      const maplibregl = await loadMaplibre();
       if (map) return;
+      maplibre = maplibregl;
       map = new maplibregl.Map({
         container,
         style: mapboxRasterStyle(token),
@@ -159,7 +162,8 @@ export const createWorldAdapter = (): FootprintMapAdapter => {
         existing.setLngLat([lng, lat]);
         return;
       }
-      const marker = new maplibregl.Marker({ element, anchor: 'center' }).setLngLat([lng, lat]).addTo(map);
+      if (!maplibre) return;
+      const marker = new maplibre.Marker({ element, anchor: 'center' }).setLngLat([lng, lat]).addTo(map);
       markers.set(key, marker);
     },
     removeMarker(key) {
@@ -178,7 +182,8 @@ export const createWorldAdapter = (): FootprintMapAdapter => {
         focus(points[0].lng, points[0].lat);
         return;
       }
-      const bounds = new maplibregl.LngLatBounds();
+      if (!maplibre) return;
+      const bounds = new maplibre.LngLatBounds();
       for (const point of points) bounds.extend([point.lng, point.lat]);
       map.fitBounds(bounds, { padding: 64, maxZoom: 9 });
     },
@@ -193,6 +198,7 @@ export const createWorldAdapter = (): FootprintMapAdapter => {
       markers.clear();
       map?.remove();
       map = null;
+      maplibre = null;
     },
   };
 };

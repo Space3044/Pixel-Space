@@ -1,6 +1,4 @@
-import maplibregl from 'maplibre-gl';
-import type { StyleSpecification } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import type { Map as MaplibreMap, Marker as MaplibreMarker, StyleSpecification } from 'maplibre-gl';
 
 // 足迹页交互地图统一用 Mapbox 栅格瓦片（dark-v11），和 /api/staticmap 静态图同源同风格。
 // 坐标全程 WGS-84，无需 GCJ-02 偏移，marker 与底图天然对齐，海外街道也准。
@@ -8,6 +6,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 const MAPBOX_STYLE_ID = 'mapbox/dark-v11';
 
 let tokenPromise: Promise<string> | null = null;
+let maplibrePromise: Promise<MaplibreNamespace> | null = null;
+
+export type MaplibreNamespace = typeof import('maplibre-gl');
 
 const readMapboxToken = async (): Promise<string> => {
   const response = await fetch('/api/mapbox-config', {
@@ -24,6 +25,14 @@ const readMapboxToken = async (): Promise<string> => {
 export const loadMapboxToken = (): Promise<string> => {
   tokenPromise ??= readMapboxToken();
   return tokenPromise;
+};
+
+export const loadMaplibre = (): Promise<MaplibreNamespace> => {
+  maplibrePromise ??= Promise.all([
+    import('maplibre-gl'),
+    import('maplibre-gl/dist/maplibre-gl.css'),
+  ]).then(([maplibre]) => maplibre);
+  return maplibrePromise;
 };
 
 // dark-v11 栅格瓦片，512 尺寸不加 @2x。单瓦片约 80KB，比 @2x 的 350KB 小四倍多。
@@ -51,5 +60,4 @@ export const mapboxRasterStyle = (token: string): StyleSpecification => ({
   ],
 });
 
-export { maplibregl };
-export type { Map as MaplibreMap, Marker as MaplibreMarker } from 'maplibre-gl';
+export type { MaplibreMap, MaplibreMarker };

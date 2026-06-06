@@ -45,7 +45,9 @@ test('upload picker splits into AMap (domestic) and Mapbox (overseas) maps', () 
   assert.match(pickMap, /loadAmap/);
   assert.match(pickMap, /new amap\.Map/);
   assert.match(pickMap, /amap:\/\/styles\/grey/);
+  assert.match(pickMap, /loadMaplibre/);
   assert.match(pickMap, /loadMapboxToken/);
+  assert.match(pickMap, /const maplibregl = await loadMaplibre\(\)/);
   assert.match(pickMap, /new maplibregl\.Map/);
   assert.match(pickMap, /mapboxRasterStyle/);
 });
@@ -61,8 +63,14 @@ test('footprint page splits into AMap (domestic) and Mapbox (overseas) maps', ()
   assert.match(footprintMap, /new amap\.Map/);
   assert.match(footprintMap, /amap:\/\/styles\//);
   assert.match(footprintMap, /mapLngLatFromStored/);
+  assert.match(footprintMap, /loadMaplibre/);
   assert.match(footprintMap, /loadMapboxToken/);
+  assert.match(footprintMap, /const maplibregl = await loadMaplibre\(\)/);
   assert.match(footprintMap, /new maplibregl\.Map/);
+  assert.doesNotMatch(mapboxLoader, /import maplibregl from 'maplibre-gl'/);
+  assert.match(mapboxLoader, /export const loadMaplibre/);
+  assert.match(mapboxLoader, /import\('maplibre-gl'\)/);
+  assert.match(mapboxLoader, /import\('maplibre-gl\/dist\/maplibre-gl\.css'\)/);
   assert.match(mapboxLoader, /api\.mapbox\.com\/styles\/v1/);
   assert.match(mapboxLoader, /MAPBOX_STYLE_ID = 'mapbox\//);
   assert.match(mapboxLoader, /tileSize: 512/);

@@ -1,7 +1,7 @@
 import { loadAmap } from './amap';
 import type { AMapClickEvent, AMapMap, AMapMarker, AMapNamespace } from './amap';
-import { loadMapboxToken, mapboxRasterStyle, maplibregl } from '@/features/footprints/mapbox';
-import type { MaplibreMap, MaplibreMarker } from '@/features/footprints/mapbox';
+import { loadMapboxToken, loadMaplibre, mapboxRasterStyle } from '@/features/footprints/mapbox';
+import type { MaplibreMap, MaplibreMarker, MaplibreNamespace } from '@/features/footprints/mapbox';
 import { mapLngLatFromStored, storedLngLatFromMap } from './map-coordinate';
 import type { LngLat } from './map-coordinate';
 
@@ -97,12 +97,15 @@ const WORLD_FLAT_ZOOM = 1.4;
 export const createWorldPickAdapter = (): PickMapAdapter => {
   let map: MaplibreMap | null = null;
   let marker: MaplibreMarker | null = null;
+  let maplibre: MaplibreNamespace | null = null;
   let disposed = false;
 
   return {
     async init(container, onReady, onPick) {
       const token = await loadMapboxToken();
+      const maplibregl = await loadMaplibre();
       if (disposed || map) return;
+      maplibre = maplibregl;
       map = new maplibregl.Map({
         container,
         style: mapboxRasterStyle(token),
@@ -129,7 +132,8 @@ export const createWorldPickAdapter = (): PickMapAdapter => {
       }
       const position: [number, number] = [stored.lng, stored.lat];
       if (!marker) {
-        marker = new maplibregl.Marker({ element: createPinElement(), anchor: 'bottom' })
+        if (!maplibre) return;
+        marker = new maplibre.Marker({ element: createPinElement(), anchor: 'bottom' })
           .setLngLat(position)
           .addTo(map);
       } else {
@@ -146,6 +150,7 @@ export const createWorldPickAdapter = (): PickMapAdapter => {
       marker = null;
       map?.remove();
       map = null;
+      maplibre = null;
     },
   };
 };
