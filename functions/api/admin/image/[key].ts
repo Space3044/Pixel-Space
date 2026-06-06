@@ -11,6 +11,7 @@ import {
   stringOrNull,
 } from '../../../_shared/request';
 import { deleteTelegramMessage } from '../../../_shared/telegram';
+import { keyFromRouteParam } from '../../../_shared/keys';
 
 const DETAIL_SQL = `
 SELECT ${IMAGE_SELECT_COLUMNS}
@@ -93,7 +94,8 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
   };
 };
 
-const keyFromParams = (params: EventContext<Env, string, unknown>['params']): string => String(params.key ?? '');
+const keyFromParams = (params: EventContext<Env, string, unknown>['params']): string =>
+  keyFromRouteParam(params.key);
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
   if (!resolveAdmin(request, env)) return unauthorized();

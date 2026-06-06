@@ -19,6 +19,11 @@ interface ImageRow {
 
 const MAX_BATCH = 200;
 
+interface CleanupResult {
+  key: string;
+  r2Deleted: boolean;
+}
+
 const parsePayload = async (request: Request): Promise<DeletePayload | null> => {
   const raw = await parseJsonObject(request);
   if (!raw) return null;
@@ -45,13 +50,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return json({ ok: true, deleted: 0, missing: payload.keys });
     }
 
-    // R2 删主图，Telegram 删消息；失败吞掉单条错误，整体仍然继续清理 D1。
-    await Promise.all(
+    // R2 是图片公开访问的主副本。R2 删除失败时保留 D1 行，避免记录丢失后留下不可追踪对象。
+    const cleanupResults: CleanupResult[] = await Promise.all(
       rows.map(async (row) => {
         try {
           await env.BUCKET.delete(row.key);
         } catch (error) {
           console.error(`R2 delete failed for ${row.key}`, error);
+          return { key: row.key, r2Deleted: false };
         }
         if (row.tg_chat_id && row.tg_message_id) {
           try {
@@ -64,20 +70,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             console.error(`Telegram cleanup failed for ${row.key}`, error);
           }
         }
+        return { key: row.key, r2Deleted: true };
       }),
     );
 
-    const deletedKeys = rows.map((r) => r.key);
-    const deletePlaceholders = deletedKeys.map(() => '?').join(',');
-    await env.DB
-      .prepare(`DELETE FROM images WHERE key IN (${deletePlaceholders})`)
-      .bind(...deletedKeys)
-      .run();
+    const deletedKeys = cleanupResults.filter((result) => result.r2Deleted).map((result) => result.key);
+    const failed = cleanupResults.filter((result) => !result.r2Deleted).map((result) => result.key);
+    if (deletedKeys.length > 0) {
+      const deletePlaceholders = deletedKeys.map(() => '?').join(',');
+      await env.DB
+        .prepare(`DELETE FROM images WHERE key IN (${deletePlaceholders})`)
+        .bind(...deletedKeys)
+        .run();
+    }
 
-    const foundSet = new Set(deletedKeys);
+    const foundSet = new Set(rows.map((r) => r.key));
     const missing = payload.keys.filter((k) => !foundSet.has(k));
 
-    return json({ ok: true, deleted: deletedKeys.length, missing });
+    return json({ ok: failed.length === 0, deleted: deletedKeys.length, missing, failed });
   } catch (error) {
     console.error('POST /api/admin/images/delete failed', error);
     return serverError('images_delete_failed');

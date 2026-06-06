@@ -381,7 +381,7 @@ const handleBatchDelete = async () => {
     const keys = Array.from(selectedKeys.value);
     const previousById = new Map(images.value.map((img) => [img.key, img.folder_id ?? null]));
     const result = await deleteImages({ keys });
-    const deletedSet = new Set(keys.filter((k) => !result.missing.includes(k)));
+    const deletedSet = new Set(keys.filter((k) => !result.missing.includes(k) && !result.failed.includes(k)));
     images.value = images.value.filter((img) => !deletedSet.has(img.key));
     const updateCount = (folderId: string | null, delta: number) => {
       if (!folderId) return;
@@ -391,9 +391,15 @@ const handleBatchDelete = async () => {
     };
     for (const key of deletedSet) updateCount(previousById.get(key) ?? null, -1);
     selectedKeys.value = new Set();
-    actionMessage.value = result.missing.length
-      ? `已删除 ${result.deleted} 张，${result.missing.length} 张未找到`
-      : `已删除 ${result.deleted} 张`;
+    const failedCount = result.failed.length;
+    if (failedCount > 0) {
+      const missingSuffix = result.missing.length ? `，${result.missing.length} 张未找到` : '';
+      actionMessage.value = `已删除 ${result.deleted} 张，${failedCount} 张清理失败，已保留记录${missingSuffix}`;
+    } else {
+      actionMessage.value = result.missing.length
+        ? `已删除 ${result.deleted} 张，${result.missing.length} 张未找到`
+        : `已删除 ${result.deleted} 张`;
+    }
   } catch (error) {
     actionMessage.value = `删除失败：${(error as Error).message}`;
   }

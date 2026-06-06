@@ -27,6 +27,7 @@ interface DeleteImagesResponse {
   ok: boolean;
   deleted: number;
   missing: string[];
+  failed: string[];
 }
 
 export interface AiSettings {

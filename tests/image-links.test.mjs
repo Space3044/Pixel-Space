@@ -86,6 +86,13 @@ test('buildPublicPageUrl trims a trailing slash on origin', () => {
   );
 });
 
+test('buildPublicPageUrl encodes image keys with storage directory separators', () => {
+  assert.equal(
+    buildPublicPageUrl({ key: 'images/abc' }, 'https://imgbed.example.com'),
+    'https://imgbed.example.com/p/images%2Fabc',
+  );
+});
+
 test('buildImageLinkRows centralizes copyable image link rows', () => {
   assert.deepEqual(buildImageLinkRows(sample, 'https://imgbed.example.com'), [
     { label: '图片直链', value: 'https://cdn.example.com/img/abc123.webp' },

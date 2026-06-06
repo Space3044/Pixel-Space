@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { onRequestGet as publicObjectGet } from '../functions/api/public/[key].ts';
+import { onRequestGet as publicObjectGet } from '../functions/api/public/[[key]].ts';
 
 const test = async (name, fn) => {
   try {
@@ -13,11 +13,11 @@ const test = async (name, fn) => {
 
 const makeEnv = (object) => ({
   BUCKET: {
-    get: async (key) => (key === 'cat-key' ? object : null),
+    get: async (key) => (key === 'images/cat-key' ? object : null),
   },
 });
 
-await test('GET /api/public/:key streams the compressed R2 object for local display', async () => {
+await test('GET /api/public/*key streams the compressed R2 object for local display', async () => {
   const env = makeEnv({
     body: new Blob(['webp-bytes'], { type: 'image/webp' }).stream(),
     httpEtag: '"etag-cat"',
@@ -28,8 +28,8 @@ await test('GET /api/public/:key streams the compressed R2 object for local disp
 
   const response = await publicObjectGet({
     env,
-    params: { key: 'cat-key' },
-    request: new Request('http://x/api/public/cat-key'),
+    params: { key: ['images', 'cat-key'] },
+    request: new Request('http://x/api/public/images/cat-key'),
   });
 
   assert.equal(response.status, 200);
@@ -39,11 +39,11 @@ await test('GET /api/public/:key streams the compressed R2 object for local disp
   assert.equal(await response.text(), 'webp-bytes');
 });
 
-await test('GET /api/public/:key returns 404 when R2 object is missing', async () => {
+await test('GET /api/public/*key returns 404 when R2 object is missing', async () => {
   const response = await publicObjectGet({
     env: makeEnv(null),
-    params: { key: 'missing' },
-    request: new Request('http://x/api/public/missing'),
+    params: { key: ['images', 'missing'] },
+    request: new Request('http://x/api/public/images/missing'),
   });
 
   assert.equal(response.status, 404);

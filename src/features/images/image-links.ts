@@ -33,7 +33,7 @@ export function buildHtml(
 }
 
 export function buildPublicPageUrl(image: Pick<ImageRecord, 'key'>, origin: string): string {
-  return `${origin.replace(/\/$/, '')}/p/${image.key}`;
+  return `${origin.replace(/\/$/, '')}/p/${encodeURIComponent(image.key)}`;
 }
 
 export function buildImageLinkRows(

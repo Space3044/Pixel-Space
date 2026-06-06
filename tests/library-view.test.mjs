@@ -135,6 +135,13 @@ test('LibraryView opens the download grant dialog from selected images', () => {
   assert.match(view, /@create="handleCreateDownloadGrant"/);
 });
 
+test('LibraryView reports batch image delete failures when R2 cleanup preserves records', () => {
+  assert.match(api, /failed: string\[\]/);
+  assert.match(view, /const failedCount = result\.failed\.length/);
+  assert.match(view, /清理失败，已保留记录/);
+  assert.match(view, /!result\.failed\.includes\(k\)/);
+});
+
 test('DownloadGrantManager shows codes images expiration editing and delete actions', () => {
   assert.match(grantManager, /defineProps<\{\s*grants: DownloadGrantRecord\[\];\s*loadingId: string \| null;\s*error: string \| null;\s*\}>/);
   assert.match(grantManager, /defineEmits<\{\s*update: \[id: string, expiresAt: string\];\s*delete: \[id: string\];\s*\}>/);

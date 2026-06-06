@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { onRequestDelete, onRequestPatch } from '../functions/api/admin/image/[key].ts';
+import { onRequestPost as batchDeletePost } from '../functions/api/admin/images/delete.ts';
 
 const test = async (name, fn) => {
   try {
@@ -92,6 +93,44 @@ const imageRow = {
   folder_id: null,
   tg_chat_id: '-100123',
   tg_message_id: 88,
+};
+
+const makeBatchDeleteEnv = ({ r2Failures = new Set() } = {}) => {
+  const rows = [
+    { key: 'img_ok', tg_chat_id: null, tg_message_id: null },
+    { key: 'img_fail', tg_chat_id: null, tg_message_id: null },
+  ];
+  const calls = {
+    deletedObjects: [],
+    d1DeleteValues: [],
+  };
+
+  const env = {
+    TG_BOT_TOKEN: 'token-test',
+    BUCKET: {
+      delete: async (key) => {
+        calls.deletedObjects.push(key);
+        if (r2Failures.has(key)) throw new Error(`r2_delete_failed:${key}`);
+      },
+    },
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...values) {
+            return {
+              all: async () => ({ results: rows.filter((row) => values.includes(row.key)) }),
+              run: async () => {
+                if (/delete\s+from\s+images/i.test(sql)) calls.d1DeleteValues.push(values);
+                return { success: true, meta: { changes: values.length } };
+              },
+            };
+          },
+        };
+      },
+    },
+  };
+
+  return { env, calls };
 };
 
 await test('PATCH /api/admin/image/:key updates editable metadata and returns ImageRecord', async () => {
@@ -261,4 +300,32 @@ await test('DELETE /api/admin/image/:key returns 404 when image is missing', asy
   assert.equal(response.status, 404);
   assert.equal(calls.deletedObjects.length, 0);
   assert.equal(calls.deletes.length, 0);
+});
+
+await test('POST /api/admin/images/delete keeps D1 rows for images whose R2 delete fails', async () => {
+  const { env, calls } = makeBatchDeleteEnv({ r2Failures: new Set(['img_fail']) });
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const response = await batchDeletePost({
+      env,
+      params: {},
+      request: new Request('http://localhost/api/admin/images/delete', {
+        method: 'POST',
+        body: JSON.stringify({ keys: ['img_ok', 'img_fail', 'missing'] }),
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      deleted: 1,
+      missing: ['missing'],
+      failed: ['img_fail'],
+    });
+    assert.deepEqual(calls.deletedObjects, ['img_ok', 'img_fail']);
+    assert.deepEqual(calls.d1DeleteValues, [['img_ok']]);
+  } finally {
+    console.error = originalConsoleError;
+  }
 });

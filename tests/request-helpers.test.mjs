@@ -4,6 +4,7 @@ import {
   normalizeOptionalString,
   normalizeStringList,
 } from '../functions/_shared/request.ts';
+import { keyFromRouteParam } from '../functions/_shared/keys.ts';
 
 const test = async (name, fn) => {
   try {
@@ -44,4 +45,9 @@ await test('normalizeOptionalString distinguishes invalid values from empty stri
   assert.equal(normalizeOptionalString(''), null);
   assert.equal(normalizeOptionalString(' folder-id '), 'folder-id');
   assert.equal(normalizeOptionalString(123), undefined);
+});
+
+await test('keyFromRouteParam restores image object keys from encoded and catch-all route params', async () => {
+  assert.equal(keyFromRouteParam('images%2Fabc'), 'images/abc');
+  assert.equal(keyFromRouteParam(['images', 'abc']), 'images/abc');
 });

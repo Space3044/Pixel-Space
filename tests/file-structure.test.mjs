@@ -66,7 +66,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'functions/api/list.ts',
     'functions/api/image/[key].ts',
     'functions/api/upload.ts',
-    'functions/api/public/[key].ts',
+    'functions/api/public/[[key]].ts',
     'functions/api/admin/image/[key].ts',
     'functions/api/admin/download-grants.ts',
     'functions/api/admin/download-grants/[id].ts',

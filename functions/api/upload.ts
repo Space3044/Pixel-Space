@@ -18,6 +18,7 @@ import {
   stringOrNull,
 } from '../_shared/request';
 import { archiveOriginalToTelegram } from '../_shared/telegram';
+import { createImageKey } from '../_shared/keys';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -182,7 +183,25 @@ const errorMessage = (error: unknown): string => {
   return 'telegram_archive_failed';
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+const archiveOriginalAfterUpload = async (env: Env, original: File, key: string): Promise<void> => {
+  try {
+    const archive = await archiveOriginalToTelegram({
+      token: env.TG_BOT_TOKEN,
+      chatId: env.TG_CHAT_ID,
+      file: original,
+      key,
+    });
+    await env.DB.prepare(UPDATE_TG_DONE_SQL)
+      .bind(archive.file_id, archive.message_id, archive.chat_id, key)
+      .run();
+  } catch (archiveError) {
+    console.error('Telegram original archive failed', archiveError);
+    await env.DB.prepare(UPDATE_TG_FAILED_SQL).bind(errorMessage(archiveError), key).run();
+  }
+};
+
+export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { request, env } = context;
   if (!resolveAdmin(request, env)) return unauthorized();
 
   let formData: FormData;
@@ -210,7 +229,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const meta = normalizeMeta(rawMeta);
   const exif = normalizeExif(rawExif);
-  const key = crypto.randomUUID();
+  const key = createImageKey();
   const originalFilename = original.name.trim() || key;
   const hash = await sha256Hex(original);
 
@@ -221,6 +240,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .first<{ id: string }>();
     if (!folderRow) return badRequest('folder_not_found');
   }
+
+  let r2ObjectWritten = false;
+  let d1ImageInserted = false;
 
   try {
     const existing = await env.DB.prepare(SELECT_BY_HASH_SQL).bind(hash).first<ImageRow>();
@@ -233,6 +255,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         contentType: compressed.type,
       },
     });
+    r2ObjectWritten = true;
 
     await env.DB.prepare(INSERT_SQL)
       .bind(
@@ -267,20 +290,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         meta.folder_id,
       )
       .run();
+    d1ImageInserted = true;
 
-    try {
-      const archive = await archiveOriginalToTelegram({
-        token: env.TG_BOT_TOKEN,
-        chatId: env.TG_CHAT_ID,
-        file: original,
-        key,
-      });
-      await env.DB.prepare(UPDATE_TG_DONE_SQL)
-        .bind(archive.file_id, archive.message_id, archive.chat_id, key)
-        .run();
-    } catch (archiveError) {
-      console.error('Telegram original archive failed', archiveError);
-      await env.DB.prepare(UPDATE_TG_FAILED_SQL).bind(errorMessage(archiveError), key).run();
+    const archiveTask = archiveOriginalAfterUpload(env, original, key);
+    if (typeof context.waitUntil === 'function') {
+      context.waitUntil(archiveTask);
+    } else {
+      await archiveTask;
     }
 
     const row = await env.DB.prepare(SELECT_SQL).bind(key).first<ImageRow>();
@@ -288,6 +304,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     return json(rowToRecord(row, env.PUBLIC_BASE_URL), 201);
   } catch (error) {
+    if (r2ObjectWritten && !d1ImageInserted) {
+      try {
+        await env.BUCKET.delete(key);
+      } catch (cleanupError) {
+        console.error(`R2 cleanup failed for ${key}`, cleanupError);
+      }
+    }
     console.error('POST /api/upload failed', error);
     return serverError('upload_failed');
   }

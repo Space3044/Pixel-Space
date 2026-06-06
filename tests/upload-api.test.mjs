@@ -82,10 +82,11 @@ const makeUploadRequest = (overrides = {}) => {
   return new Request('http://localhost/api/upload', { method: 'POST', body: formData });
 };
 
-const makeEnv = () => {
+const makeEnv = (options = {}) => {
   const calls = {
     events: [],
     puts: [],
+    deletedObjects: [],
     insert: null,
     updates: [],
     selectedKey: null,
@@ -102,6 +103,10 @@ const makeEnv = () => {
         calls.events.push('r2');
         calls.puts.push({ key, body, options });
       },
+      delete: async (key) => {
+        calls.events.push('r2-delete');
+        calls.deletedObjects.push(key);
+      },
     },
     DB: {
       prepare(sql) {
@@ -112,6 +117,7 @@ const makeEnv = () => {
                 if (/insert\s+into\s+images/i.test(sql)) {
                   calls.events.push('insert');
                   calls.insert = { sql, values };
+                  if (options.failImageInsert) throw new Error('d1_insert_failed');
                 } else if (/update\s+images/i.test(sql)) {
                   calls.events.push('update');
                   calls.updates.push({ sql, values });
@@ -119,7 +125,7 @@ const makeEnv = () => {
                 return { success: true, meta: {} };
               },
               first: async () => {
-                if (/where\s+hash\s*=/i.test(sql)) return null;
+                if (/where\s+hash\s*=/i.test(sql)) return options.existingRow ?? null;
                 calls.selectedKey = values[0];
                 const inserted = calls.insert?.values;
                 return {
@@ -146,6 +152,7 @@ const makeEnv = () => {
                   color_palette_json: inserted?.[22] ?? null,
                   composition: inserted?.[23] ?? null,
                   ai_status: inserted?.[24] ?? 'pending',
+                  tg_status: inserted?.[25] ?? 'pending',
                   created_at: '2026-05-20 10:11:12',
                   updated_at: '2026-05-20 10:11:12',
                   is_public: inserted?.[26] ?? 1,
@@ -215,11 +222,13 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
     'original_filename',
     'public_url',
     'tags_json',
+    'tg_status',
     'title',
     'updated_at',
     'width',
   ]);
   assert.equal(data.title, '猫猫');
+  assert.match(data.key, /^images\/[0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12}$/);
   assert.equal(data.width, 1280);
   assert.equal(data.height, 853);
   assert.equal(data.format, 'webp');
@@ -229,6 +238,7 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
   assert.equal(data.ai_status, 'done');
+  assert.equal(data.tg_status, 'pending');
   assert.equal(data.created_at, '2026-05-20T10:11:12.000Z');
   assert.equal(data.updated_at, '2026-05-20T10:11:12.000Z');
   assert.equal(data.is_public, 1);
@@ -306,6 +316,60 @@ await test('POST /api/upload archives the original file to Telegram after D1 ins
   assert.deepEqual(calls.updates[0].values, ['telegram-file-id', 77, '-100123', data.key]);
 });
 
+await test('POST /api/upload schedules Telegram archive without delaying the upload response', async () => {
+  const { env, calls } = makeEnv();
+  const request = makeUploadRequest();
+  const waitUntilTasks = [];
+  let releaseTelegram;
+  const telegramGate = new Promise((resolve) => {
+    releaseTelegram = resolve;
+  });
+
+  const responsePromise = withMockedFetch(
+    async (url, init) => {
+      calls.events.push('telegram');
+      calls.telegramRequests.push({ url: String(url), init });
+      await telegramGate;
+      return Response.json({
+        ok: true,
+        result: {
+          message_id: 77,
+          chat: { id: -100123 },
+          document: { file_id: 'telegram-file-id' },
+        },
+      });
+    },
+    () =>
+      uploadPost({
+        env,
+        request,
+        params: {},
+        waitUntil: (task) => waitUntilTasks.push(task),
+      }),
+  );
+
+  const earlyResult = await Promise.race([
+    responsePromise,
+    new Promise((resolve) => setTimeout(() => resolve('timed_out'), 20)),
+  ]);
+
+  if (earlyResult === 'timed_out') {
+    releaseTelegram();
+    await responsePromise.catch(() => {});
+    assert.fail('upload response waited for Telegram archive');
+  }
+
+  assert.equal(earlyResult.status, 201);
+  assert.equal(waitUntilTasks.length, 1);
+  assert.deepEqual(calls.events, ['r2', 'insert', 'telegram']);
+  assert.equal(calls.updates.length, 0);
+
+  releaseTelegram();
+  await waitUntilTasks[0];
+  assert.equal(calls.updates.length, 1);
+  assert.match(calls.updates[0].sql, /tg_status\s*=\s*'done'/i);
+});
+
 await test('POST /api/upload does not infer location_region from coordinate bounds', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest({ meta: { location_region: undefined } });
@@ -358,4 +422,21 @@ await test('POST /api/upload rejects non-image input before R2 or D1 writes', as
   assert.equal(response.status, 400);
   assert.equal(calls.puts.length, 0);
   assert.equal(calls.insert, null);
+});
+
+await test('POST /api/upload deletes the R2 object when D1 insert fails after upload', async () => {
+  const { env, calls } = makeEnv({ failImageInsert: true });
+  const request = makeUploadRequest();
+
+  const response = await withMutedConsoleError(() =>
+    withMockedFetch(telegramSuccessFetch(calls), () =>
+      uploadPost({ env, request, params: {} }),
+    ),
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal(calls.puts.length, 1);
+  assert.deepEqual(calls.deletedObjects, [calls.puts[0].key]);
+  assert.deepEqual(calls.events, ['r2', 'insert', 'r2-delete']);
+  assert.equal(calls.telegramRequests.length, 0);
 });

@@ -1,8 +1,9 @@
 import type { Env } from '../../types';
 import { notFound, serverError } from '../../_shared/http';
+import { keyFromRouteParam } from '../../_shared/keys';
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
-  const key = String(params.key ?? '');
+  const key = keyFromRouteParam(params.key);
   if (!key) return notFound();
 
   try {

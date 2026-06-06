@@ -3,11 +3,12 @@ import { notFound, serverError } from '../../../_shared/http';
 import { parseJsonObject } from '../../../_shared/request';
 import { imageBelongsToGrant, resolveActiveGrant } from '../../../_shared/download-grants';
 import { streamTelegramOriginal, type OriginalImageRow } from '../../../_shared/original';
+import { keyFromRouteParam } from '../../../_shared/keys';
 
 const ORIGINAL_SQL = 'SELECT key, original_filename, tg_file_id FROM images WHERE key = ?';
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }) => {
-  const key = String(params.key ?? '');
+  const key = keyFromRouteParam(params.key);
   if (!key) return notFound();
 
   const raw = await parseJsonObject(request);
