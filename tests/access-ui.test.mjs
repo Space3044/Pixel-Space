@@ -23,6 +23,13 @@ test('LoginView presents Access OTP instead of GitHub identity copy', () => {
   assert.doesNotMatch(source, /const GITHUB/);
 });
 
+test('LoginView uses a document navigation link for Access protected upload', () => {
+  const source = read('src/features/auth/LoginView.vue');
+
+  assert.match(source, /<a\s+href="\/upload"\s+class="primary">/);
+  assert.doesNotMatch(source, /<RouterLink\s+to="\/upload"\s+class="primary">/);
+});
+
 test('AccessView reuses the shared download grant expiry formatter', () => {
   const source = read('src/features/access/AccessView.vue');
 

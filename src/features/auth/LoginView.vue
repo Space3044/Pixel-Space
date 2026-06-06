@@ -79,12 +79,12 @@ const SHIELD = {
             </header>
 
             <div class="actions">
-              <RouterLink to="/upload" class="primary">
+              <a href="/upload" class="primary">
                 <svg :viewBox="MAIL.vb" fill="currentColor" class="primary-icon" aria-hidden="true">
                   <path :d="MAIL.d" />
                 </svg>
                 <span>邮箱验证码登录</span>
-              </RouterLink>
+              </a>
 
               <div class="divider"><span>OR</span></div>
 
