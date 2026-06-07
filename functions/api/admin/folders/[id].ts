@@ -6,6 +6,7 @@ import {
   normalizeParentId,
   sanitizeFolderName,
 } from '../../../_shared/folders';
+import { withRequestLogging } from '../../../_shared/logger';
 import { parseJsonObject } from '../../../_shared/request';
 import { requireSameOrigin } from '../../../_shared/security';
 
@@ -39,7 +40,7 @@ const parsePatchPayload = async (request: Request): Promise<PatchPayload | null>
 const keyFromParams = (params: EventContext<Env, string, unknown>['params']): string =>
   String(params.id ?? '');
 
-export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
+export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin/folders/:id', async ({ request, env, params }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -79,14 +80,20 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   } catch (error) {
     const message = (error as Error).message ?? '';
     if (message.includes('UNIQUE')) return badRequest('name_conflict');
-    console.error(`PATCH /api/admin/folders/${id} failed`, error);
+    logger.error('PATCH /api/admin/folders/:id failed', {
+      error,
+      context: {
+        id,
+        parentId: nextParent,
+      },
+    });
     return serverError('folder_update_failed');
   }
 
   return json({ id, parent_id: nextParent, name: nextName });
-};
+});
 
-export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
+export const onRequestDelete: PagesFunction<Env> = withRequestLogging('/api/admin/folders/:id', async ({ request, env, params }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -117,7 +124,10 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
     await env.DB.prepare('DELETE FROM folders WHERE id = ?').bind(id).run();
     return json({ ok: true, id });
   } catch (error) {
-    console.error(`DELETE /api/admin/folders/${id} failed`, error);
+    logger.error('DELETE /api/admin/folders/:id failed', {
+      error,
+      context: { id },
+    });
     return serverError('folder_delete_failed');
   }
-};
+});

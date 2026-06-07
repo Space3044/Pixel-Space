@@ -1,5 +1,6 @@
 import type { Env } from '../../types';
 import { notFound, serverError, unauthorized } from '../../_shared/http';
+import { withRequestLogging, type RequestLogger } from '../../_shared/logger';
 import { resolveAdmin } from '../../_shared/auth';
 import { streamTelegramOriginal, type OriginalImageRow } from '../../_shared/original';
 import { keyFromRouteParam } from '../../_shared/keys';
@@ -10,7 +11,10 @@ interface OriginalRow extends OriginalImageRow {
   title: string;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, params, request }) => {
+export const handleOriginalGet = async (
+  { env, params, request }: EventContext<Env, string, Record<string, unknown>>,
+  logger: RequestLogger,
+): Promise<Response> => {
   if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const key = keyFromRouteParam(params.key);
@@ -25,7 +29,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request })
 
     return response;
   } catch (error) {
-    console.error(`GET /api/original/${key} failed`, error);
+    logger.error('GET /api/original/:key failed', {
+      error,
+      context: { key },
+    });
     return serverError('original_failed');
   }
 };
+
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/original/:key', handleOriginalGet);

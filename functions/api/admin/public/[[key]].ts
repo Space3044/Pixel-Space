@@ -2,12 +2,13 @@ import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { notFound, serverError, unauthorized } from '../../../_shared/http';
 import { keyFromRouteParam } from '../../../_shared/keys';
+import { withRequestLogging } from '../../../_shared/logger';
 
 interface ImageObjectRow {
   key: string;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, params, request }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/public/:key', async ({ env, params, request }, logger) => {
   if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const key = keyFromRouteParam(params.key);
@@ -27,7 +28,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request })
 
     return new Response(object.body, { headers });
   } catch (error) {
-    console.error(`GET /api/admin/public/${key} failed`, error);
+    logger.error('GET /api/admin/public/:key failed', {
+      error,
+      context: { key },
+    });
     return serverError('public_object_failed');
   }
-};
+});

@@ -1,5 +1,6 @@
 import type { Env } from '../types';
 import { badRequest, json, serverError, unauthorized } from '../_shared/http';
+import { withRequestLogging, type RequestLogger } from '../_shared/logger';
 import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
 import {
@@ -161,7 +162,10 @@ const sha256Hex = async (file: File): Promise<string> => {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
-export const onRequestPost: PagesFunction<Env> = async (context) => {
+export const handleUploadPost = async (
+  context: EventContext<Env, string, Record<string, unknown>>,
+  logger: RequestLogger,
+): Promise<Response> => {
   const { request, env } = context;
   const originError = requireSameOrigin(request);
   if (originError) return originError;
@@ -256,7 +260,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     d1ImageInserted = true;
 
     if (meta.is_public === 1 && meta.location_public === 1) {
-      const staticMapTask = createStaticMapCacheTask(env, meta.location_lat, meta.location_lng, meta.location_region);
+      const staticMapTask = createStaticMapCacheTask(env, meta.location_lat, meta.location_lng, meta.location_region, logger);
       if (staticMapTask) {
         if (typeof context.waitUntil === 'function') {
           context.waitUntil(staticMapTask);
@@ -266,7 +270,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     }
 
-    const archiveTask = archiveOriginalAfterUpload(env, original, key);
+    const archiveTask = archiveOriginalAfterUpload(env, original, key, logger);
     if (typeof context.waitUntil === 'function') {
       context.waitUntil(archiveTask);
     } else {
@@ -282,10 +286,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       try {
         await env.BUCKET.delete(key);
       } catch (cleanupError) {
-        console.error(`R2 cleanup failed for ${key}`, cleanupError);
+        logger.error('R2 cleanup failed', {
+          error: cleanupError,
+          context: { key },
+        });
       }
     }
-    console.error('POST /api/upload failed', error);
+    logger.error('POST /api/upload failed', {
+      error,
+      context: {
+        key,
+        r2ObjectWritten,
+        d1ImageInserted,
+      },
+    });
     return serverError('upload_failed');
   }
 };
+
+export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/upload', handleUploadPost);

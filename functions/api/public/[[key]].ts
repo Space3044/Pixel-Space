@@ -1,12 +1,13 @@
 import type { Env } from '../../types';
 import { notFound, serverError } from '../../_shared/http';
 import { keyFromRouteParam } from '../../_shared/keys';
+import { withRequestLogging } from '../../_shared/logger';
 
 interface VisibilityRow {
   is_public: number;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/public/:key', async ({ env, params }, logger) => {
   const key = keyFromRouteParam(params.key);
   if (!key) return notFound();
 
@@ -26,7 +27,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
 
     return new Response(object.body, { headers });
   } catch (error) {
-    console.error(`GET /api/public/${key} failed`, error);
+    logger.error('GET /api/public/:key failed', {
+      error,
+      context: { key },
+    });
     return serverError('public_object_failed');
   }
-};
+});

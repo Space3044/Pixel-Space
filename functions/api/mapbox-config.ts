@@ -1,4 +1,5 @@
 import { json, serverError } from '../_shared/http';
+import { withRequestLogging } from '../_shared/logger';
 import { readMapboxPublicToken } from '../_shared/mapbox';
 import type { Env } from '../types';
 
@@ -8,10 +9,10 @@ interface MapboxConfigResponse {
   token: string;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/mapbox-config', async ({ env }) => {
   const tokenResult = readMapboxPublicToken(env);
   if ('error' in tokenResult) return serverError(tokenResult.error);
 
   const payload: MapboxConfigResponse = { token: tokenResult.token };
   return json(payload);
-};
+});

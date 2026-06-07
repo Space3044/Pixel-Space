@@ -3,6 +3,7 @@ import { badRequest, json, serverError, unauthorized } from '../../_shared/http'
 import type { AiSettings } from '../../_shared/ai';
 import { getAiSettings } from '../../_shared/ai';
 import { resolveAdmin } from '../../_shared/auth';
+import { withRequestLogging } from '../../_shared/logger';
 import { parseJsonObject, stringOrEmpty } from '../../_shared/request';
 import { requireSameOrigin } from '../../_shared/security';
 
@@ -26,18 +27,18 @@ const payloadFromRequest = async (request: Request): Promise<AiSettings | null> 
   };
 };
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/ai-settings', async ({ env, request }, logger) => {
   if (!(await resolveAdmin(request, env))) return unauthorized();
 
   try {
     return json(await getAiSettings(env));
   } catch (error) {
-    console.error('GET /api/admin/ai-settings failed', error);
+    logger.error('GET /api/admin/ai-settings failed', { error });
     return serverError('ai_settings_failed');
   }
-};
+});
 
-export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin/ai-settings', async ({ request, env }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -49,7 +50,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
     await env.DB.prepare(UPSERT_SQL).bind(payload.proxy_url, payload.model, payload.prompt).run();
     return json(payload);
   } catch (error) {
-    console.error('PATCH /api/admin/ai-settings failed', error);
+    logger.error('PATCH /api/admin/ai-settings failed', { error });
     return serverError('ai_settings_update_failed');
   }
-};
+});

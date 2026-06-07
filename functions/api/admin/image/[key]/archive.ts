@@ -1,6 +1,7 @@
 import type { Env } from '../../../../types';
 import { badRequest, json, notFound, serverError, unauthorized } from '../../../../_shared/http';
 import { resolveAdmin } from '../../../../_shared/auth';
+import { withRequestLogging } from '../../../../_shared/logger';
 import type { ImageRow } from '../../../../_shared/images';
 import { IMAGE_SELECT_COLUMNS, rowToRecord } from '../../../../_shared/images';
 import { keyFromRouteParam } from '../../../../_shared/keys';
@@ -33,7 +34,7 @@ const originalFromRequest = async (request: Request): Promise<File | null> => {
   return original && typeof original !== 'string' ? original : null;
 };
 
-export const onRequestPost: PagesFunction<Env> = async (context) => {
+export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/admin/image/:key/archive', async (context, logger) => {
   const { env, request, params } = context;
   const originError = requireSameOrigin(request);
   if (originError) return originError;
@@ -56,7 +57,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     await markTelegramArchivePending(env, key);
 
-    const archiveTask = archiveOriginalAfterUpload(env, original, key);
+    const archiveTask = archiveOriginalAfterUpload(env, original, key, logger);
     if (typeof context.waitUntil === 'function') {
       context.waitUntil(archiveTask);
       return json(rowToRecord({ ...row, tg_status: 'pending' }, env.PUBLIC_BASE_URL), 202);
@@ -67,7 +68,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (!updated) return notFound();
     return json(rowToRecord(updated, env.PUBLIC_BASE_URL));
   } catch (error) {
-    console.error(`POST /api/admin/image/${key}/archive failed`, error);
+    logger.error('POST /api/admin/image/:key/archive failed', {
+      error,
+      context: { key },
+    });
     return serverError('telegram_archive_retry_failed');
   }
-};
+});

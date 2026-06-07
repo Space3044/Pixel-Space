@@ -3,6 +3,7 @@ import { badRequest, json, serverError } from './http';
 import { collectDescendantIds } from './folders';
 import type { ImageRow } from './images';
 import { IMAGE_SELECT_COLUMNS, rowToAdminRecord, rowToRecord, scrubRecordForVisitor } from './images';
+import type { RequestLogger } from './logger';
 
 // 列表与搜索共用一套动态拼接的 SQL：根据 admin / 是否带搜索 / 是否带 folder 参数决定 WHERE。
 // 访客视角强制 is_public=1，并把 location_name 搜索包在 location_public=1 守卫里。
@@ -96,6 +97,7 @@ const parseFolderParam = async (
 interface ListImagesOptions {
   admin: boolean;
   logPath: string;
+  logger?: RequestLogger;
 }
 
 export const handleListImages = async (
@@ -173,7 +175,7 @@ export const handleListImages = async (
           : null,
     });
   } catch (error) {
-    console.error(`GET ${options.logPath} failed`, error);
+    options.logger?.error(`GET ${options.logPath} failed`, { error });
     return serverError('list_failed');
   }
 };

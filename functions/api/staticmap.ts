@@ -1,5 +1,6 @@
 import type { Env } from '../types';
 import { badRequest, notFound, serverError } from '../_shared/http';
+import { withRequestLogging } from '../_shared/logger';
 import {
   getCachedStaticMap,
   type StaticMapLocation,
@@ -28,7 +29,7 @@ const hasPublicLocation = async (db: D1Database, location: StaticMapLocation): P
   return row !== null;
 };
 
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/staticmap', async ({ request, env }, logger) => {
   const parsed = staticMapLocationFromUrl(new URL(request.url));
   if ('error' in parsed) return badRequest(parsed.error);
   const { location } = parsed;
@@ -36,7 +37,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
     if (!(await hasPublicLocation(env.DB, location))) return notFound();
   } catch (error) {
-    console.error('GET /api/staticmap visibility check failed', error);
+    logger.error('GET /api/staticmap visibility check failed', {
+      error,
+      context: { location },
+    });
     return serverError('staticmap_visibility_failed');
   }
 
@@ -44,9 +48,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const cached = await getCachedStaticMap(env, location);
     if (cached) return staticMapObjectResponse(cached);
   } catch (error) {
-    console.error('GET /api/staticmap cache read failed', error);
+    logger.error('GET /api/staticmap cache read failed', {
+      error,
+      context: { location },
+    });
     return serverError('staticmap_cache_failed');
   }
 
   return notFound();
-};
+});

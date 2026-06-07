@@ -1,5 +1,6 @@
 import type { Env } from '../types';
 import { json, serverError } from '../_shared/http';
+import { withRequestLogging } from '../_shared/logger';
 import { resolveAdmin } from '../_shared/auth';
 import type { ImageRow } from '../_shared/images';
 import { IMAGE_SELECT_COLUMNS, rowToRecord, scrubRecordForVisitor } from '../_shared/images';
@@ -32,7 +33,7 @@ interface SummaryRow {
   places: number;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/stats', async ({ env, request }, logger) => {
   try {
     const isAdmin = (await resolveAdmin(request, env)) !== null;
     const [summary, latest] = await Promise.all([
@@ -52,7 +53,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       latest: latestRecords,
     });
   } catch (error) {
-    console.error('GET /api/stats failed', error);
+    logger.error('GET /api/stats failed', { error });
     return serverError('stats_failed');
   }
-};
+});

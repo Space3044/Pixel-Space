@@ -2,6 +2,7 @@ import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
 import { LIST_FOLDERS_SQL, normalizeParentId, sanitizeFolderName, type FolderRecord } from '../../../_shared/folders';
+import { withRequestLogging } from '../../../_shared/logger';
 import { parseJsonObject } from '../../../_shared/request';
 import { requireSameOrigin } from '../../../_shared/security';
 
@@ -27,7 +28,7 @@ const cryptoUUID = (): string => {
   throw new Error('crypto.randomUUID is unavailable');
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/admin/folders', async ({ request, env }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -54,7 +55,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const message = (error as Error).message ?? '';
     // SQLite UNIQUE 冲突在 D1 上返回的 message 包含 UNIQUE 关键字。
     if (message.includes('UNIQUE')) return badRequest('name_conflict');
-    console.error('POST /api/admin/folders failed', error);
+    logger.error('POST /api/admin/folders failed', {
+      error,
+      context: {
+        id,
+        parentId: payload.parent_id,
+      },
+    });
     return serverError('folder_create_failed');
   }
 
@@ -65,16 +72,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     image_count: 0,
     child_count: 0,
   }, 201);
-};
+});
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/folders', async ({ env, request }, logger) => {
   if (!(await resolveAdmin(request, env))) return unauthorized();
 
   try {
     const result = await env.DB.prepare(LIST_FOLDERS_SQL).all<FolderRecord>();
     return json({ folders: result.results ?? [] });
   } catch (error) {
-    console.error('GET /api/admin/folders failed', error);
+    logger.error('GET /api/admin/folders failed', { error });
     return serverError('folders_list_failed');
   }
-};
+});

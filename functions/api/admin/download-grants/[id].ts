@@ -1,6 +1,7 @@
 import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, notFound, serverError, unauthorized } from '../../../_shared/http';
+import { withRequestLogging } from '../../../_shared/logger';
 import { normalizeFutureIso } from '../../../_shared/download-grants';
 import { requireSameOrigin } from '../../../_shared/security';
 import { parseJsonObject, stringOrNull } from '../../../_shared/request';
@@ -10,7 +11,7 @@ const grantIdFromParams = (params: EventContext<Env, string, unknown>['params'])
   return typeof id === 'string' && id.trim() ? id : null;
 };
 
-export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params }) => {
+export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin/download-grants/:id', async ({ request, env, params }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -32,12 +33,15 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
     if ((result.meta?.changes ?? 0) === 0) return notFound('download_grant_not_found');
     return json({ id, expires_at: normalized });
   } catch (error) {
-    console.error('PATCH /api/admin/download-grants/:id failed', error);
+    logger.error('PATCH /api/admin/download-grants/:id failed', {
+      error,
+      context: { id },
+    });
     return serverError('download_grant_update_failed');
   }
-};
+});
 
-export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
+export const onRequestDelete: PagesFunction<Env> = withRequestLogging('/api/admin/download-grants/:id', async ({ request, env, params }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -50,7 +54,10 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
     if ((result.meta?.changes ?? 0) === 0) return notFound('download_grant_not_found');
     return json({ ok: true, id });
   } catch (error) {
-    console.error('DELETE /api/admin/download-grants/:id failed', error);
+    logger.error('DELETE /api/admin/download-grants/:id failed', {
+      error,
+      context: { id },
+    });
     return serverError('download_grant_delete_failed');
   }
-};
+});

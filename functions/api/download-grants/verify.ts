@@ -1,10 +1,11 @@
 import type { Env } from '../../types';
 import { json, notFound, serverError } from '../../_shared/http';
+import { withRequestLogging } from '../../_shared/logger';
 import { parseJsonObject } from '../../_shared/request';
 import { loadGrantImages, resolveActiveGrant } from '../../_shared/download-grants';
 import { requireSameOrigin } from '../../_shared/security';
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/download-grants/verify', async ({ request, env }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
 
@@ -19,7 +20,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       images,
     });
   } catch (error) {
-    console.error('POST /api/download-grants/verify failed', error);
+    logger.error('POST /api/download-grants/verify failed', {
+      error,
+      context: { grantId: grant.id },
+    });
     return serverError('download_grant_verify_failed');
   }
-};
+});

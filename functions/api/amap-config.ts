@@ -1,4 +1,5 @@
 import { json, serverError } from '../_shared/http';
+import { withRequestLogging } from '../_shared/logger';
 import type { Env } from '../types';
 
 interface AmapConfigResponse {
@@ -6,7 +7,7 @@ interface AmapConfigResponse {
   securityJsCode: string;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/amap-config', async ({ env }) => {
   const key = env.AMAP_JS_KEY?.trim();
   if (!key) return serverError('amap_js_key_missing');
 
@@ -16,4 +17,4 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   };
 
   return json(payload);
-};
+});

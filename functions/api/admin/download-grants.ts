@@ -1,6 +1,7 @@
 import type { Env } from '../../types';
 import { resolveAdmin } from '../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../_shared/http';
+import { withRequestLogging } from '../../_shared/logger';
 import { normalizeStringList, parseJsonObject, stringOrNull } from '../../_shared/request';
 import { codeHash, generateAccessCode, normalizeFutureIso } from '../../_shared/download-grants';
 import type { ImageRecord, ImageRow } from '../../_shared/images';
@@ -112,18 +113,18 @@ const loadGrantRecords = async (env: Env): Promise<DownloadGrantRecord[]> => {
   });
 };
 
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/download-grants', async ({ request, env }, logger) => {
   if (!(await resolveAdmin(request, env))) return unauthorized();
 
   try {
     return json({ grants: await loadGrantRecords(env) });
   } catch (error) {
-    console.error('GET /api/admin/download-grants failed', error);
+    logger.error('GET /api/admin/download-grants failed', { error });
     return serverError('download_grant_list_failed');
   }
-};
+});
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/admin/download-grants', async ({ request, env }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -158,7 +159,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       access_url: '/access',
     });
   } catch (error) {
-    console.error('POST /api/admin/download-grants failed', error);
+    logger.error('POST /api/admin/download-grants failed', {
+      error,
+      context: {
+        imageCount: payload.keys.length,
+        expiresAt,
+      },
+    });
     return serverError('download_grant_create_failed');
   }
-};
+});

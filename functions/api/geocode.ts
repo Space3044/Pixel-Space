@@ -1,10 +1,25 @@
 import { resolveAdmin } from '../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../_shared/http';
+import { withRequestLogging, type RequestLogger } from '../_shared/logger';
 import type { Env } from '../types';
 import { dedupeGeocodeResults, validCoordinate, type GeocodeResult } from '../../shared/geocode';
 
 type GeocodeRegion = 'cn' | 'global';
 type ProviderResults = GeocodeResult[] | null;
+type ProviderName = 'maptiler' | 'nominatim' | 'photon';
+type ProviderOutcome = 'skipped' | 'empty' | 'error' | 'hit';
+type ReverseCoordinate = { lng: number; lat: number };
+type GeocodeInput =
+  | { kind: 'search'; query: string }
+  | { kind: 'reverse'; coordinate: ReverseCoordinate };
+
+interface ProviderAttemptLog {
+  provider: ProviderName;
+  outcome: ProviderOutcome;
+  resultCount: number;
+  durationMs: number;
+  error?: string;
+}
 
 interface MapTilerFeature {
   place_name?: unknown;
@@ -35,7 +50,9 @@ interface PhotonFeature {
 
 const MAPTILER_GEOCODING_BASE_URL = 'https://api.maptiler.com/geocoding/';
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 const PHOTON_SEARCH_URL = 'https://photon.komoot.io/api/';
+const PHOTON_REVERSE_URL = 'https://photon.komoot.io/reverse';
 const CITY_PREFIXES = [
   '北京',
   '上海',
@@ -64,6 +81,15 @@ const normalizeRegion = (request: Request): GeocodeRegion | null => {
   const value = new URL(request.url).searchParams.get('region') ?? 'global';
   if (value === 'cn' || value === 'global') return value;
   return null;
+};
+
+const readReverseCoordinate = (request: Request): ReverseCoordinate | null | 'invalid' => {
+  const params = new URL(request.url).searchParams;
+  if (!params.has('lat') && !params.has('lng')) return null;
+
+  const lat = validCoordinate(params.get('lat'), -90, 90);
+  const lng = validCoordinate(params.get('lng'), -180, 180);
+  return lat === null || lng === null ? 'invalid' : { lng, lat };
 };
 
 const requestOrigin = (request: Request): string => {
@@ -113,6 +139,18 @@ const normalizeNominatimResult = (row: NominatimResult): GeocodeResult | null =>
     name: row.display_name.trim(),
     lat,
     lng,
+  };
+};
+
+const normalizeNominatimReverseResult = (
+  row: NominatimResult,
+  fallback: ReverseCoordinate,
+): GeocodeResult | null => {
+  if (typeof row.display_name !== 'string' || !row.display_name.trim()) return null;
+  return {
+    name: row.display_name.trim(),
+    lat: validCoordinate(row.lat, -90, 90) ?? fallback.lat,
+    lng: validCoordinate(row.lon, -180, 180) ?? fallback.lng,
   };
 };
 
@@ -168,6 +206,30 @@ const fetchMapTiler = async (query: string, env: Env): Promise<ProviderResults> 
   );
 };
 
+const fetchMapTilerReverse = async (coordinate: ReverseCoordinate, env: Env): Promise<ProviderResults> => {
+  const key = env.MAPTILER_KEY?.trim();
+  if (!key) return null;
+
+  const url = new URL(`${coordinate.lng},${coordinate.lat}.json`, MAPTILER_GEOCODING_BASE_URL);
+  url.searchParams.set('key', key);
+  url.searchParams.set('limit', '1');
+
+  const response = await fetch(url.toString(), {
+    headers: { accept: 'application/json' },
+  });
+
+  if (!response.ok) throw new Error(`maptiler_http_${response.status}`);
+
+  const data = (await response.json()) as { features?: unknown };
+  if (!Array.isArray(data.features)) return [];
+
+  return dedupeGeocodeResults(
+    data.features
+      .map((feature) => normalizeMapTilerFeature(feature as MapTilerFeature))
+      .filter((row): row is GeocodeResult => row !== null),
+  );
+};
+
 const fetchNominatim = async (query: string, request: Request): Promise<GeocodeResult[]> => {
   const url = new URL(NOMINATIM_SEARCH_URL);
   url.searchParams.set('format', 'jsonv2');
@@ -193,10 +255,60 @@ const fetchNominatim = async (query: string, request: Request): Promise<GeocodeR
   );
 };
 
+const fetchNominatimReverse = async (
+  coordinate: ReverseCoordinate,
+  request: Request,
+): Promise<GeocodeResult[]> => {
+  const url = new URL(NOMINATIM_REVERSE_URL);
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('lat', String(coordinate.lat));
+  url.searchParams.set('lon', String(coordinate.lng));
+  url.searchParams.set('zoom', '18');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('accept-language', 'zh-CN,zh,en');
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      accept: 'application/json',
+      referer: requestOrigin(request),
+      'user-agent': 'imgbed-geocoder/0.1',
+    },
+  });
+
+  if (!response.ok) throw new Error(`nominatim_http_${response.status}`);
+
+  const data = (await response.json()) as unknown;
+  const result = normalizeNominatimReverseResult(data as NominatimResult, coordinate);
+  return result ? [result] : [];
+};
+
 const fetchPhoton = async (query: string): Promise<GeocodeResult[]> => {
   const url = new URL(PHOTON_SEARCH_URL);
   url.searchParams.set('q', query);
   url.searchParams.set('limit', '5');
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      accept: 'application/json',
+      'user-agent': 'imgbed-geocoder/0.1',
+    },
+  });
+
+  if (!response.ok) throw new Error(`photon_http_${response.status}`);
+
+  const data = (await response.json()) as { features?: unknown };
+  if (!Array.isArray(data.features)) return [];
+  return dedupeGeocodeResults(
+    data.features
+      .map((feature) => normalizePhotonFeature(feature as PhotonFeature))
+      .filter((row): row is GeocodeResult => row !== null),
+  );
+};
+
+const fetchPhotonReverse = async (coordinate: ReverseCoordinate): Promise<GeocodeResult[]> => {
+  const url = new URL(PHOTON_REVERSE_URL);
+  url.searchParams.set('lat', String(coordinate.lat));
+  url.searchParams.set('lon', String(coordinate.lng));
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -227,43 +339,109 @@ const fetchPhotonVariants = async (query: string): Promise<GeocodeResult[]> => {
 const providerOrder = (
   request: Request,
   env: Env,
-): Array<[name: string, search: () => Promise<ProviderResults>]> => {
-  const sharedFallbacks: Array<[name: string, search: () => Promise<ProviderResults>]> = [
-    ['nominatim', () => fetchNominatim(normalizeQuery(request), request)],
-    ['photon', () => fetchPhotonVariants(normalizeQuery(request))],
-  ];
+  input: GeocodeInput,
+): Array<[name: ProviderName, search: () => Promise<ProviderResults>]> => {
+  if (input.kind === 'reverse') {
+    return [
+      ['maptiler', () => fetchMapTilerReverse(input.coordinate, env)],
+      ['nominatim', () => fetchNominatimReverse(input.coordinate, request)],
+      ['photon', () => fetchPhotonReverse(input.coordinate)],
+    ];
+  }
 
-  return [['maptiler', () => fetchMapTiler(normalizeQuery(request), env)], ...sharedFallbacks];
+  return [
+    ['maptiler', () => fetchMapTiler(input.query, env)],
+    ['nominatim', () => fetchNominatim(input.query, request)],
+    ['photon', () => fetchPhotonVariants(input.query)],
+  ];
 };
 
-export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  if (!(await resolveAdmin(request, env))) return unauthorized();
+const logProviderAttempts = (
+  logger: RequestLogger,
+  input: GeocodeInput,
+  region: GeocodeRegion,
+  attempts: ProviderAttemptLog[],
+): void => {
+  logger.info('geocode provider attempts', {
+    context: {
+      kind: input.kind,
+      region,
+      attempts,
+    },
+  });
+};
 
-  const query = normalizeQuery(request);
-  if (!query) return badRequest('missing_geocode_query');
+export const handleGeocodeGet = async (
+  { request, env }: EventContext<Env, string, Record<string, unknown>>,
+  logger: RequestLogger,
+): Promise<Response> => {
+  if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const region = normalizeRegion(request);
   if (!region) return badRequest('invalid_geocode_region');
   if (region === 'cn') return badRequest('domestic_geocode_uses_amap_js_api');
 
+  const reverseCoordinate = readReverseCoordinate(request);
+  if (reverseCoordinate === 'invalid') return badRequest('invalid_geocode_coordinate');
+
+  const query = normalizeQuery(request);
+  const input: GeocodeInput = reverseCoordinate
+    ? { kind: 'reverse', coordinate: reverseCoordinate }
+    : { kind: 'search', query };
+  if (input.kind === 'search' && !input.query) return badRequest('missing_geocode_query');
+
   const providerErrors: Record<string, unknown> = {};
+  const providerAttempts: ProviderAttemptLog[] = [];
   let completedProvider = false;
 
-  for (const [name, search] of providerOrder(request, env)) {
+  for (const [name, search] of providerOrder(request, env, input)) {
+    const startedAt = Date.now();
     try {
       const results = await search();
-      if (results === null) continue;
+      const durationMs = Date.now() - startedAt;
+      if (results === null) {
+        providerAttempts.push({ provider: name, outcome: 'skipped', resultCount: 0, durationMs });
+        continue;
+      }
 
       completedProvider = true;
-      if (results.length > 0) return json(results);
+      providerAttempts.push({
+        provider: name,
+        outcome: results.length > 0 ? 'hit' : 'empty',
+        resultCount: results.length,
+        durationMs,
+      });
+      if (results.length > 0) {
+        logProviderAttempts(logger, input, region, providerAttempts);
+        return json(results);
+      }
     } catch (error) {
+      providerAttempts.push({
+        provider: name,
+        outcome: 'error',
+        resultCount: 0,
+        durationMs: Date.now() - startedAt,
+        error: errorMessage(error),
+      });
       providerErrors[name] = error;
     }
   }
 
+  logProviderAttempts(logger, input, region, providerAttempts);
+
   if (completedProvider || Object.keys(providerErrors).length === 0) return json([]);
 
   const firstError = Object.values(providerErrors)[0];
-  console.error('GET /api/geocode failed', providerErrors);
+  logger.error('GET /api/geocode failed', {
+    error: firstError,
+    context: {
+      kind: input.kind,
+      region,
+      attempts: providerAttempts,
+      firstError: errorMessage(firstError),
+    },
+  });
   return serverError(firstError ? errorMessage(firstError) : 'geocode_failed');
 };
+
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/geocode', handleGeocodeGet);

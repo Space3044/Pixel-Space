@@ -21,6 +21,20 @@ const withMockedFetch = async (fetchImpl, fn) => {
   }
 };
 
+const captureConsole = async (method, fn) => {
+  const original = console[method];
+  const lines = [];
+  console[method] = (line) => {
+    lines.push(String(line));
+  };
+  try {
+    await fn();
+  } finally {
+    console[method] = original;
+  }
+  return lines;
+};
+
 const makeEnv = (env = {}) => env;
 
 await test('GET /api/admin/geocode rejects production visitors before calling upstream providers', async () => {
@@ -149,6 +163,90 @@ await test('GET /api/admin/geocode uses MapTiler first for global searches', asy
   assert.equal(requestUrl.searchParams.get('limit'), '5');
 });
 
+await test('GET /api/admin/geocode uses MapTiler first for global reverse geocoding', async () => {
+  const requests = [];
+
+  const response = await withMockedFetch(
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      return Response.json({
+        features: [
+          {
+            place_name: 'Eiffel Tower, Paris, France',
+            center: [2.294481, 48.85837],
+          },
+        ],
+      });
+    },
+    () =>
+      onRequestGet({
+        request: new Request('http://localhost/api/admin/geocode?lat=48.85837&lng=2.294481&region=global'),
+        env: makeEnv({ MAPTILER_KEY: 'maptiler-key' }),
+        params: {},
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), [
+    {
+      name: 'Eiffel Tower, Paris, France',
+      lat: 48.85837,
+      lng: 2.294481,
+    },
+  ]);
+
+  assert.equal(requests.length, 1);
+  const requestUrl = new URL(requests[0].url);
+  assert.equal(requestUrl.origin, 'https://api.maptiler.com');
+  assert.equal(requestUrl.pathname, '/geocoding/2.294481,48.85837.json');
+  assert.equal(requestUrl.searchParams.get('key'), 'maptiler-key');
+  assert.equal(requestUrl.searchParams.get('limit'), '1');
+});
+
+await test('GET /api/admin/geocode falls back to Nominatim for global reverse geocoding', async () => {
+  const requests = [];
+
+  const response = await withMockedFetch(
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      return Response.json({
+        display_name: 'Tour Eiffel, Paris, France',
+        lat: '48.85837',
+        lon: '2.294481',
+      });
+    },
+    () =>
+      onRequestGet({
+        request: new Request('http://localhost/api/admin/geocode?lat=48.85837&lng=2.294481&region=global'),
+        env: makeEnv(),
+        params: {},
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), [
+    {
+      name: 'Tour Eiffel, Paris, France',
+      lat: 48.85837,
+      lng: 2.294481,
+    },
+  ]);
+
+  assert.equal(requests.length, 1);
+  const requestUrl = new URL(requests[0].url);
+  assert.equal(requestUrl.origin, 'https://nominatim.openstreetmap.org');
+  assert.equal(requestUrl.pathname, '/reverse');
+  assert.equal(requestUrl.searchParams.get('format'), 'jsonv2');
+  assert.equal(requestUrl.searchParams.get('lat'), '48.85837');
+  assert.equal(requestUrl.searchParams.get('lon'), '2.294481');
+  assert.equal(requestUrl.searchParams.get('zoom'), '18');
+  assert.equal(requestUrl.searchParams.get('addressdetails'), '1');
+
+  const headers = new Headers(requests[0].init.headers);
+  assert.match(headers.get('user-agent'), /imgbed-geocoder/i);
+  assert.equal(headers.get('referer'), 'http://localhost/');
+});
+
 await test('GET /api/admin/geocode falls back to Photon when Nominatim is unreachable', async () => {
   const requests = [];
 
@@ -233,6 +331,120 @@ await test('GET /api/admin/geocode retries Photon with city-spaced Chinese query
   ]);
   assert.equal(new URL(requests[1]).searchParams.get('q'), '厦门清水宫');
   assert.equal(new URL(requests[2]).searchParams.get('q'), '厦门 清水宫');
+});
+
+await test('GET /api/admin/geocode logs the provider fallback path without the full search query', async () => {
+  const lines = await captureConsole('info', async () => {
+    const response = await withMockedFetch(
+      async (url) => {
+        const origin = new URL(String(url)).origin;
+        if (origin === 'https://nominatim.openstreetmap.org') throw new TypeError('fetch failed');
+        return Response.json({
+          features: [
+            {
+              properties: {
+                name: '清水宫',
+                city: '湖里区',
+                country: '中国',
+              },
+              geometry: {
+                coordinates: [118.1086221, 24.5315568],
+              },
+            },
+          ],
+        });
+      },
+      () =>
+        onRequestGet({
+          request: new Request('http://localhost/api/admin/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
+          env: makeEnv(),
+          params: {},
+        }),
+    );
+    assert.equal(response.status, 200);
+  });
+
+  const providerLog = lines.map((line) => JSON.parse(line)).find((entry) => entry.message === 'geocode provider attempts');
+  assert.ok(providerLog);
+  assert.equal(providerLog.context.kind, 'search');
+  assert.equal(providerLog.context.region, 'global');
+  assert.deepEqual(
+    providerLog.context.attempts.map(({ provider, outcome, resultCount }) => ({ provider, outcome, resultCount })),
+    [
+      { provider: 'maptiler', outcome: 'skipped', resultCount: 0 },
+      { provider: 'nominatim', outcome: 'error', resultCount: 0 },
+      { provider: 'photon', outcome: 'hit', resultCount: 1 },
+    ],
+  );
+  assert.equal(providerLog.context.query, undefined);
+  assert.doesNotMatch(lines.join('\n'), /清水宫/);
+  assert.ok(providerLog.context.attempts.every((attempt) => typeof attempt.durationMs === 'number'));
+});
+
+await test('GET /api/admin/geocode logs reverse provider hits without exact coordinates', async () => {
+  const lines = await captureConsole('info', async () => {
+    const response = await withMockedFetch(
+      async () =>
+        Response.json({
+          features: [
+            {
+              place_name: 'Eiffel Tower, Paris, France',
+              center: [2.294481, 48.85837],
+            },
+          ],
+        }),
+      () =>
+        onRequestGet({
+          request: new Request('http://localhost/api/admin/geocode?lat=48.85837&lng=2.294481&region=global'),
+          env: makeEnv({ MAPTILER_KEY: 'maptiler-key' }),
+          params: {},
+        }),
+    );
+    assert.equal(response.status, 200);
+  });
+
+  const providerLog = lines.map((line) => JSON.parse(line)).find((entry) => entry.message === 'geocode provider attempts');
+  assert.ok(providerLog);
+  assert.equal(providerLog.context.kind, 'reverse');
+  assert.deepEqual(
+    providerLog.context.attempts.map(({ provider, outcome, resultCount }) => ({ provider, outcome, resultCount })),
+    [{ provider: 'maptiler', outcome: 'hit', resultCount: 1 }],
+  );
+  assert.equal(providerLog.context.coordinate, undefined);
+  assert.doesNotMatch(lines.join('\n'), /48\.85837|2\.294481/);
+});
+
+await test('GET /api/admin/geocode error log keeps provider errors summarized', async () => {
+  const lines = await captureConsole('error', async () => {
+    const response = await withMockedFetch(
+      async () => {
+        throw new TypeError('fetch failed');
+      },
+      () =>
+        onRequestGet({
+          request: new Request('http://localhost/api/admin/geocode?q=Tokyo&region=global'),
+          env: makeEnv(),
+          params: {},
+        }),
+    );
+    assert.equal(response.status, 500);
+  });
+
+  const failureLog = lines.map((line) => JSON.parse(line)).find((entry) => entry.message === 'GET /api/geocode failed');
+  assert.ok(failureLog);
+  assert.equal(failureLog.context.kind, 'search');
+  assert.equal(failureLog.context.region, 'global');
+  assert.equal(failureLog.context.providerErrors, undefined);
+  assert.equal(failureLog.context.firstError, 'fetch failed');
+  assert.deepEqual(
+    failureLog.context.attempts.map(({ provider, outcome, resultCount }) => ({ provider, outcome, resultCount })),
+    [
+      { provider: 'maptiler', outcome: 'skipped', resultCount: 0 },
+      { provider: 'nominatim', outcome: 'error', resultCount: 0 },
+      { provider: 'photon', outcome: 'error', resultCount: 0 },
+    ],
+  );
+  assert.doesNotMatch(lines.join('\n'), /Tokyo/);
 });
 
 await test('GET /api/admin/geocode rejects empty query before calling Nominatim', async () => {

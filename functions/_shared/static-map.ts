@@ -1,5 +1,6 @@
 import type { Env } from '../types';
 import { readMapboxPublicToken } from './mapbox';
+import type { RequestLogger } from './logger';
 import type { LocationRegion } from '../../shared/geo-region';
 import { wgs84ToGcj02 } from '../../shared/map-coordinate';
 
@@ -136,7 +137,11 @@ export const staticMapObjectResponse = (object: R2ObjectBody): Response => {
 export const getCachedStaticMap = (env: Pick<Env, 'BUCKET'>, location: StaticMapLocation): Promise<R2ObjectBody | null> =>
   env.BUCKET.get(staticMapCacheKey(location));
 
-const fetchStaticMap = async (requestUrl: string, errorPrefix: string): Promise<{ bytes: ArrayBuffer; contentType: string }> => {
+const fetchStaticMap = async (
+  requestUrl: string,
+  errorPrefix: string,
+  logger?: RequestLogger,
+): Promise<{ bytes: ArrayBuffer; contentType: string }> => {
   let upstream: Response;
   try {
     upstream = await fetch(requestUrl);
@@ -147,7 +152,12 @@ const fetchStaticMap = async (requestUrl: string, errorPrefix: string): Promise<
   const contentType = upstream.headers.get('content-type') ?? '';
   if (!upstream.ok || !contentType.startsWith('image/')) {
     const detail = await upstream.text().catch(() => '');
-    console.error(`${errorPrefix} upstream error`, upstream.status, detail.slice(0, 300));
+    logger?.error(`${errorPrefix} upstream error`, {
+      status: upstream.status,
+      context: {
+        detail: detail.slice(0, 300),
+      },
+    });
     throw new StaticMapError(`${errorPrefix}_failed`);
   }
 
@@ -157,6 +167,7 @@ const fetchStaticMap = async (requestUrl: string, errorPrefix: string): Promise<
 const fetchAmapStaticMap = async (
   env: Pick<Env, 'AMAP_WEB_KEY'>,
   location: StaticMapLocation,
+  logger?: RequestLogger,
 ): Promise<{ bytes: ArrayBuffer; contentType: string }> => {
   const key = readAmapWebKey(env);
   const gcj = wgs84ToGcj02(location.lng, location.lat);
@@ -168,12 +179,13 @@ const fetchAmapStaticMap = async (
   url.searchParams.set('size', AMAP_SIZE);
   url.searchParams.set('markers', `mid,,A:${lngStr},${latStr}`);
   url.searchParams.set('key', key);
-  return fetchStaticMap(url.toString(), 'amap_staticmap');
+  return fetchStaticMap(url.toString(), 'amap_staticmap', logger);
 };
 
 const fetchMapboxStaticMap = async (
   env: Pick<Env, 'MAPBOX_PUBLIC_TOKEN'>,
   location: StaticMapLocation,
+  logger?: RequestLogger,
 ): Promise<{ bytes: ArrayBuffer; contentType: string }> => {
   const tokenResult = readMapboxPublicToken(env);
   if ('error' in tokenResult) throw new StaticMapError(tokenResult.error);
@@ -183,16 +195,17 @@ const fetchMapboxStaticMap = async (
   const marker = `pin-s+${MARKER_COLOR}(${lngStr},${latStr})`;
   const position = `${lngStr},${latStr},${location.zoom}`;
   const requestUrl = `${MAPBOX_STATIC_BASE}/${MAPBOX_STYLE}/static/${marker}/${position}/${SIZE}@2x?access_token=${encodeURIComponent(tokenResult.token)}`;
-  return fetchStaticMap(requestUrl, 'mapbox_staticmap');
+  return fetchStaticMap(requestUrl, 'mapbox_staticmap', logger);
 };
 
 export const generateAndCacheStaticMap = async (
   env: Pick<Env, 'BUCKET' | 'AMAP_WEB_KEY' | 'MAPBOX_PUBLIC_TOKEN'>,
   location: StaticMapLocation,
+  logger?: RequestLogger,
 ): Promise<Response> => {
   const { bytes, contentType } = location.region === 'china'
-    ? await fetchAmapStaticMap(env, location)
-    : await fetchMapboxStaticMap(env, location);
+    ? await fetchAmapStaticMap(env, location, logger)
+    : await fetchMapboxStaticMap(env, location, logger);
 
   await env.BUCKET.put(staticMapCacheKey(location), bytes, {
     httpMetadata: { contentType, cacheControl: CACHE_CONTROL },
@@ -207,13 +220,22 @@ export const generateAndCacheStaticMap = async (
 const cacheStaticMap = async (
   env: Pick<Env, 'BUCKET' | 'AMAP_WEB_KEY' | 'MAPBOX_PUBLIC_TOKEN'>,
   location: StaticMapLocation,
+  logger?: RequestLogger,
 ): Promise<void> => {
   try {
     const cached = await getCachedStaticMap(env, location);
     if (cached) return;
-    await generateAndCacheStaticMap(env, location);
+    await generateAndCacheStaticMap(env, location, logger);
   } catch (error) {
-    console.error('Static map precache failed', error);
+    logger?.error('Static map precache failed', {
+      error,
+      context: {
+        lat: location.lat,
+        lng: location.lng,
+        region: location.region,
+        zoom: location.zoom,
+      },
+    });
   }
 };
 
@@ -222,10 +244,11 @@ export const createStaticMapCacheTask = (
   lat: number | null,
   lng: number | null,
   region: LocationRegion | null,
+  logger?: RequestLogger,
 ): Promise<void> | null => {
   const location = normalizeLocation(lat, lng, region);
   if (!location) return null;
   if (location.region === 'china' && !env.AMAP_WEB_KEY?.trim()) return null;
   if (location.region === 'global' && 'error' in readMapboxPublicToken(env)) return null;
-  return location ? cacheStaticMap(env, location) : null;
+  return location ? cacheStaticMap(env, location, logger) : null;
 };

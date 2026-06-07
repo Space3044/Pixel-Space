@@ -6,6 +6,7 @@ for (const path of [
   './image-zoom.test.mjs',
   './location-name.test.mjs',
   './http-api.test.mjs',
+  './logger.test.mjs',
   './request-helpers.test.mjs',
   './auth-security.test.mjs',
   './download-grants-helpers.test.mjs',

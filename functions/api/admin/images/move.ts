@@ -1,6 +1,7 @@
 import type { Env } from '../../../types';
 import { resolveAdmin } from '../../../_shared/auth';
 import { badRequest, json, serverError, unauthorized } from '../../../_shared/http';
+import { withRequestLogging } from '../../../_shared/logger';
 import { normalizeOptionalString, normalizeStringList, parseJsonObject } from '../../../_shared/request';
 import { requireSameOrigin } from '../../../_shared/security';
 
@@ -25,7 +26,7 @@ const parsePayload = async (request: Request): Promise<MovePayload | null> => {
   return { keys, folder_id: folderId };
 };
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/admin/images/move', async ({ request, env }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -56,7 +57,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       folder_id: payload.folder_id,
     });
   } catch (error) {
-    console.error('POST /api/admin/images/move failed', error);
+    logger.error('POST /api/admin/images/move failed', {
+      error,
+      context: {
+        keyCount: payload.keys.length,
+        folderId: payload.folder_id,
+      },
+    });
     return serverError('images_move_failed');
   }
-};
+});

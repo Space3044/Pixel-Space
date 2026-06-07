@@ -1,5 +1,6 @@
 import type { Env } from '../../../types';
 import { notFound, serverError } from '../../../_shared/http';
+import { withRequestLogging } from '../../../_shared/logger';
 import { parseJsonObject } from '../../../_shared/request';
 import { imageBelongsToGrant, resolveActiveGrant } from '../../../_shared/download-grants';
 import { streamTelegramOriginal, type OriginalImageRow } from '../../../_shared/original';
@@ -8,7 +9,7 @@ import { requireSameOrigin } from '../../../_shared/security';
 
 const ORIGINAL_SQL = 'SELECT key, original_filename, tg_file_id FROM images WHERE key = ?';
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }) => {
+export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/download-grants/original/:key', async ({ request, env, params }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
 
@@ -31,7 +32,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
 
     return response;
   } catch (error) {
-    console.error(`POST /api/download-grants/original/${key} failed`, error);
+    logger.error('POST /api/download-grants/original/:key failed', {
+      error,
+      context: {
+        key,
+        grantId: grant.id,
+      },
+    });
     return serverError('original_failed');
   }
-};
+});

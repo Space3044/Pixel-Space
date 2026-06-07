@@ -1,5 +1,6 @@
 import type { Env } from '../types';
 import { archiveOriginalToTelegram } from './telegram';
+import type { RequestLogger } from './logger';
 
 const UPDATE_TG_PENDING_SQL = `
 UPDATE images
@@ -40,7 +41,12 @@ export const markTelegramArchivePending = async (env: Env, key: string): Promise
   await env.DB.prepare(UPDATE_TG_PENDING_SQL).bind(key).run();
 };
 
-export const archiveOriginalAfterUpload = async (env: Env, original: File, key: string): Promise<void> => {
+export const archiveOriginalAfterUpload = async (
+  env: Env,
+  original: File,
+  key: string,
+  logger?: RequestLogger,
+): Promise<void> => {
   try {
     const archive = await archiveOriginalToTelegram({
       token: env.TG_BOT_TOKEN,
@@ -52,7 +58,10 @@ export const archiveOriginalAfterUpload = async (env: Env, original: File, key: 
       .bind(archive.file_id, archive.message_id, archive.chat_id, key)
       .run();
   } catch (archiveError) {
-    console.error('Telegram original archive failed', archiveError);
+    logger?.error('Telegram original archive failed', {
+      error: archiveError,
+      context: { key },
+    });
     await env.DB.prepare(UPDATE_TG_FAILED_SQL).bind(errorMessage(archiveError), key).run();
   }
 };
