@@ -278,3 +278,7 @@ pnpm build
 - 访客接口不能返回 `location_public = 0` 的位置字段。
 - AI 代理配置存在 D1，代理密钥只通过 `PROXY_KEY` 注入。
 - 新增图片字段时，需要同步前端类型、Functions 类型、迁移、`IMAGE_SELECT_COLUMNS` 和相关测试。
+
+## License
+
+MIT. See [LICENSE](./LICENSE) for details.
