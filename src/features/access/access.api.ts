@@ -6,11 +6,11 @@ export interface VerifyDownloadGrantResponse {
   images: ImageRecord[];
 }
 
-export function verifyDownloadGrant(code: string): Promise<VerifyDownloadGrantResponse> {
+export function verifyDownloadGrant(code: string, turnstileToken?: string): Promise<VerifyDownloadGrantResponse> {
   return fetchJson<VerifyDownloadGrantResponse>('/api/download-grants/verify', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code, turnstileToken }),
   });
 }
 

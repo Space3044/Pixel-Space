@@ -1,9 +1,33 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, defineAsyncComponent, nextTick, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatDownloadGrantExpiry } from '@/features/library/download-grant-expiry';
 import { downloadGrantOriginal, verifyDownloadGrant } from './access.api';
+
+const ImageLightbox = defineAsyncComponent(() => import('@/features/images/ImageLightbox.vue'));
+
+interface TurnstileApi {
+  render(
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      callback: (token: string) => void;
+      'error-callback': () => void;
+      'expired-callback': () => void;
+    },
+  ): string;
+  reset(widgetId?: string): void;
+}
+
+declare global {
+  interface Window {
+    turnstile?: TurnstileApi;
+  }
+}
+
+const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
 
 const code = ref('');
 const verifiedCode = ref('');
@@ -13,10 +37,143 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const downloadingKey = ref<string | null>(null);
 const batchDownloading = ref(false);
+const lightboxOpen = ref(false);
+const lightboxImage = ref<ImageRecord | null>(null);
+const turnstileRequired = ref(false);
+const turnstileToken = ref('');
+const turnstileEl = ref<HTMLElement | null>(null);
+const turnstileStatus = ref<'idle' | 'loading' | 'ready' | 'verified' | 'error'>('idle');
+const pendingCode = ref('');
+let turnstileWidgetId: string | null = null;
+let turnstileScriptPromise: Promise<void> | null = null;
 
 const hasResult = computed(() => expiresAt.value !== null);
 
 const expiresLabel = computed(() => (expiresAt.value ? formatDownloadGrantExpiry(expiresAt.value) : ''));
+
+const loadTurnstileScript = (): Promise<void> => {
+  if (window.turnstile) return Promise.resolve();
+  if (turnstileScriptPromise) return turnstileScriptPromise;
+
+  turnstileScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SCRIPT_URL}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true });
+      existing.addEventListener('error', () => reject(new Error('turnstile_script_failed')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = TURNSTILE_SCRIPT_URL;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('turnstile_script_failed'));
+    document.head.appendChild(script);
+  });
+
+  return turnstileScriptPromise;
+};
+
+const renderTurnstile = async () => {
+  if (!turnstileRequired.value || turnstileWidgetId || !turnstileEl.value) return;
+  if (!TURNSTILE_SITE_KEY) {
+    turnstileStatus.value = 'error';
+    error.value = '人机验证暂未配置';
+    return;
+  }
+
+  turnstileStatus.value = 'loading';
+  try {
+    await loadTurnstileScript();
+    if (!window.turnstile || !turnstileEl.value) throw new Error('turnstile_unavailable');
+
+    turnstileWidgetId = window.turnstile.render(turnstileEl.value, {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: (token) => {
+        turnstileToken.value = token;
+        turnstileStatus.value = 'verified';
+        if (pendingCode.value) void verifyCode(pendingCode.value);
+      },
+      'error-callback': () => {
+        turnstileToken.value = '';
+        turnstileStatus.value = 'error';
+        error.value = '人机验证失败，请重试';
+      },
+      'expired-callback': () => {
+        turnstileToken.value = '';
+        turnstileStatus.value = 'ready';
+      },
+    });
+    turnstileStatus.value = 'ready';
+  } catch {
+    turnstileStatus.value = 'error';
+    error.value = '人机验证加载失败';
+  }
+};
+
+const resetTurnstile = () => {
+  turnstileToken.value = '';
+  if (turnstileWidgetId && window.turnstile) window.turnstile.reset(turnstileWidgetId);
+  turnstileStatus.value = turnstileRequired.value ? 'ready' : 'idle';
+};
+
+const hideTurnstile = () => {
+  turnstileRequired.value = false;
+  turnstileToken.value = '';
+  turnstileWidgetId = null;
+  turnstileStatus.value = 'idle';
+};
+
+const showTurnstile = async (normalized: string, message: string) => {
+  pendingCode.value = normalized;
+  turnstileRequired.value = true;
+  error.value = message;
+  if (turnstileWidgetId) {
+    resetTurnstile();
+    return;
+  }
+  await nextTick();
+  await renderTurnstile();
+};
+
+const clearResult = () => {
+  verifiedCode.value = '';
+  expiresAt.value = null;
+  images.value = [];
+};
+
+const isTurnstileError = (message: string) =>
+  message.includes('turnstile_required') || message.includes('turnstile_invalid');
+
+const verifyCode = async (normalized: string) => {
+  loading.value = true;
+  error.value = null;
+  try {
+    const result = await verifyDownloadGrant(normalized, turnstileToken.value || undefined);
+    verifiedCode.value = normalized;
+    expiresAt.value = result.expires_at;
+    images.value = result.images;
+    pendingCode.value = '';
+    hideTurnstile();
+  } catch (verifyError) {
+    clearResult();
+    const message = verifyError instanceof Error ? verifyError.message : '';
+    if (isTurnstileError(message)) {
+      await showTurnstile(normalized, '请先完成人机验证');
+      return;
+    }
+    if (message.includes('too_many_attempts')) {
+      error.value = '尝试次数过多，请稍后再试';
+      resetTurnstile();
+      return;
+    }
+    error.value = '验证码无效或已过期';
+    resetTurnstile();
+  } finally {
+    loading.value = false;
+  }
+};
 
 const submitCode = async () => {
   const normalized = code.value.trim().toUpperCase();
@@ -25,24 +182,15 @@ const submitCode = async () => {
     return;
   }
 
-  loading.value = true;
-  error.value = null;
-  try {
-    const result = await verifyDownloadGrant(normalized);
-    verifiedCode.value = normalized;
-    expiresAt.value = result.expires_at;
-    images.value = result.images;
-  } catch {
-    verifiedCode.value = '';
-    expiresAt.value = null;
-    images.value = [];
-    error.value = '验证码无效或已过期';
-  } finally {
-    loading.value = false;
-  }
+  await verifyCode(normalized);
 };
 
 const downloadName = (image: ImageRecord): string => image.original_filename || image.title || image.key;
+
+const openLightbox = (image: ImageRecord) => {
+  lightboxImage.value = image;
+  lightboxOpen.value = true;
+};
 
 const saveOriginalBlob = (image: ImageRecord, blob: Blob) => {
   const url = URL.createObjectURL(blob);
@@ -121,6 +269,9 @@ const downloadAllOriginals = async () => {
               {{ loading ? '验证中...' : '验证' }}
             </button>
           </div>
+          <div v-if="turnstileRequired" class="access-turnstile">
+            <div ref="turnstileEl" class="access-turnstile-widget" />
+          </div>
           <p v-if="error" class="access-error">{{ error }}</p>
         </form>
 
@@ -147,9 +298,14 @@ const downloadAllOriginals = async () => {
           </p>
           <div v-else class="access-grid">
             <article v-for="image in images" :key="image.key" class="access-card">
-              <div class="access-card-media">
-                <img :src="image.public_url" :alt="image.title || image.original_filename" loading="lazy" />
-              </div>
+              <button
+                type="button"
+                class="access-card-media access-lightbox-trigger"
+                :aria-label="`查看 ${downloadName(image)} 大图`"
+                @click="openLightbox(image)"
+              >
+                <img :src="image.public_url" :alt="downloadName(image)" loading="lazy" />
+              </button>
               <div class="access-card-body">
                 <h2>{{ image.original_filename || image.title || image.key }}</h2>
                 <p class="access-card-meta">{{ image.width }} × {{ image.height }} · {{ image.format.toUpperCase() }}</p>
@@ -166,6 +322,8 @@ const downloadAllOriginals = async () => {
           </div>
         </section>
       </div>
+
+      <ImageLightbox :open="lightboxOpen" :image="lightboxImage" @close="lightboxOpen = false" />
     </section>
   </AppShell>
 </template>
@@ -267,6 +425,16 @@ const downloadAllOriginals = async () => {
 .access-field {
   display: flex;
   gap: 0.6rem;
+}
+
+.access-turnstile {
+  display: flex;
+  min-height: 65px;
+  align-items: center;
+}
+
+.access-turnstile-widget {
+  min-height: 65px;
 }
 
 .access-input {
@@ -429,7 +597,19 @@ const downloadAllOriginals = async () => {
 }
 
 .access-card-media {
+  display: block;
   overflow: hidden;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.access-lightbox-trigger:focus-visible {
+  outline: 2px solid rgba(53, 243, 255, 0.78);
+  outline-offset: -2px;
 }
 
 .access-card-media img {

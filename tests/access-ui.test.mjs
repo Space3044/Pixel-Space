@@ -38,3 +38,16 @@ test('AccessView reuses the shared download grant expiry formatter', () => {
   assert.match(source, /formatDownloadGrantExpiry/);
   assert.doesNotMatch(source, /new Intl\.DateTimeFormat/);
 });
+
+test('AccessView reuses the same ImageLightbox viewer as Explore for large previews', () => {
+  const source = read('src/features/access/AccessView.vue');
+
+  assert.match(source, /defineAsyncComponent/);
+  assert.match(source, /const ImageLightbox = defineAsyncComponent\(\(\) => import\('@\/features\/images\/ImageLightbox\.vue'\)\)/);
+  assert.match(source, /const lightboxOpen = ref\(false\)/);
+  assert.match(source, /const lightboxImage = ref<ImageRecord \| null>\(null\)/);
+  assert.match(source, /const openLightbox = \(image: ImageRecord\) => \{/);
+  assert.match(source, /@click="openLightbox\(image\)"/);
+  assert.match(source, /<ImageLightbox[\s\S]*:open="lightboxOpen"[\s\S]*:image="lightboxImage"[\s\S]*@close="lightboxOpen = false"/);
+  assert.doesNotMatch(source, /access-preview-backdrop|access-preview-dialog|access-preview-image/);
+});
