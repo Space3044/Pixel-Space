@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import LoadingState from '@/shared/ui/LoadingState.vue';
 import type { ImageRecord } from '@/features/images/image.types';
@@ -8,11 +8,15 @@ import { groupFootprints, type FootprintGroup } from './footprint';
 import FootprintFlatMap from './FootprintFlatMap.vue';
 import WorldBoundaryGlobe from './WorldBoundaryGlobe.vue';
 
+const ImageLightbox = defineAsyncComponent(() => import('@/features/images/ImageLightbox.vue'));
+
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 const images = ref<ImageRecord[]>([]);
 const activeFootprintKey = ref<string | null>(null);
 const hoveredFootprintKey = ref<string | null>(null);
+const lightboxOpen = ref(false);
+const lightboxImage = ref<ImageRecord | null>(null);
 
 const coordinateLabel = (lat: number, lng: number) => `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
@@ -47,6 +51,22 @@ const previewFootprint = (footprint: FootprintGroup | null) => {
 const resetSelection = () => {
   activeFootprintKey.value = null;
   hoveredFootprintKey.value = null;
+};
+
+const openLightbox = (image: ImageRecord) => {
+  lightboxImage.value = image;
+  lightboxOpen.value = true;
+};
+
+const replaceImage = (image: ImageRecord) => {
+  images.value = images.value.map((item) => (item.key === image.key ? image : item));
+  lightboxImage.value = image;
+};
+
+const removeImage = (key: string) => {
+  images.value = images.value.filter((image) => image.key !== key);
+  lightboxOpen.value = false;
+  lightboxImage.value = null;
 };
 
 const loadFootprints = async () => {
@@ -153,18 +173,19 @@ onMounted(() => {
           </div>
 
           <div class="point-image-list">
-            <a
+            <button
               v-for="pointImage in activeFootprint.images"
               :key="pointImage.key"
+              type="button"
               class="point-image-item"
-              :href="`/p/${encodeURIComponent(pointImage.key)}`"
+              @click="openLightbox(pointImage)"
             >
               <img :src="pointImage.public_url" :alt="pointImage.title" />
               <span>
                 <strong>{{ pointImage.title || pointImage.original_filename }}</strong>
                 <small>{{ pointImage.width }} × {{ pointImage.height }} · {{ pointImage.format.toUpperCase() }}</small>
               </span>
-            </a>
+            </button>
           </div>
         </article>
 
@@ -173,6 +194,14 @@ onMounted(() => {
         </article>
       </div>
     </section>
+
+    <ImageLightbox
+      :open="lightboxOpen"
+      :image="lightboxImage"
+      @close="lightboxOpen = false"
+      @updated="replaceImage"
+      @deleted="removeImage"
+    />
   </AppShell>
 </template>
 
@@ -408,6 +437,8 @@ onMounted(() => {
   background: rgba(7, 7, 19, 0.38);
   padding: 0.5rem;
   color: inherit;
+  cursor: pointer;
+  font: inherit;
   text-align: left;
   text-decoration: none;
   transition: border-color 0.2s ease, background 0.2s ease;

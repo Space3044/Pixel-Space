@@ -42,9 +42,12 @@ test('FootprintsView keeps the stats, selection detail and globe', () => {
   assert.match(view, /const activeFootprint = computed/);
   assert.match(view, /const selectFootprint = /);
   assert.match(view, /const resetSelection = /);
+  assert.match(view, /const openLightbox = \(image: ImageRecord\) => /);
   assert.match(view, /v-if="activeFootprint" class="footprint-detail-card/);
   assert.match(view, /v-for="pointImage in activeFootprint\.images"/);
-  assert.match(view, /:href="`\/p\/\$\{encodeURIComponent\(pointImage\.key\)\}`"/);
+  assert.match(view, /type="button"[\s\S]*@click="openLightbox\(pointImage\)"/);
+  assert.doesNotMatch(view, /:href="`\/p\/\$\{encodeURIComponent\(pointImage\.key\)\}`"/);
+  assert.match(view, /<ImageLightbox\s+:open="lightboxOpen"\s+:image="lightboxImage"/);
   assert.match(view, />\s*返回总览\s*</);
   assert.match(view, /const visitedPlaces = computed/);
   assert.match(view, /const visitedCoordinates = computed/);
