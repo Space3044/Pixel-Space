@@ -111,3 +111,24 @@ await test('PATCH /api/admin/ai-settings upserts proxy URL, model and prompt onl
     '新的图片分析提示词',
   ]);
 });
+
+await test('PATCH /api/admin/ai-settings rejects empty prompt before writing D1', async () => {
+  const { env, calls } = makeEnv();
+  const response = await onRequestPatch({
+    env,
+    params: {},
+    request: new Request('http://localhost/api/admin/ai-settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        proxy_url: 'https://new-cpa.test/v1/chat/completions',
+        model: 'new-model',
+        prompt: '   ',
+      }),
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'invalid_ai_settings_payload' });
+  assert.equal(calls.prepared.length, 0);
+  assert.equal(calls.binds.length, 0);
+});

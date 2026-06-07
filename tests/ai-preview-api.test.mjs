@@ -128,6 +128,27 @@ await test('POST /api/admin/ai/preview rejects missing AI settings before callin
   assert.deepEqual(await response.json(), { error: 'missing_ai_settings' });
 });
 
+await test('POST /api/admin/ai/preview rejects empty prompt before calling CPA', async () => {
+  const { env } = makeEnv({
+    proxy_url: 'https://cpa.test/v1/chat/completions',
+    model: 'image-tagger',
+    prompt: '',
+  });
+  let called = false;
+
+  const response = await withMockedFetch(
+    async () => {
+      called = true;
+      return Response.json({});
+    },
+    () => onRequestPost({ env, params: {}, request: makeRequest() }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+  assert.deepEqual(await response.json(), { error: 'missing_ai_settings' });
+});
+
 await test('POST /api/admin/ai/preview uses the editable prompt from ai_settings', async () => {
   const { env } = makeEnv({
     proxy_url: 'https://cpa.test/v1/chat/completions',

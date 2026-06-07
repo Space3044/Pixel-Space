@@ -35,7 +35,7 @@ export const getAiSettings = async (env: Pick<Env, 'DB'>): Promise<AiSettings> =
 };
 
 export const hasUsableAiSettings = (settings: AiSettings, proxyKey: string | undefined): boolean =>
-  Boolean(settings.proxy_url && settings.model && proxyKey?.trim());
+  Boolean(settings.proxy_url && settings.model && settings.prompt && proxyKey?.trim());
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   const bytes = new Uint8Array(buffer);

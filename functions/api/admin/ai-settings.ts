@@ -20,11 +20,12 @@ ON CONFLICT(id) DO UPDATE SET
 const payloadFromRequest = async (request: Request): Promise<AiSettings | null> => {
   const raw = await parseJsonObject(request);
   if (!raw) return null;
-  return {
+  const payload = {
     proxy_url: stringOrEmpty(raw.proxy_url),
     model: stringOrEmpty(raw.model),
     prompt: stringOrEmpty(raw.prompt),
   };
+  return payload.prompt ? payload : null;
 };
 
 export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/ai-settings', async ({ env, request }, logger) => {

@@ -15,6 +15,7 @@ const test = (name, fn) => {
 const migrationDir = join(process.cwd(), 'db/migrations');
 const migrationFiles = readdirSync(migrationDir).filter((name) => name.endsWith('.sql')).sort();
 const schemaPath = join(process.cwd(), 'db/schema.sql');
+const promptExamplePath = join(process.cwd(), 'db/ai-prompt.example.md');
 const sql = readFileSync(join(migrationDir, '0001_init.sql'), 'utf8');
 
 const stripComments = (s) =>
@@ -165,12 +166,15 @@ test('migration creates folders and AI settings tables', () => {
     assert.match(aiSettings, new RegExp(`\\b${col}\\b`), `${col} missing from ai_settings schema`);
   }
 
-  assert.match(sqlBody, /insert\s+into\s+ai_settings\s*\(\s*id,\s*proxy_url,\s*model,\s*prompt\s*\)/);
+  assert.doesNotMatch(sqlBody, /insert\s+into\s+ai_settings/);
   assert.doesNotMatch(aiSettings, /\bproxy_key\b/);
 });
 
-test('migration seeds the editable AI prompt in the database', () => {
-  assert.match(sql, /INSERT INTO ai_settings \(id, proxy_url, model, prompt\) VALUES \(1, '', '', '# 图片结构化分析专家/);
+test('AI prompt example is documented outside database initialization SQL', () => {
+  assert.equal(existsSync(promptExamplePath), true);
+  const promptExample = readFileSync(promptExamplePath, 'utf8');
+  assert.match(promptExample, /^# 图片结构化分析专家/m);
+  assert.match(promptExample, /只输出一个合法的 JSON 对象/);
 });
 
 test('migration creates final indexes', () => {
@@ -193,5 +197,6 @@ test('schema.sql is a D1 console-ready fresh database schema', () => {
   assert.match(downloadGrants, /\bcode\s+text\b/);
   assert.match(body, /create\s+table\s+download_grant_images/);
   assert.match(body, /create\s+unique\s+index\s+idx_download_grants_code/);
-  assert.match(schema, /INSERT INTO ai_settings \(id, proxy_url, model, prompt\) VALUES \(1, '', '', '# 图片结构化分析专家/);
+  assert.doesNotMatch(body, /insert\s+into\s+ai_settings/);
+  assert.doesNotMatch(schema, /# 图片结构化分析专家/);
 });
