@@ -317,10 +317,10 @@ const grantImageRow = {
   folder_id: null,
 };
 
-const makeGrantRequest = (url, body) =>
+const makeGrantRequest = (url, body, headers = {}) =>
   new Request(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
 
@@ -366,6 +366,104 @@ const withMockedFetch = async (fetchImpl, fn) => {
     globalThis.fetch = originalFetch;
   }
 };
+
+const turnstileEnv = (env) => ({ ...env, TURNSTILE_SECRET_KEY: 'turnstile-secret' });
+
+const mockTurnstileSuccess = async (url) => {
+  assert.equal(String(url), 'https://challenges.cloudflare.com/turnstile/v0/siteverify');
+  return Response.json({ success: true, hostname: 'example.test' });
+};
+
+const cookieHeader = (response) => response.headers.get('set-cookie')?.split(';')[0] ?? '';
+
+await test('POST /api/download-grants/verify requires Turnstile before checking visitor codes', async () => {
+  const { env, calls } = makeVisitorEnv();
+  const response = await verifyGrant({
+    env: turnstileEnv(env),
+    request: makeGrantRequest('https://example.test/api/download-grants/verify', { code: 'A7K9P2QX' }),
+  });
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: 'turnstile_required' });
+  assert.equal(calls.prepared.some((sql) => /from\s+download_grants/i.test(sql)), false);
+});
+
+await test('POST /api/download-grants/verify accepts a valid Turnstile token and sets a visitor challenge cookie', async () => {
+  const { env } = makeVisitorEnv();
+  const response = await withMockedFetch(mockTurnstileSuccess, () =>
+    verifyGrant({
+      env: turnstileEnv(env),
+      request: makeGrantRequest(
+        'https://example.test/api/download-grants/verify',
+        { code: 'A7K9P2QX', turnstileToken: 'visitor-token' },
+        { 'cf-connecting-ip': '198.51.100.10' },
+      ),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('set-cookie') ?? '', /visitor_challenge=/);
+});
+
+await test('POST /api/download-grants/verify reuses a valid visitor challenge cookie without Turnstile', async () => {
+  const { env } = makeVisitorEnv();
+  const first = await withMockedFetch(mockTurnstileSuccess, () =>
+    verifyGrant({
+      env: turnstileEnv(env),
+      request: makeGrantRequest(
+        'https://example.test/api/download-grants/verify',
+        { code: 'A7K9P2QX', turnstileToken: 'visitor-token' },
+        { 'cf-connecting-ip': '198.51.100.11' },
+      ),
+    }),
+  );
+
+  const cookie = cookieHeader(first);
+  assert.ok(cookie);
+
+  const second = await withMockedFetch(
+    async () => {
+      throw new Error('turnstile_should_not_be_called');
+    },
+    () =>
+      verifyGrant({
+        env: turnstileEnv(env),
+        request: makeGrantRequest(
+          'https://example.test/api/download-grants/verify',
+          { code: 'A7K9P2QX' },
+          { cookie, 'cf-connecting-ip': '198.51.100.11' },
+        ),
+      }),
+  );
+
+  assert.equal(second.status, 200);
+});
+
+await test('POST /api/download-grants/verify throttles repeated invalid codes after a visitor challenge', async () => {
+  const { env } = makeVisitorEnv({ grant: null });
+  let cookie = '';
+  let response;
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    response = await withMockedFetch(mockTurnstileSuccess, () =>
+      verifyGrant({
+        env: turnstileEnv(env),
+        request: makeGrantRequest(
+          'https://example.test/api/download-grants/verify',
+          { code: 'BADCODE1', turnstileToken: cookie ? undefined : 'visitor-token' },
+          {
+            ...(cookie ? { cookie } : {}),
+            'cf-connecting-ip': '198.51.100.12',
+          },
+        ),
+      }),
+    );
+    cookie ||= cookieHeader(response);
+  }
+
+  assert.equal(response.status, 429);
+  assert.deepEqual(await response.json(), { error: 'too_many_attempts' });
+});
 
 await test('POST /api/download-grants/verify returns authorized visitor-safe images', async () => {
   const { env, calls } = makeVisitorEnv();

@@ -48,3 +48,11 @@ test('content security policy remains compatible with the AMap JS API', () => {
   assert.match(headers, /script-src [^;]*'unsafe-inline'/);
   assert.match(headers, /script-src [^;]*https:\/\/\*\.amap\.com/);
 });
+
+test('content security policy allows the Turnstile widget', () => {
+  const headers = readHeaders();
+
+  assert.match(headers, /script-src [^;]*https:\/\/challenges\.cloudflare\.com/);
+  assert.match(headers, /connect-src [^;]*https:\/\/challenges\.cloudflare\.com/);
+  assert.match(headers, /frame-src [^;]*https:\/\/challenges\.cloudflare\.com/);
+});
