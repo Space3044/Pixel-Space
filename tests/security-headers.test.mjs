@@ -40,3 +40,11 @@ test('static pages do not expose a wildcard CORS header', () => {
   assert.match(headers, /^\s+! Access-Control-Allow-Origin$/m);
   assert.doesNotMatch(headers, /^\s+Access-Control-Allow-Origin: \*$/m);
 });
+
+test('content security policy remains compatible with the AMap JS API', () => {
+  const headers = readHeaders();
+
+  assert.match(headers, /script-src [^;]*'unsafe-eval'/);
+  assert.match(headers, /script-src [^;]*'unsafe-inline'/);
+  assert.match(headers, /script-src [^;]*https:\/\/\*\.amap\.com/);
+});
