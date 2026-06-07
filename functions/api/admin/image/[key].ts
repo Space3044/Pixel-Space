@@ -1,6 +1,7 @@
 import type { Env } from '../../../types';
 import { badRequest, json, notFound, serverError, unauthorized } from '../../../_shared/http';
 import { resolveAdmin } from '../../../_shared/auth';
+import { withRequestLogging } from '../../../_shared/logger';
 import type { ImageRow } from '../../../_shared/images';
 import { IMAGE_SELECT_COLUMNS, normalizeColorPaletteJson, normalizeRegion, normalizeTagsJson, rowToAdminRecord } from '../../../_shared/images';
 import {
@@ -13,7 +14,7 @@ import {
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 import { keyFromRouteParam } from '../../../_shared/keys';
 import { requireSameOrigin } from '../../../_shared/security';
-import { createStaticMapCacheTask } from '../../../_shared/static-map';
+import { createStaticMapCacheTask, deleteUnusedStaticMapCache } from '../../../_shared/static-map';
 
 const DETAIL_SQL = `
 SELECT ${IMAGE_SELECT_COLUMNS}
@@ -22,7 +23,7 @@ WHERE key = ?
 `;
 
 const DELETE_DETAIL_SQL = `
-SELECT key, tg_chat_id, tg_message_id
+SELECT key, tg_chat_id, tg_message_id, location_lat, location_lng, location_region
 FROM images
 WHERE key = ?
 `;
@@ -51,6 +52,9 @@ interface DeleteRow {
   key: string;
   tg_chat_id: string | null;
   tg_message_id: number | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  location_region: 'china' | 'global' | null;
 }
 
 interface EditablePayload {
@@ -99,7 +103,7 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
 const keyFromParams = (params: EventContext<Env, string, unknown>['params']): string =>
   keyFromRouteParam(params.key);
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, params, request }) => {
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/image/:key', async ({ env, params, request }, logger) => {
   if (!(await resolveAdmin(request, env))) return unauthorized();
 
   const key = keyFromParams(params);
@@ -110,12 +114,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request })
     if (!row) return notFound();
     return json(rowToAdminRecord(row));
   } catch (error) {
-    console.error(`GET /api/admin/image/${key} failed`, error);
+    logger.error('GET /api/admin/image/:key failed', {
+      error,
+      context: { key },
+    });
     return serverError('image_failed');
   }
-};
+});
 
-export const onRequestPatch: PagesFunction<Env> = async (context) => {
+export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin/image/:key', async (context, logger) => {
   const { request, env, params } = context;
   const originError = requireSameOrigin(request);
   if (originError) return originError;
@@ -149,7 +156,7 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     const row = await env.DB.prepare(DETAIL_SQL).bind(key).first<ImageRow>();
     if (!row) return notFound();
     if (row.is_public === 1 && row.location_public === 1) {
-      const staticMapTask = createStaticMapCacheTask(env, row.location_lat, row.location_lng, row.location_region);
+      const staticMapTask = createStaticMapCacheTask(env, row.location_lat, row.location_lng, row.location_region, logger);
       if (staticMapTask) {
         if (typeof context.waitUntil === 'function') {
           context.waitUntil(staticMapTask);
@@ -160,12 +167,15 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     }
     return json(rowToAdminRecord(row));
   } catch (error) {
-    console.error(`PATCH /api/admin/image/${key} failed`, error);
+    logger.error('PATCH /api/admin/image/:key failed', {
+      error,
+      context: { key },
+    });
     return serverError('image_update_failed');
   }
-};
+});
 
-export const onRequestDelete: PagesFunction<Env> = async ({ env, params, request }) => {
+export const onRequestDelete: PagesFunction<Env> = withRequestLogging('/api/admin/image/:key', async ({ env, params, request }, logger) => {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (!(await resolveAdmin(request, env))) return unauthorized();
@@ -177,6 +187,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, params, request
     const row = await env.DB.prepare(DELETE_DETAIL_SQL).bind(key).first<DeleteRow>();
     if (!row) return notFound();
 
+    await deleteUnusedStaticMapCache(env, row);
     await env.BUCKET.delete(row.key);
 
     if (row.tg_chat_id && row.tg_message_id) {
@@ -187,14 +198,20 @@ export const onRequestDelete: PagesFunction<Env> = async ({ env, params, request
           messageId: row.tg_message_id,
         });
       } catch (error) {
-        console.error(`Telegram message cleanup failed for ${key}`, error);
+        logger.error('Telegram message cleanup failed', {
+          error,
+          context: { key },
+        });
       }
     }
 
     await env.DB.prepare(DELETE_SQL).bind(key).run();
     return json({ ok: true, key });
   } catch (error) {
-    console.error(`DELETE /api/admin/image/${key} failed`, error);
+    logger.error('DELETE /api/admin/image/:key failed', {
+      error,
+      context: { key },
+    });
     return serverError('image_delete_failed');
   }
-};
+});

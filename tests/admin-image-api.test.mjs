@@ -12,12 +12,15 @@ const test = async (name, fn) => {
   }
 };
 
-const makeEnv = (row) => {
+const makeStaticMapReferenceKey = (region, lat, lng) => `${region}:${lat}:${lng}`;
+
+const makeEnv = (row, { staticMapReferences = new Map() } = {}) => {
   const calls = {
     deletedObjects: [],
     gets: [],
     puts: [],
     selectedKeys: [],
+    staticMapReferenceChecks: [],
     updates: [],
     deletes: [],
     telegram: [],
@@ -44,6 +47,13 @@ const makeEnv = (row) => {
           bind(...values) {
             return {
               first: async () => {
+                if (/printf\('%.6f',\s*location_lat\)/i.test(sql)) {
+                  const region = values.at(-3);
+                  const lat = values.at(-2);
+                  const lng = values.at(-1);
+                  calls.staticMapReferenceChecks.push({ sql, values });
+                  return staticMapReferences.get(makeStaticMapReferenceKey(region, lat, lng)) ?? null;
+                }
                 calls.selectedKeys.push(values[0]);
                 return row;
               },
@@ -110,14 +120,15 @@ const imageRow = {
   tg_message_id: 88,
 };
 
-const makeBatchDeleteEnv = ({ r2Failures = new Set() } = {}) => {
-  const rows = [
+const makeBatchDeleteEnv = ({ r2Failures = new Set(), rows, staticMapReferences = new Map() } = {}) => {
+  const imageRows = rows ?? [
     { key: 'img_ok', tg_chat_id: null, tg_message_id: null },
     { key: 'img_fail', tg_chat_id: null, tg_message_id: null },
   ];
   const calls = {
     deletedObjects: [],
     d1DeleteValues: [],
+    staticMapReferenceChecks: [],
   };
 
   const env = {
@@ -133,7 +144,17 @@ const makeBatchDeleteEnv = ({ r2Failures = new Set() } = {}) => {
         return {
           bind(...values) {
             return {
-              all: async () => ({ results: rows.filter((row) => values.includes(row.key)) }),
+              all: async () => ({ results: imageRows.filter((row) => values.includes(row.key)) }),
+              first: async () => {
+                if (/printf\('%.6f',\s*location_lat\)/i.test(sql)) {
+                  const region = values.at(-3);
+                  const lat = values.at(-2);
+                  const lng = values.at(-1);
+                  calls.staticMapReferenceChecks.push({ sql, values });
+                  return staticMapReferences.get(makeStaticMapReferenceKey(region, lat, lng)) ?? null;
+                }
+                return null;
+              },
               run: async () => {
                 if (/delete\s+from\s+images/i.test(sql)) calls.d1DeleteValues.push(values);
                 return { success: true, meta: { changes: values.length } };
@@ -338,7 +359,7 @@ await test('PATCH /api/admin/image/:key rejects invalid coordinates before updat
 });
 
 await test('DELETE /api/admin/image/:key removes R2 object, tries Telegram cleanup, then deletes D1 row', async () => {
-  const { env, calls } = makeEnv(imageRow);
+  const { env, calls } = makeEnv({ ...imageRow, location_lat: null, location_lng: null, location_region: null });
   const telegramRequests = [];
 
   const response = await withMockedFetch(
@@ -366,7 +387,7 @@ await test('DELETE /api/admin/image/:key removes R2 object, tries Telegram clean
 });
 
 await test('DELETE /api/admin/image/:key keeps deleting D1 when Telegram cleanup fails', async () => {
-  const { env, calls } = makeEnv(imageRow);
+  const { env, calls } = makeEnv({ ...imageRow, location_lat: null, location_lng: null, location_region: null });
   const originalConsoleError = console.error;
   console.error = () => {};
   try {
@@ -402,6 +423,63 @@ await test('DELETE /api/admin/image/:key returns 404 when image is missing', asy
   assert.equal(calls.deletes.length, 0);
 });
 
+await test('DELETE /api/admin/image/:key removes unshared static map cache from R2', async () => {
+  const { env, calls } = makeEnv({
+    ...imageRow,
+    location_lat: 31.2304,
+    location_lng: 121.4737,
+    location_region: 'china',
+  });
+
+  const response = await withMockedFetch(
+    async () => Response.json({ ok: true, result: true }),
+    () =>
+      onRequestDelete({
+        env,
+        params: { key: 'img-key' },
+        request: new Request('http://localhost/api/admin/image/img-key', { method: 'DELETE' }),
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls.deletedObjects, [
+    'staticmap/amap_31.230400_121.473700_z12_600x360.png',
+    'img-key',
+  ]);
+  assert.deepEqual(calls.staticMapReferenceChecks[0].values, ['img-key', 'china', '31.230400', '121.473700']);
+  assert.equal(calls.deletes.length, 1);
+});
+
+await test('DELETE /api/admin/image/:key keeps shared static map cache in R2', async () => {
+  const staticMapReferences = new Map([
+    [makeStaticMapReferenceKey('china', '31.230400', '121.473700'), { key: 'other-img' }],
+  ]);
+  const { env, calls } = makeEnv(
+    {
+      ...imageRow,
+      location_lat: 31.2304,
+      location_lng: 121.4737,
+      location_region: 'china',
+    },
+    { staticMapReferences },
+  );
+
+  const response = await withMockedFetch(
+    async () => Response.json({ ok: true, result: true }),
+    () =>
+      onRequestDelete({
+        env,
+        params: { key: 'img-key' },
+        request: new Request('http://localhost/api/admin/image/img-key', { method: 'DELETE' }),
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls.deletedObjects, ['img-key']);
+  assert.equal(calls.staticMapReferenceChecks.length, 1);
+  assert.equal(calls.deletes.length, 1);
+});
+
 await test('POST /api/admin/images/delete keeps D1 rows for images whose R2 delete fails', async () => {
   const { env, calls } = makeBatchDeleteEnv({ r2Failures: new Set(['img_fail']) });
   const originalConsoleError = console.error;
@@ -428,4 +506,61 @@ await test('POST /api/admin/images/delete keeps D1 rows for images whose R2 dele
   } finally {
     console.error = originalConsoleError;
   }
+});
+
+await test('POST /api/admin/images/delete removes unshared static map caches for deleted images', async () => {
+  const { env, calls } = makeBatchDeleteEnv({
+    rows: [
+      {
+        key: 'img_a',
+        tg_chat_id: null,
+        tg_message_id: null,
+        location_lat: 31.2304,
+        location_lng: 121.4737,
+        location_region: 'china',
+      },
+      {
+        key: 'img_b',
+        tg_chat_id: null,
+        tg_message_id: null,
+        location_lat: 31.2304,
+        location_lng: 121.4737,
+        location_region: 'china',
+      },
+      {
+        key: 'img_global',
+        tg_chat_id: null,
+        tg_message_id: null,
+        location_lat: 48.8566,
+        location_lng: 2.3522,
+        location_region: 'global',
+      },
+    ],
+  });
+
+  const response = await batchDeletePost({
+    env,
+    params: {},
+    request: new Request('http://localhost/api/admin/images/delete', {
+      method: 'POST',
+      body: JSON.stringify({ keys: ['img_a', 'img_b', 'img_global'] }),
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    deleted: 3,
+    missing: [],
+    failed: [],
+  });
+  assert.deepEqual(calls.deletedObjects, [
+    'img_a',
+    'img_b',
+    'img_global',
+    'staticmap/amap_31.230400_121.473700_z12_600x360.png',
+    'staticmap/mapbox_48.856600_2.352200_z12_600x360.png',
+  ]);
+  assert.equal(calls.staticMapReferenceChecks.length, 2);
+  assert.deepEqual(calls.d1DeleteValues, [['img_a', 'img_b', 'img_global']]);
 });

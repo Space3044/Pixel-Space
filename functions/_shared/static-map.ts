@@ -19,6 +19,13 @@ export interface StaticMapLocation {
   region: LocationRegion;
 }
 
+interface StaticMapReference {
+  key: string;
+  location_lat: number | null;
+  location_lng: number | null;
+  location_region: LocationRegion | null;
+}
+
 type StaticMapProvider = 'amap' | 'mapbox';
 
 type StaticMapLocationParseResult =
@@ -83,6 +90,39 @@ export const staticMapCacheKey = (location: StaticMapLocation): string => {
   const lngStr = location.lng.toFixed(6);
   const latStr = location.lat.toFixed(6);
   return `staticmap/${providerForLocation(location)}_${latStr}_${lngStr}_z${location.zoom}_${SIZE}.png`;
+};
+
+const STATIC_MAP_REFERENCE_SQL = (excludedKeys: string): string => `
+SELECT key
+FROM images
+WHERE key NOT IN (${excludedKeys})
+  AND location_region = ?
+  AND printf('%.6f', location_lat) = ?
+  AND printf('%.6f', location_lng) = ?
+LIMIT 1
+`;
+
+export const deleteUnusedStaticMapCache = async (
+  env: Pick<Env, 'DB' | 'BUCKET'>,
+  image: StaticMapReference,
+  excludedKeys: string[] = [image.key],
+): Promise<string | null> => {
+  const location = normalizeLocation(image.location_lat, image.location_lng, image.location_region);
+  if (!location) return null;
+
+  const uniqueExcludedKeys = Array.from(new Set(excludedKeys.filter(Boolean)));
+  if (uniqueExcludedKeys.length === 0) return null;
+
+  const placeholders = uniqueExcludedKeys.map(() => '?').join(',');
+  const remainingReference = await env.DB
+    .prepare(STATIC_MAP_REFERENCE_SQL(placeholders))
+    .bind(...uniqueExcludedKeys, location.region, location.lat.toFixed(6), location.lng.toFixed(6))
+    .first<{ key: string }>();
+  if (remainingReference) return null;
+
+  const cacheKey = staticMapCacheKey(location);
+  await env.BUCKET.delete(cacheKey);
+  return cacheKey;
 };
 
 export const staticMapObjectResponse = (object: R2ObjectBody): Response => {
