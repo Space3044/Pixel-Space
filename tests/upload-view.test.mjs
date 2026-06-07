@@ -210,10 +210,13 @@ test('upload duplicate check failure is not silently treated as a new image', ()
   assert.match(view, /const existing = await checkAdminImageHash\(hash\)/);
 });
 
-test('upload location region follows the manually selected search region instead of coordinate bounds', () => {
+test('upload location region follows the selected region while EXIF can detect overseas coordinates', () => {
   assert.doesNotMatch(view, /mapRegionForStoredCoordinate/);
   assert.match(view, /const\s+regionFromPickRegion\s*=\s*\(region:\s*GeocodeRegion\):\s*MapRegion\s*=>\s*\(region === 'cn' \? 'china' : 'global'\)/);
-  assert.match(view, /entry\.meta\.location_region\s*=\s*lat === null \|\| lng === null \? null : regionFromPickRegion\(pickRegion\.value\)/);
+  assert.match(view, /region:\s*GeocodeRegion\s*=\s*pickRegion\.value/);
+  assert.match(view, /entry\.meta\.location_region\s*=\s*lat === null \|\| lng === null \? null : regionFromPickRegion\(region\)/);
+  assert.match(view, /const geocodeRegionForCoordinate = \(lat: number, lng: number\): GeocodeRegion =>/);
+  assert.match(view, /setEntryCoordinates\(entry, nextExif\.location_lat, nextExif\.location_lng, entry\.id === currentEntryId\.value, exifRegion\)/);
 });
 
 test('upload location region controls do not render implementation-source hint text', () => {

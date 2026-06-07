@@ -45,6 +45,12 @@ test('geocode.api enriches domestic POI names with reverse geocoded administrati
   assert.match(geocodeApi, /normalizeAmapPoi\(row, reverse\)/);
 });
 
+test('geocode.api sends overseas reverse geocoding to the admin backend', () => {
+  assert.match(geocodeApi, /reverseGeocodeGlobalLocation/);
+  assert.match(geocodeApi, /URLSearchParams\(\{ lat: String\(lat\), lng: String\(lng\), region: 'global' \}\)/);
+  assert.match(geocodeApi, /if \(region === 'global'\) return await reverseGeocodeGlobalLocation\(lat, lng\)/);
+});
+
 test('LocationSearch lets the user choose domestic or global geocoding', () => {
   assert.match(locationSearch, /import \{ searchLocations, type GeocodeRegion, type GeocodeResult \}/);
   assert.match(locationSearch, /const localRegion = ref<GeocodeRegion>\('cn'\)/);
@@ -66,6 +72,12 @@ test('UploadView applies selected geocode result to location name and marker coo
   assert.match(upload, /setEntryCoordinates\(entry, result\.lat, result\.lng, true\)/);
   assert.match(upload, /const onSearchRegionChange = \(region: GeocodeRegion\) =>/);
   assert.match(upload, /:model-value="pickRegion"[\s\S]*class="location-search"[\s\S]*@select="applyLocationSearchResult"[\s\S]*@region-change="onSearchRegionChange"/);
+});
+
+test('UploadView reverse geocodes EXIF coordinates with the detected overseas region', () => {
+  assert.match(upload, /const geocodeRegionForCoordinate = \(lat: number, lng: number\): GeocodeRegion =>/);
+  assert.match(upload, /const exifRegion = geocodeRegionForCoordinate\(nextExif\.location_lat, nextExif\.location_lng\)/);
+  assert.match(upload, /reverseGeocodeLocation\(nextExif\.location_lat, nextExif\.location_lng, exifRegion\)/);
 });
 
 test('ImageLightbox applies selected geocode result while editing location', () => {

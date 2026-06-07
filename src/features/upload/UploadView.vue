@@ -12,7 +12,7 @@ import { reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult } from '
 import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkAdminImageHash, fetchAdminImage } from '@/features/images/images.api';
-import type { MapRegion } from './map-coordinate';
+import { regionForCoordinate, type MapRegion } from './map-coordinate';
 import { formatExifTakenAt, normalizeExif } from './exif';
 import { createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter } from './pick-map';
 import { previewAiAnnotation } from './ai-preview.api';
@@ -129,6 +129,8 @@ let pickAdapter: PickMapAdapter | null = null;
 // 取景底图区域跟随位置搜索范围切换。
 const pickRegion = ref<GeocodeRegion>('cn');
 const regionFromPickRegion = (region: GeocodeRegion): MapRegion => (region === 'cn' ? 'china' : 'global');
+const geocodeRegionForCoordinate = (lat: number, lng: number): GeocodeRegion =>
+  regionForCoordinate({ lng, lat }) === 'global' ? 'global' : 'cn';
 
 const currentEntry = computed(() => entries.value.find((entry) => entry.id === currentEntryId.value) ?? null);
 const hasCurrent = computed(() => currentEntry.value !== null);
@@ -279,11 +281,17 @@ const syncMarker = (center = false) => {
   pickAdapter?.setMarker(currentStoredCoordinate(), center);
 };
 
-const setEntryCoordinates = (entry: UploadEntry, lat: number | null, lng: number | null, centerMap = true) => {
+const setEntryCoordinates = (
+  entry: UploadEntry,
+  lat: number | null,
+  lng: number | null,
+  centerMap = true,
+  region: GeocodeRegion = pickRegion.value,
+) => {
   entry.meta.location_lat = lat;
   entry.meta.location_lng = lng;
-  // 坐标来源跟随用户选择的搜索区域，避免海外坐标被国内边界兜底误判。
-  entry.meta.location_region = lat === null || lng === null ? null : regionFromPickRegion(pickRegion.value);
+  // 坐标归属默认跟随用户选择的搜索区域；EXIF 可传入明确的国内/海外区域。
+  entry.meta.location_region = lat === null || lng === null ? null : regionFromPickRegion(region);
   if (entry.id === currentEntryId.value) syncMarker(centerMap);
 };
 
@@ -511,11 +519,15 @@ const processEntry = async (entry: UploadEntry) => {
     entry.compressedFile = nextCompressed;
     entry.compressedDimensions = nextDimensions;
     if (nextExif.location_lat !== null && nextExif.location_lng !== null) {
-      setEntryCoordinates(entry, nextExif.location_lat, nextExif.location_lng, entry.id === currentEntryId.value);
+      const exifRegion = geocodeRegionForCoordinate(nextExif.location_lat, nextExif.location_lng);
+      if (entry.id === currentEntryId.value && exifRegion !== pickRegion.value) onSearchRegionChange(exifRegion);
+      setEntryCoordinates(entry, nextExif.location_lat, nextExif.location_lng, entry.id === currentEntryId.value, exifRegion);
       if (!entry.meta.location_name) {
-        void reverseGeocodeLocation(nextExif.location_lat, nextExif.location_lng).then((name) => {
-          if (name && !entry.meta.location_name) entry.meta.location_name = name;
-        });
+        void reverseGeocodeLocation(nextExif.location_lat, nextExif.location_lng, exifRegion)
+          .then((name) => {
+            if (name && !entry.meta.location_name) entry.meta.location_name = name;
+          })
+          .catch(() => undefined);
       }
     }
     entry.status = 'ready';

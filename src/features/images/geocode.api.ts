@@ -222,14 +222,24 @@ const searchAmapLocations = async (keyword: string): Promise<GeocodeResult[]> =>
   return geocodeAmapAddress(amap, keyword);
 };
 
-const searchGlobalLocations = async (keyword: string): Promise<GeocodeResult[]> => {
-  const params = new URLSearchParams({ q: keyword, region: 'global' });
+const fetchGlobalGeocode = async (params: URLSearchParams): Promise<GeocodeResult[]> => {
   const response = await fetch(`/api/admin/geocode?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`位置搜索失败：${await readHttpError(response)}`);
   }
 
   return (await response.json()) as GeocodeResult[];
+};
+
+const searchGlobalLocations = async (keyword: string): Promise<GeocodeResult[]> => {
+  const params = new URLSearchParams({ q: keyword, region: 'global' });
+  return fetchGlobalGeocode(params);
+};
+
+const reverseGeocodeGlobalLocation = async (lat: number, lng: number): Promise<string | null> => {
+  const params = new URLSearchParams({ lat: String(lat), lng: String(lng), region: 'global' });
+  const results = await fetchGlobalGeocode(params);
+  return results[0]?.name ?? null;
 };
 
 const normalizeSearchError = (error: unknown): Error => {
@@ -249,7 +259,9 @@ export async function searchLocations(query: string, region: GeocodeRegion = 'cn
   }
 }
 
-export async function reverseGeocodeLocation(lat: number, lng: number): Promise<string | null> {
+export async function reverseGeocodeLocation(lat: number, lng: number, region: GeocodeRegion = 'cn'): Promise<string | null> {
+  if (region === 'global') return await reverseGeocodeGlobalLocation(lat, lng);
+
   const amap = await loadAmap();
   const gcj = wgs84ToGcj02(lng, lat);
   const geocoder = new amap.Geocoder({ city: '全国', extensions: 'all' });
