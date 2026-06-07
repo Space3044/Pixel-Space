@@ -9,6 +9,7 @@ for (const path of [
   './logger.test.mjs',
   './request-helpers.test.mjs',
   './auth-security.test.mjs',
+  './security-headers.test.mjs',
   './download-grants-helpers.test.mjs',
   './migration.test.mjs',
   './access-ui.test.mjs',
