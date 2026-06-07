@@ -46,6 +46,7 @@ test('images.api exposes admin update and delete helpers', () => {
   assert.match(imagesApi, /export function listAdminImagesPage\(query = '', options: ListImagesPageOptions\)/);
   assert.match(imagesApi, /export function fetchAdminImage\(key: string\): Promise<ImageRecord>/);
   assert.match(imagesApi, /export async function checkAdminImageHash\(hash: string\): Promise<ImageRecord \| null>/);
+  assert.doesNotMatch(imagesApi, /export async function checkImageHash/);
   assert.match(imagesApi, /apiPath\(qs \? `\/admin\/list\?\$\{qs\}` : '\/admin\/list'\)/);
   assert.match(imagesApi, /apiPath\(`\/admin\/image\/\$\{encodeURIComponent\(key\)\}`\)/);
   assert.match(imagesApi, /apiPath\(`\/admin\/check-hash\?hash=\$\{encodeURIComponent\(hash\)\}`\)/);

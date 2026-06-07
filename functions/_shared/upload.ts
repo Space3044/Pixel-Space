@@ -1,15 +1,15 @@
 import type { Env } from '../types';
-import { badRequest, json, serverError, unauthorized } from '../_shared/http';
-import { withRequestLogging, type RequestLogger } from '../_shared/logger';
-import { resolveAdmin } from '../_shared/auth';
-import type { ImageRow } from '../_shared/images';
+import { badRequest, json, serverError, unauthorized } from './http';
+import type { RequestLogger } from './logger';
+import { resolveAdmin } from './auth';
+import type { ImageRow } from './images';
 import {
   IMAGE_SELECT_COLUMNS,
   normalizeColorPaletteJson,
   normalizeRegion,
   normalizeTagsJson,
   rowToRecord,
-} from '../_shared/images';
+} from './images';
 import {
   coordinateOrNull,
   flagOrDefault,
@@ -17,11 +17,11 @@ import {
   numberOrNull,
   stringOrEmpty,
   stringOrNull,
-} from '../_shared/request';
-import { createImageKey } from '../_shared/keys';
-import { archiveOriginalAfterUpload } from '../_shared/archive';
-import { requireSameOrigin } from '../_shared/security';
-import { createStaticMapCacheTask } from '../_shared/static-map';
+} from './request';
+import { createImageKey } from './keys';
+import { archiveOriginalAfterUpload } from './archive';
+import { requireSameOrigin } from './security';
+import { createStaticMapCacheTask } from './static-map';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -292,7 +292,7 @@ export const handleUploadPost = async (
         });
       }
     }
-    logger.error('POST /api/upload failed', {
+    logger.error('POST /api/admin/upload failed', {
       error,
       context: {
         key,
@@ -303,5 +303,3 @@ export const handleUploadPost = async (
     return serverError('upload_failed');
   }
 };
-
-export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/upload', handleUploadPost);

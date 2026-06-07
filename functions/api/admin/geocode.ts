@@ -1,5 +1,5 @@
 import type { Env } from '../../types';
 import { withRequestLogging } from '../../_shared/logger';
-import { handleGeocodeGet } from '../geocode';
+import { handleGeocodeGet } from '../../_shared/geocode';
 
 export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/geocode', handleGeocodeGet);

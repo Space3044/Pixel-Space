@@ -1,9 +1,9 @@
-import type { Env } from '../../types';
-import { analyzeImageWithAi } from '../../_shared/ai';
-import { resolveAdmin } from '../../_shared/auth';
-import { badRequest, json, serverError, unauthorized } from '../../_shared/http';
-import { withRequestLogging, type RequestLogger } from '../../_shared/logger';
-import { requireSameOrigin } from '../../_shared/security';
+import type { Env } from '../types';
+import { analyzeImageWithAi } from './ai';
+import { resolveAdmin } from './auth';
+import { badRequest, json, serverError, unauthorized } from './http';
+import type { RequestLogger } from './logger';
+import { requireSameOrigin } from './security';
 
 const fileFromForm = (formData: FormData, name: string): File | null => {
   const value = formData.get(name);
@@ -35,7 +35,7 @@ export const handleAiPreviewPost = async (
     if (error instanceof Error && error.message === 'missing_ai_settings') {
       return badRequest('missing_ai_settings');
     }
-    logger.error('POST /api/ai/preview failed', {
+    logger.error('POST /api/admin/ai/preview failed', {
       error,
       context: {
         mime: image.type,
@@ -45,5 +45,3 @@ export const handleAiPreviewPost = async (
     return serverError('ai_preview_failed');
   }
 };
-
-export const onRequestPost: PagesFunction<Env> = withRequestLogging('/api/ai/preview', handleAiPreviewPost);

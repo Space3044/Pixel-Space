@@ -430,7 +430,7 @@ await test('GET /api/admin/geocode error log keeps provider errors summarized', 
     assert.equal(response.status, 500);
   });
 
-  const failureLog = lines.map((line) => JSON.parse(line)).find((entry) => entry.message === 'GET /api/geocode failed');
+  const failureLog = lines.map((line) => JSON.parse(line)).find((entry) => entry.message === 'GET /api/admin/geocode failed');
   assert.ok(failureLog);
   assert.equal(failureLog.context.kind, 'search');
   assert.equal(failureLog.context.region, 'global');

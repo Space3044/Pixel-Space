@@ -1,9 +1,9 @@
 import type { Env } from '../types';
-import { badRequest, json, notFound, serverError, unauthorized } from '../_shared/http';
-import { withRequestLogging, type RequestLogger } from '../_shared/logger';
-import { resolveAdmin } from '../_shared/auth';
-import type { ImageRow } from '../_shared/images';
-import { IMAGE_SELECT_COLUMNS, rowToRecord } from '../_shared/images';
+import { badRequest, json, notFound, serverError, unauthorized } from './http';
+import type { RequestLogger } from './logger';
+import { resolveAdmin } from './auth';
+import type { ImageRow } from './images';
+import { IMAGE_SELECT_COLUMNS, rowToRecord } from './images';
 
 const SELECT_BY_HASH_SQL =
   `SELECT ${IMAGE_SELECT_COLUMNS} FROM images WHERE hash = ? LIMIT 1`;
@@ -24,12 +24,10 @@ export const handleCheckHashGet = async (
     if (!row) return notFound('hash_not_found');
     return json(rowToRecord(row, env.PUBLIC_BASE_URL));
   } catch (error) {
-    logger.error('GET /api/check-hash failed', {
+    logger.error('GET /api/admin/check-hash failed', {
       error,
       context: { hash },
     });
     return serverError('check_hash_failed');
   }
 };
-
-export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/check-hash', handleCheckHashGet);

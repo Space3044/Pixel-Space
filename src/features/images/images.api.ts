@@ -90,15 +90,6 @@ export function fetchAdminImage(key: string): Promise<ImageRecord> {
   return fetchJson<ImageRecord>(apiPath(`/admin/image/${encodeURIComponent(key)}`));
 }
 
-export async function checkImageHash(hash: string): Promise<ImageRecord | null> {
-  const response = await fetch(apiPath(`/check-hash?hash=${encodeURIComponent(hash)}`));
-  if (response.status === 404) return null;
-  if (!response.ok) {
-    throw new Error(`check-hash failed: ${await readHttpError(response)}`);
-  }
-  return (await response.json()) as ImageRecord;
-}
-
 export async function checkAdminImageHash(hash: string): Promise<ImageRecord | null> {
   const response = await fetch(apiPath(`/admin/check-hash?hash=${encodeURIComponent(hash)}`));
   if (response.status === 404) return null;

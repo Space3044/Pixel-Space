@@ -120,7 +120,7 @@ await test('resolveAdmin keeps local development role switching independent from
 });
 
 await test('requireSameOrigin allows the Vite dev proxy loopback origin', async () => {
-  const request = new Request('http://localhost:8788/api/upload', {
+  const request = new Request('http://localhost:8788/api/admin/upload', {
     method: 'POST',
     headers: {
       origin: 'http://localhost:5173',
@@ -132,7 +132,7 @@ await test('requireSameOrigin allows the Vite dev proxy loopback origin', async 
 
 await test('requireSameOrigin still rejects external cross-site browser origins', async () => {
   const response = requireSameOrigin(
-    new Request('https://imgbed.example.com/api/upload', {
+    new Request('https://imgbed.example.com/api/admin/upload', {
       method: 'POST',
       headers: {
         origin: 'https://evil.example',

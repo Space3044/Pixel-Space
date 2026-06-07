@@ -38,12 +38,12 @@ await test('serializeError keeps stable error fields', () => {
 });
 
 await test('request logger emits structured JSON with redacted context', async () => {
-  const request = new Request('https://x.test/api/upload', {
+  const request = new Request('https://x.test/api/admin/upload', {
     headers: { 'x-request-id': 'req-from-client' },
   });
 
   const lines = await captureConsole('error', () => {
-    createRequestLogger(request, '/api/upload').error('upload failed', {
+    createRequestLogger(request, '/api/admin/upload').error('upload failed', {
       status: 500,
       durationMs: 42,
       error: new Error('d1 failed'),
@@ -58,7 +58,7 @@ await test('request logger emits structured JSON with redacted context', async (
   const entry = JSON.parse(lines[0]);
   assert.equal(entry.level, 'error');
   assert.equal(entry.message, 'upload failed');
-  assert.equal(entry.route, '/api/upload');
+  assert.equal(entry.route, '/api/admin/upload');
   assert.equal(entry.method, 'GET');
   assert.equal(entry.requestId, 'req-from-client');
   assert.equal(entry.status, 500);

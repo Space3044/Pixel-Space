@@ -1,7 +1,7 @@
-import { resolveAdmin } from '../_shared/auth';
-import { badRequest, json, serverError, unauthorized } from '../_shared/http';
-import { withRequestLogging, type RequestLogger } from '../_shared/logger';
 import type { Env } from '../types';
+import { resolveAdmin } from './auth';
+import { badRequest, json, serverError, unauthorized } from './http';
+import type { RequestLogger } from './logger';
 import { dedupeGeocodeResults, validCoordinate, type GeocodeResult } from '../../shared/geocode';
 
 type GeocodeRegion = 'cn' | 'global';
@@ -432,7 +432,7 @@ export const handleGeocodeGet = async (
   if (completedProvider || Object.keys(providerErrors).length === 0) return json([]);
 
   const firstError = Object.values(providerErrors)[0];
-  logger.error('GET /api/geocode failed', {
+  logger.error('GET /api/admin/geocode failed', {
     error: firstError,
     context: {
       kind: input.kind,
@@ -443,5 +443,3 @@ export const handleGeocodeGet = async (
   });
   return serverError(firstError ? errorMessage(firstError) : 'geocode_failed');
 };
-
-export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/geocode', handleGeocodeGet);

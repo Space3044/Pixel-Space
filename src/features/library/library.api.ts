@@ -159,5 +159,3 @@ export function deleteDownloadGrant(id: string): Promise<void> {
     method: 'DELETE',
   }).then(() => undefined);
 }
-
-// 借用 list API（管理员视角拿全量）；前端按 folder_id 自己过滤当前目录。

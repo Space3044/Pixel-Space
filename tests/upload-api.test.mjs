@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { onRequestPost as uploadPost } from '../functions/api/upload.ts';
-import { onRequestPost as adminUploadPost } from '../functions/api/admin/upload.ts';
+import { onRequestPost as uploadPost } from '../functions/api/admin/upload.ts';
 
 const test = async (name, fn) => {
   try {
@@ -85,7 +84,7 @@ const makeUploadRequest = (overrides = {}) => {
     }),
   );
   formData.append('dimensions', JSON.stringify(overrides.dimensions ?? { width: 1280, height: 853 }));
-  return new Request('http://localhost/api/upload', { method: 'POST', body: formData });
+  return new Request('http://localhost/api/admin/upload', { method: 'POST', body: formData });
 };
 
 const makeEnv = (options = {}) => {
@@ -196,7 +195,7 @@ const telegramSuccessFetch = (calls) => async (url, init) => {
   });
 };
 
-await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, and returns ImageRecord', async () => {
+await test('POST /api/admin/upload stores compressed WebP in R2, writes D1 metadata, and returns ImageRecord', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest();
   const original = await request.clone().formData().then((data) => data.get('original'));
@@ -247,7 +246,7 @@ await test('POST /api/upload stores compressed WebP in R2, writes D1 metadata, a
   assert.equal(data.format, 'webp');
   assert.equal(data.bytes_compressed, 10);
   assert.equal(data.original_filename, 'cat.jpg');
-  assert.equal(data.public_url, `https://cdn.test/${data.key}`);
+  assert.equal(data.public_url, `/api/admin/public/${data.key}`);
   assert.equal(data.exif_camera, 'Nikon Zf');
   assert.equal(data.exif_focal_length, 40);
   assert.equal(data.ai_status, 'done');
@@ -308,7 +307,7 @@ await test('POST /api/admin/upload returns admin object URLs for uploaded images
   const request = makeUploadRequest();
 
   const response = await withMockedFetch(telegramSuccessFetch(calls), () =>
-    adminUploadPost({ env, request, params: {} }),
+    uploadPost({ env, request, params: {} }),
   );
 
   assert.equal(response.status, 201);
@@ -316,7 +315,7 @@ await test('POST /api/admin/upload returns admin object URLs for uploaded images
   assert.equal(data.public_url, `/api/admin/public/${data.key}`);
 });
 
-await test('POST /api/upload pre-caches the stored location static map in R2', async () => {
+await test('POST /api/admin/upload pre-caches the stored location static map in R2', async () => {
   const { env, calls } = makeEnv({ amapWebKey: 'amap-web-key', mapboxToken: 'pk.mb-token' });
   const request = makeUploadRequest();
   const staticMapRequests = [];
@@ -340,7 +339,7 @@ await test('POST /api/upload pre-caches the stored location static map in R2', a
   assert.equal(staticMapPut.options.httpMetadata.contentType, 'image/png');
 });
 
-await test('POST /api/upload does not pre-cache hidden visitor locations', async () => {
+await test('POST /api/admin/upload does not pre-cache hidden visitor locations', async () => {
   const { env, calls } = makeEnv({ mapboxToken: 'pk.mb-token' });
   const request = makeUploadRequest({ meta: { location_public: 0 } });
   const staticMapRequests = [];
@@ -359,7 +358,7 @@ await test('POST /api/upload does not pre-cache hidden visitor locations', async
   assert.equal(calls.puts.some((put) => String(put.key).startsWith('staticmap/')), false);
 });
 
-await test('POST /api/upload archives the original file to Telegram after D1 insert', async () => {
+await test('POST /api/admin/upload archives the original file to Telegram after D1 insert', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest();
 
@@ -385,7 +384,7 @@ await test('POST /api/upload archives the original file to Telegram after D1 ins
   assert.deepEqual(calls.updates[0].values, ['telegram-file-id', 77, '-100123', data.key]);
 });
 
-await test('POST /api/upload schedules Telegram archive without delaying the upload response', async () => {
+await test('POST /api/admin/upload schedules Telegram archive without delaying the upload response', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest();
   const waitUntilTasks = [];
@@ -439,7 +438,7 @@ await test('POST /api/upload schedules Telegram archive without delaying the upl
   assert.match(calls.updates[0].sql, /tg_status\s*=\s*'done'/i);
 });
 
-await test('POST /api/upload does not infer location_region from coordinate bounds', async () => {
+await test('POST /api/admin/upload does not infer location_region from coordinate bounds', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest({ meta: { location_region: undefined } });
 
@@ -453,7 +452,7 @@ await test('POST /api/upload does not infer location_region from coordinate boun
   assert.equal(calls.insert.values[12], null);
 });
 
-await test('POST /api/upload marks Telegram archive failure without blocking upload', async () => {
+await test('POST /api/admin/upload marks Telegram archive failure without blocking upload', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest();
 
@@ -480,7 +479,7 @@ await test('POST /api/upload marks Telegram archive failure without blocking upl
   assert.equal(calls.updates[0].values[1], data.key);
 });
 
-await test('POST /api/upload rejects non-image input before R2 or D1 writes', async () => {
+await test('POST /api/admin/upload rejects non-image input before R2 or D1 writes', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest({
     original: new File(['not-image'], 'notes.txt', { type: 'text/plain' }),
@@ -493,7 +492,7 @@ await test('POST /api/upload rejects non-image input before R2 or D1 writes', as
   assert.equal(calls.insert, null);
 });
 
-await test('POST /api/upload deletes the R2 object when D1 insert fails after upload', async () => {
+await test('POST /api/admin/upload deletes the R2 object when D1 insert fails after upload', async () => {
   const { env, calls } = makeEnv({ failImageInsert: true });
   const request = makeUploadRequest();
 

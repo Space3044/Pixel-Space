@@ -1,9 +1,20 @@
+import type { Env } from '../types';
+import { keyFromRouteParam } from './keys';
+import { notFound, serverError, unauthorized } from './http';
+import { resolveAdmin } from './auth';
+import type { RequestLogger } from './logger';
 import { getTelegramFileUrl } from './telegram';
 
 export interface OriginalImageRow {
   key: string;
   original_filename: string;
   tg_file_id: string | null;
+}
+
+const ORIGINAL_SQL = 'SELECT key, title, original_filename, tg_file_id FROM images WHERE key = ?';
+
+interface OriginalRow extends OriginalImageRow {
+  title: string;
 }
 
 export function downloadName(name: string): string {
@@ -24,3 +35,29 @@ export async function streamTelegramOriginal(token: string, row: OriginalImageRo
 
   return new Response(fileResponse.body, { headers });
 }
+
+export const handleOriginalGet = async (
+  { env, params, request }: EventContext<Env, string, Record<string, unknown>>,
+  logger: RequestLogger,
+): Promise<Response> => {
+  if (!(await resolveAdmin(request, env))) return unauthorized();
+
+  const key = keyFromRouteParam(params.key);
+  if (!key) return notFound();
+
+  try {
+    const row = await env.DB.prepare(ORIGINAL_SQL).bind(key).first<OriginalRow>();
+    if (!row) return notFound();
+
+    const response = await streamTelegramOriginal(env.TG_BOT_TOKEN, row);
+    if (!response) return notFound('original_not_archived');
+
+    return response;
+  } catch (error) {
+    logger.error('GET /api/admin/original/:key failed', {
+      error,
+      context: { key },
+    });
+    return serverError('original_failed');
+  }
+};
