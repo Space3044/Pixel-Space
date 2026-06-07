@@ -12,7 +12,7 @@ const router = useRouter();
 const consumeRedirectIfAdmin = () => {
   if (!isAdmin.value) return;
   const raw = route.query.redirect;
-  const target = typeof raw === 'string' && raw.startsWith('/') ? raw : '/upload';
+  const target = typeof raw === 'string' && raw.startsWith('/') ? raw : '/library';
   void router.replace(target);
 };
 
@@ -79,7 +79,7 @@ const SHIELD = {
             </header>
 
             <div class="actions">
-              <a href="/upload" class="primary">
+              <a href="/library" class="primary">
                 <svg :viewBox="MAIL.vb" fill="currentColor" class="primary-icon" aria-hidden="true">
                   <path :d="MAIL.d" />
                 </svg>

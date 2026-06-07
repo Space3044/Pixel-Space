@@ -54,6 +54,15 @@ test('AppShell shows upload only in the admin nav before console', () => {
   assert.match(router, /path:\s*'\/upload'[\s\S]*requiresAdmin:\s*true/);
 });
 
+test('AppShell turns the access entry into a connected console link for admins', () => {
+  assert.match(
+    shell,
+    /const accessEntry = computed\(\(\) => \(\{\s*to:\s*isAdmin\.value \? '\/library' : '\/login',\s*label:\s*isAdmin\.value \? '已接入' : '接入',\s*\}\)\);/,
+  );
+  assert.match(shell, /:to="accessEntry\.to"/);
+  assert.match(shell, /\{\{\s*accessEntry\.label\s*\}\}/);
+});
+
 test('router keeps /library but titles it as console', () => {
   assert.match(router, /path:\s*'\/library'[\s\S]*title:\s*'控制台'[\s\S]*requiresAdmin:\s*true/);
   assert.doesNotMatch(router, /path:\s*'\/library'[\s\S]*title:\s*'文件库'/);
