@@ -9,7 +9,6 @@ import LocationSearch from '@/features/images/LocationSearch.vue';
 import FolderPickerPopover from '@/features/images/FolderPickerPopover.vue';
 import { fetchAdminFolders, type FolderRecord } from '@/features/library/library.api';
 import { reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult } from '@/features/images/geocode.api';
-import type { ImageRecord } from '@/features/images/image.types';
 import { formatBytes as formatImageBytes } from '@/features/images/image-meta';
 import { checkAdminImageHash, fetchAdminImage } from '@/features/images/images.api';
 import { regionForCoordinate, type MapRegion } from './map-coordinate';
@@ -18,7 +17,8 @@ import { createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter } f
 import { previewAiAnnotation } from './ai-preview.api';
 import { retryTelegramArchive, uploadImage } from './upload.api';
 import { buildUploadFormData } from './upload-form';
-import type { UploadDimensions, UploadExif, UploadMeta } from './upload.types';
+import type { UploadDimensions, UploadExif } from './upload.types';
+import { useUploadQueue, type UploadEntry } from './useUploadQueue';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 const MAX_EDGE = 2048;
@@ -30,94 +30,31 @@ const UPLOAD_CONCURRENCY = 2;
 const TELEGRAM_ARCHIVE_POLL_ATTEMPTS = 60;
 const TELEGRAM_ARCHIVE_POLL_INTERVAL_MS = 1200;
 
-type EntryStatus = 'processing' | 'ready' | 'uploading' | 'done' | 'error';
-type AiStatus = 'idle' | 'pending' | 'done' | 'failed';
 type MapLoadState = 'loading' | 'ready';
-
-interface UploadEntry {
-  id: string;
-  file: File;
-  previewUrl: string | null;
-  previewObjectUrl: string | null;
-  compressedFile: File | null;
-  compressedDimensions: UploadDimensions | null;
-  aiPreviewFile: File | null;
-  exif: UploadExif;
-  meta: UploadMeta;
-  status: EntryStatus;
-  errorMessage: string | null;
-  aiStatus: AiStatus;
-  aiError: string | null;
-  aiRequestId: number;
-  uploadResult: ImageRecord | null;
-  archiveRetrying: boolean;
-  archiveRetryError: string | null;
-  duplicate: boolean;
-}
-
-const emptyExif = (): UploadExif => ({
-  taken_at: null,
-  camera: null,
-  iso: null,
-  aperture: null,
-  shutter: null,
-  focal_length: null,
-  location_lat: null,
-  location_lng: null,
-});
-
-const createMeta = (file: File): UploadMeta => ({
-  title: file.name.replace(/\.[^.]+$/, ''),
-  caption: '',
-  location_name: '',
-  location_lat: null,
-  location_lng: null,
-  location_region: null,
-  tags: '',
-  search_content: '',
-  dominant_color: '',
-  palette: '',
-  composition: '',
-  ai_status: 'pending',
-  is_public: 1,
-  location_public: 1,
-  folder_id: null,
-});
-
-let entryIdSeq = 0;
-const nextEntryId = () => `e_${++entryIdSeq}`;
-
-const createEntry = (file: File): UploadEntry => {
-  const previewObjectUrl = URL.createObjectURL(file);
-  return {
-    id: nextEntryId(),
-    file,
-    previewUrl: previewObjectUrl,
-    previewObjectUrl,
-    compressedFile: null,
-    compressedDimensions: null,
-    aiPreviewFile: null,
-    exif: emptyExif(),
-    meta: createMeta(file),
-    status: 'processing',
-    errorMessage: null,
-    aiStatus: 'idle',
-    aiError: null,
-    aiRequestId: 0,
-    uploadResult: null,
-    archiveRetrying: false,
-    archiveRetryError: null,
-    duplicate: false,
-  };
-};
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const mapRef = ref<HTMLDivElement | null>(null);
 
-const entries = ref<UploadEntry[]>([]);
-const currentEntryId = ref<string | null>(null);
-const isBatchUploading = ref(false);
-const globalError = ref<string | null>(null);
+const {
+  entries,
+  currentEntryId,
+  isBatchUploading,
+  globalError,
+  createEntry,
+  currentEntry,
+  hasCurrent,
+  displayEntry,
+  displayFileName,
+  hasEntries,
+  readyEntries,
+  queueCountLabel,
+  canSubmit,
+  statusLabel,
+  statusVariant,
+  taskProgressMax,
+  taskProgressValue,
+  taskProgressStatus,
+} = useUploadQueue();
 const mapLoadState = ref<MapLoadState>('loading');
 
 // 整批上传配置：目标文件夹 + 是否把当前图位置自动同步到队列里其它没坐标的图。
@@ -129,98 +66,15 @@ let pickAdapter: PickMapAdapter | null = null;
 // 取景底图区域跟随位置搜索范围切换。
 const pickRegion = ref<GeocodeRegion>('cn');
 const regionFromPickRegion = (region: GeocodeRegion): MapRegion => (region === 'cn' ? 'china' : 'global');
+const searchRegionFromMapRegion = (region: MapRegion | null | undefined): GeocodeRegion =>
+  region === 'global' ? 'global' : 'cn';
 const geocodeRegionForCoordinate = (lat: number, lng: number): GeocodeRegion =>
   regionForCoordinate({ lng, lat }) === 'global' ? 'global' : 'cn';
 
-const currentEntry = computed(() => entries.value.find((entry) => entry.id === currentEntryId.value) ?? null);
-const hasCurrent = computed(() => currentEntry.value !== null);
-
-const emptyEntry = ref<UploadEntry>({
-  id: '__placeholder__',
-  file: new File([], ''),
-  previewUrl: null,
-  previewObjectUrl: null,
-  compressedFile: null,
-  compressedDimensions: null,
-  aiPreviewFile: null,
-  exif: emptyExif(),
-  meta: createMeta(new File([], '')),
-  status: 'ready',
-  errorMessage: null,
-  aiStatus: 'idle',
-  aiError: null,
-  aiRequestId: 0,
-  uploadResult: null,
-  archiveRetrying: false,
-  archiveRetryError: null,
-  duplicate: false,
-});
-
-const displayEntry = computed<UploadEntry>(() => currentEntry.value ?? emptyEntry.value);
-const displayFileName = computed(() => currentEntry.value?.file.name ?? '--');
-const hasEntries = computed(() => entries.value.length > 0);
-const readyEntries = computed(() => entries.value.filter((entry) => entry.status === 'ready'));
-const doneEntries = computed(() =>
-  entries.value.filter((entry) => entry.status === 'done' && entry.uploadResult !== null),
-);
-const processingCount = computed(() => entries.value.filter((entry) => entry.status === 'processing').length);
-const duplicateEntries = computed(() => entries.value.filter((entry) => entry.duplicate));
-const queueCountLabel = computed(() => (hasEntries.value ? `${entries.value.length} 张` : '空'));
-const canSubmit = computed(() => readyEntries.value.length > 0 && !isBatchUploading.value);
 const formatBytes = (bytes: number): string => formatImageBytes(bytes, '--');
 
 const originalSize = computed(() => formatBytes(currentEntry.value?.file.size ?? 0));
 const compressedSize = computed(() => formatBytes(currentEntry.value?.compressedFile?.size ?? 0));
-
-const statusLabel = computed(() => {
-  if (globalError.value) return globalError.value;
-  if (isBatchUploading.value) {
-    const uploadingCount = entries.value.filter((entry) => entry.status === 'uploading').length;
-    const total = readyEntries.value.length + uploadingCount + doneEntries.value.length;
-    return total > 0 ? `正在上传 ${doneEntries.value.length}/${total}` : '上传中';
-  }
-  if (processingCount.value > 0) return `处理图片中… ${processingCount.value} 张`;
-  const dupCount = duplicateEntries.value.length;
-  const dupSuffix = dupCount > 0 ? `，跳过 ${dupCount} 张重复` : '';
-  if (canSubmit.value) return `准备就绪，可上传 ${readyEntries.value.length} 张${dupSuffix}`;
-  if (hasEntries.value && doneEntries.value.length === entries.value.length) {
-    return dupCount > 0 ? `全部完成（${dupCount} 张已存在）` : '全部上传完成';
-  }
-  if (hasEntries.value) return '等待操作';
-  return '等待选择图片';
-});
-
-const statusVariant = computed<'is-idle' | 'is-busy' | 'is-ok' | 'is-error' | 'is-pending'>(() => {
-  if (globalError.value) return 'is-error';
-  if (isBatchUploading.value || processingCount.value > 0) return 'is-busy';
-  if (hasEntries.value && doneEntries.value.length === entries.value.length) return 'is-ok';
-  if (canSubmit.value) return 'is-pending';
-  return 'is-idle';
-});
-
-const uploadTaskTotal = computed(() => {
-  const uploadingCount = entries.value.filter((entry) => entry.status === 'uploading').length;
-  return Math.max(1, readyEntries.value.length + uploadingCount + doneEntries.value.length);
-});
-
-const taskProgressMax = computed(() => (isBatchUploading.value ? uploadTaskTotal.value : Math.max(1, entries.value.length)));
-
-const taskProgressValue = computed<number | null>(() => {
-  if (globalError.value) return null;
-  if (isBatchUploading.value) return doneEntries.value.length;
-  if (processingCount.value > 0) return entries.value.length - processingCount.value;
-  if (hasEntries.value && doneEntries.value.length === entries.value.length) return entries.value.length;
-  if (canSubmit.value) return readyEntries.value.length;
-  return 0;
-});
-
-const taskProgressStatus = computed<'idle' | 'loading' | 'success' | 'error'>(() => {
-  if (globalError.value) return 'error';
-  if (isBatchUploading.value || processingCount.value > 0) return 'loading';
-  if (hasEntries.value && doneEntries.value.length === entries.value.length) return 'success';
-  if (canSubmit.value) return 'loading';
-  return 'idle';
-});
 
 const display = (value: string | number | null): string => {
   if (value === null || value === '') return '--';
@@ -348,6 +202,13 @@ const remountMap = async () => {
   pickAdapter = null;
   mapLoadState.value = 'loading';
   await mountMap();
+};
+
+const syncPickRegionFromEntry = (entry: UploadEntry | null) => {
+  const nextRegion = searchRegionFromMapRegion(entry?.meta.location_region);
+  if (nextRegion === pickRegion.value) return;
+  pickRegion.value = nextRegion;
+  void remountMap();
 };
 
 const onSearchRegionChange = (region: GeocodeRegion) => {
@@ -641,8 +502,11 @@ const openFilePicker = () => {
 };
 
 const selectEntry = (entryId: string) => {
+  const entry = entries.value.find((item) => item.id === entryId) ?? null;
+  if (!entry) return;
   if (currentEntryId.value === entryId) return;
   currentEntryId.value = entryId;
+  syncPickRegionFromEntry(entry);
 };
 
 const removeEntry = (entryId: string) => {
@@ -654,12 +518,14 @@ const removeEntry = (entryId: string) => {
   if (currentEntryId.value !== entryId) return;
   const nextEntry = entries.value[index] ?? entries.value[index - 1] ?? null;
   currentEntryId.value = nextEntry?.id ?? null;
+  syncPickRegionFromEntry(nextEntry);
 };
 
 const clearAll = () => {
   for (const entry of entries.value) releaseEntryPreview(entry);
   entries.value = [];
   currentEntryId.value = null;
+  syncPickRegionFromEntry(null);
   globalError.value = null;
 };
 

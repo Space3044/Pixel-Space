@@ -31,10 +31,12 @@ test('AMap loader uses the official JS API loader with zh_cn language', () => {
   assert.match(amapLoader, /'AMap\.Geocoder'/);
 });
 
-test('read-only single image map uses AMap JS API instead of MapLibre styles', () => {
-  assert.match(readOnlyMap, /loadAmap/);
-  assert.match(readOnlyMap, /new amap\.Map/);
-  assert.doesNotMatch(readOnlyMap, /maplibre-gl|primaryMapStyleForRegion|RASTER_FALLBACK_STYLE|setStyle/);
+test('read-only single image map stays static until editing and reuses picker map adapters', () => {
+  assert.match(readOnlyMap, /createChinaPickAdapter/);
+  assert.match(readOnlyMap, /createWorldPickAdapter/);
+  assert.match(readOnlyMap, /interactiveRegion/);
+  assert.match(readOnlyMap, /props\.region === 'global' \? 'global' : 'china'/);
+  assert.doesNotMatch(readOnlyMap, /new amap\.Map|new maplibregl\.Map/);
 });
 
 test('upload picker splits into AMap (domestic) and Mapbox (overseas) maps', () => {
@@ -79,14 +81,13 @@ test('footprint page splits into AMap (domestic) and Mapbox (overseas) maps', ()
 test('AMap maps keep WGS84 storage and GCJ-02 display conversion', () => {
   assert.match(pickMap, /mapLngLatFromStored/);
   assert.match(pickMap, /storedLngLatFromMap/);
-  assert.match(readOnlyMap, /mapLngLatFromStored/);
-  assert.match(readOnlyMap, /storedLngLatFromMap/);
+  assert.match(readOnlyMap, /type LngLat/);
+  assert.match(readOnlyMap, /currentStoredCoordinate/);
 });
 
 test('single image maps use pin markers anchored at the coordinate point', () => {
   assert.match(readOnlyMap, /map-location-pin/);
   assert.match(readOnlyMap, /map-location-pin-dot/);
-  assert.match(readOnlyMap, /anchor:\s*'bottom-center'/);
   assert.match(readOnlyMap, /clip-path:\s*polygon/);
 
   // 取景图样式留在 UploadView，标记创建移到 pick-map：高德锚点 bottom-center、Mapbox 锚点 bottom

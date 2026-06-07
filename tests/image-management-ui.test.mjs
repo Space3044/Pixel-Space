@@ -192,7 +192,6 @@ test('ImageLightbox toggles the bottom zoom controls from image clicks', () => {
 });
 
 test('ReadOnlyMap supports empty coordinates and interactive coordinate picking', () => {
-  assert.match(readOnlyMap, /const DEFAULT_CENTER/);
   assert.match(readOnlyMap, /lat\?: number \| null/);
   assert.match(readOnlyMap, /lng\?: number \| null/);
   assert.match(readOnlyMap, /region\?: string \| null/);
@@ -203,11 +202,12 @@ test('ReadOnlyMap supports empty coordinates and interactive coordinate picking'
   assert.match(readOnlyMap, /interactive\?: boolean/);
   assert.match(readOnlyMap, /defineEmits<\{ pick:/);
   assert.match(readOnlyMap, /emit\('pick'/);
-  assert.match(readOnlyMap, /map\.on\('click'/);
-  assert.match(readOnlyMap, /marker\?\.setMap\(null\);\s*marker = null;/s);
-  assert.match(readOnlyMap, /center: mapCenter\(\)/);
-  assert.match(readOnlyMap, /dragEnable: props\.interactive/);
-  assert.match(readOnlyMap, /storedLngLatFromMap/);
+  assert.match(readOnlyMap, /createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter/);
+  assert.match(readOnlyMap, /const currentStoredCoordinate = \(\): LngLat \| null =>/);
+  assert.match(readOnlyMap, /const interactiveRegion = \(\): MapRegion =>/);
+  assert.match(readOnlyMap, /props\.region === 'global' \? 'global' : 'china'/);
+  assert.match(readOnlyMap, /createWorldPickAdapter\(\) : createChinaPickAdapter\(\)/);
+  assert.match(readOnlyMap, /nextAdapter\.init\(/);
   assert.match(readOnlyMap, /readonly-map-placeholder/);
   assert.match(lightbox, /const mapRegion = computed/);
   assert.match(lightbox, /:region="mapRegion"/);

@@ -89,3 +89,9 @@ test('ImageLightbox applies selected geocode result while editing location', () 
   assert.match(lightbox, /editForm\.location_lng = result\.lng/);
   assert.match(lightbox, /:model-value="editSearchRegion"[\s\S]*@select="applyLocationSearchResult"[\s\S]*@region-change="onEditSearchRegionChange"/);
 });
+
+test('ImageLightbox restores the edit search region from the saved location region', () => {
+  assert.match(lightbox, /const searchRegionFromMapRegion = \(region: MapRegion \| null \| undefined\): GeocodeRegion =>/);
+  assert.match(lightbox, /locationEditOpen\.value \? regionFromSearchRegion\(editSearchRegion\.value\) : toRegion\(props\.image\?\.location_region\)/);
+  assert.match(lightbox, /editSearchRegion\.value = searchRegionFromMapRegion\(editForm\.location_region\)/);
+});

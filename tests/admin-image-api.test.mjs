@@ -14,7 +14,7 @@ const test = async (name, fn) => {
 
 const makeStaticMapReferenceKey = (region, lat, lng) => `${region}:${lat}:${lng}`;
 
-const makeEnv = (row, { staticMapReferences = new Map() } = {}) => {
+const makeEnv = (row, { selectedRows = [row], staticMapReferences = new Map() } = {}) => {
   const calls = {
     deletedObjects: [],
     gets: [],
@@ -25,6 +25,7 @@ const makeEnv = (row, { staticMapReferences = new Map() } = {}) => {
     deletes: [],
     telegram: [],
   };
+  let selectedRowIndex = 0;
 
   const env = {
     PUBLIC_BASE_URL: 'https://cdn.test',
@@ -55,7 +56,9 @@ const makeEnv = (row, { staticMapReferences = new Map() } = {}) => {
                   return staticMapReferences.get(makeStaticMapReferenceKey(region, lat, lng)) ?? null;
                 }
                 calls.selectedKeys.push(values[0]);
-                return row;
+                const selected = selectedRows[Math.min(selectedRowIndex, selectedRows.length - 1)];
+                selectedRowIndex += 1;
+                return selected;
               },
               run: async () => {
                 if (/update\s+images/i.test(sql)) calls.updates.push({ sql, values });
@@ -292,7 +295,88 @@ await test('PATCH /api/admin/image/:key pre-caches the updated location static m
   assert.equal(staticMapPut.options.httpMetadata.contentType, 'image/png');
 });
 
-await test('PATCH /api/admin/image/:key does not pre-cache hidden visitor locations', async () => {
+await test('PATCH /api/admin/image/:key removes unshared old static map cache after location changes', async () => {
+  const previousRow = {
+    ...imageRow,
+    location_lat: 31.2304,
+    location_lng: 121.4737,
+    location_region: 'china',
+  };
+  const updatedRow = {
+    ...imageRow,
+    location_name: '巴黎',
+    location_lat: 48.8566,
+    location_lng: 2.3522,
+    location_region: 'global',
+    location_public: 0,
+  };
+  const { env, calls } = makeEnv(updatedRow, { selectedRows: [previousRow, updatedRow] });
+
+  const response = await onRequestPatch({
+    env,
+    params: { key: 'img-key' },
+    request: new Request('http://localhost/api/admin/image/img-key', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: '旧标题',
+        caption: '旧描述',
+        location_name: '巴黎',
+        location_lat: 48.8566,
+        location_lng: 2.3522,
+        location_region: 'global',
+        location_public: 0,
+      }),
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(calls.deletedObjects.includes('staticmap/amap_31.230400_121.473700_z12_600x360.png'), true);
+  assert.deepEqual(calls.staticMapReferenceChecks[0].values, ['img-key', 'china', '31.230400', '121.473700']);
+});
+
+await test('PATCH /api/admin/image/:key keeps shared old static map cache after location changes', async () => {
+  const staticMapReferences = new Map([
+    [makeStaticMapReferenceKey('china', '31.230400', '121.473700'), { key: 'other-img' }],
+  ]);
+  const previousRow = {
+    ...imageRow,
+    location_lat: 31.2304,
+    location_lng: 121.4737,
+    location_region: 'china',
+  };
+  const updatedRow = {
+    ...imageRow,
+    location_name: '巴黎',
+    location_lat: 48.8566,
+    location_lng: 2.3522,
+    location_region: 'global',
+    location_public: 0,
+  };
+  const { env, calls } = makeEnv(updatedRow, { selectedRows: [previousRow, updatedRow], staticMapReferences });
+
+  const response = await onRequestPatch({
+    env,
+    params: { key: 'img-key' },
+    request: new Request('http://localhost/api/admin/image/img-key', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: '旧标题',
+        caption: '旧描述',
+        location_name: '巴黎',
+        location_lat: 48.8566,
+        location_lng: 2.3522,
+        location_region: 'global',
+        location_public: 0,
+      }),
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(calls.deletedObjects.includes('staticmap/amap_31.230400_121.473700_z12_600x360.png'), false);
+  assert.equal(calls.staticMapReferenceChecks.length, 1);
+});
+
+await test('PATCH /api/admin/image/:key pre-caches hidden visitor locations', async () => {
   const { env, calls } = makeEnv({
     ...imageRow,
     location_name: '隐藏位置',
@@ -328,8 +412,10 @@ await test('PATCH /api/admin/image/:key does not pre-cache hidden visitor locati
   );
 
   assert.equal(response.status, 200);
-  assert.equal(staticMapRequests.length, 0);
-  assert.equal(calls.puts.some((put) => String(put.key).startsWith('staticmap/')), false);
+  assert.equal(staticMapRequests.length, 1);
+  const staticMapKey = 'staticmap/amap_31.230400_121.473700_z12_600x360.png';
+  assert.equal(calls.gets.includes(staticMapKey), true);
+  assert.equal(calls.puts.some((put) => put.key === staticMapKey), true);
 });
 
 await test('PATCH /api/admin/image/:key rejects invalid coordinates before updating', async () => {

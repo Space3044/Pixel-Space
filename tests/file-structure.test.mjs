@@ -43,6 +43,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'src/features/upload/amap.ts',
     'src/features/upload/exif.ts',
     'src/features/upload/map-coordinate.ts',
+    'src/features/upload/useUploadQueue.ts',
     'src/features/upload/upload.api.ts',
     'src/features/upload/upload-form.ts',
     'src/features/upload/upload.types.ts',
@@ -104,6 +105,7 @@ test('keeps only the starter code the owner will extend by hand', () => {
     'tests/exif.test.mjs',
     'tests/map-style.test.mjs',
     'tests/upload-api.test.mjs',
+    'tests/upload-queue.test.mjs',
     'tests/upload-form.test.mjs',
     'tests/image-object.test.mjs',
   ]) {

@@ -57,6 +57,12 @@ interface DeleteRow {
   location_region: 'china' | 'global' | null;
 }
 
+interface StaticMapReferenceLike {
+  location_lat: number | null;
+  location_lng: number | null;
+  location_region: 'china' | 'global' | null;
+}
+
 interface EditablePayload {
   title: string;
   caption: string | null;
@@ -103,6 +109,15 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
 const keyFromParams = (params: EventContext<Env, string, unknown>['params']): string =>
   keyFromRouteParam(params.key);
 
+const staticMapReferenceKey = (row: StaticMapReferenceLike): string | null => {
+  if (row.location_lat === null || row.location_lng === null || !row.location_region) return null;
+  if (!Number.isFinite(row.location_lat) || !Number.isFinite(row.location_lng)) return null;
+  return `${row.location_region}:${row.location_lat.toFixed(6)}:${row.location_lng.toFixed(6)}`;
+};
+
+const staticMapReferenceChanged = (before: StaticMapReferenceLike, after: StaticMapReferenceLike): boolean =>
+  staticMapReferenceKey(before) !== staticMapReferenceKey(after);
+
 export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/image/:key', async ({ env, params, request }, logger) => {
   if (!(await resolveAdmin(request, env))) return unauthorized();
 
@@ -135,6 +150,9 @@ export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin
   if (!payload) return badRequest('invalid_image_payload');
 
   try {
+    const previousRow = await env.DB.prepare(DELETE_DETAIL_SQL).bind(key).first<DeleteRow>();
+    if (!previousRow) return notFound();
+
     await env.DB.prepare(UPDATE_SQL)
       .bind(
         payload.title,
@@ -155,14 +173,24 @@ export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin
 
     const row = await env.DB.prepare(DETAIL_SQL).bind(key).first<ImageRow>();
     if (!row) return notFound();
-    if (row.is_public === 1 && row.location_public === 1) {
-      const staticMapTask = createStaticMapCacheTask(env, row.location_lat, row.location_lng, row.location_region, logger);
-      if (staticMapTask) {
-        if (typeof context.waitUntil === 'function') {
-          context.waitUntil(staticMapTask);
-        } else {
-          await staticMapTask;
-        }
+
+    if (staticMapReferenceChanged(previousRow, row)) {
+      try {
+        await deleteUnusedStaticMapCache(env, previousRow);
+      } catch (error) {
+        logger.error('Static map cleanup failed', {
+          error,
+          context: { key },
+        });
+      }
+    }
+
+    const staticMapTask = createStaticMapCacheTask(env, row.location_lat, row.location_lng, row.location_region, logger);
+    if (staticMapTask) {
+      if (typeof context.waitUntil === 'function') {
+        context.waitUntil(staticMapTask);
+      } else {
+        await staticMapTask;
       }
     }
     return json(rowToAdminRecord(row));

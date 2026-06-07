@@ -259,14 +259,12 @@ export const handleUploadPost = async (
       .run();
     d1ImageInserted = true;
 
-    if (meta.is_public === 1 && meta.location_public === 1) {
-      const staticMapTask = createStaticMapCacheTask(env, meta.location_lat, meta.location_lng, meta.location_region, logger);
-      if (staticMapTask) {
-        if (typeof context.waitUntil === 'function') {
-          context.waitUntil(staticMapTask);
-        } else {
-          await staticMapTask;
-        }
+    const staticMapTask = createStaticMapCacheTask(env, meta.location_lat, meta.location_lng, meta.location_region, logger);
+    if (staticMapTask) {
+      if (typeof context.waitUntil === 'function') {
+        context.waitUntil(staticMapTask);
+      } else {
+        await staticMapTask;
       }
     }
 

@@ -339,8 +339,8 @@ await test('POST /api/admin/upload pre-caches the stored location static map in 
   assert.equal(staticMapPut.options.httpMetadata.contentType, 'image/png');
 });
 
-await test('POST /api/admin/upload does not pre-cache hidden visitor locations', async () => {
-  const { env, calls } = makeEnv({ mapboxToken: 'pk.mb-token' });
+await test('POST /api/admin/upload pre-caches hidden visitor locations', async () => {
+  const { env, calls } = makeEnv({ amapWebKey: 'amap-web-key', mapboxToken: 'pk.mb-token' });
   const request = makeUploadRequest({ meta: { location_public: 0 } });
   const staticMapRequests = [];
 
@@ -354,8 +354,10 @@ await test('POST /api/admin/upload does not pre-cache hidden visitor locations',
   }, () => uploadPost({ env, request, params: {} }));
 
   assert.equal(response.status, 201);
-  assert.equal(staticMapRequests.length, 0);
-  assert.equal(calls.puts.some((put) => String(put.key).startsWith('staticmap/')), false);
+  assert.equal(staticMapRequests.length, 1);
+  const staticMapKey = 'staticmap/amap_31.230400_121.473700_z12_600x360.png';
+  assert.equal(calls.gets.includes(staticMapKey), true);
+  assert.equal(calls.puts.some((put) => put.key === staticMapKey), true);
 });
 
 await test('POST /api/admin/upload archives the original file to Telegram after D1 insert', async () => {

@@ -38,10 +38,14 @@ test('shared progress components exist with accessible determinate and indetermi
 
 test('upload page uses the shared progress component for queue and upload status', () => {
   const view = read('src/features/upload/UploadView.vue');
+  const uploadQueue = read('src/features/upload/useUploadQueue.ts');
   assert.match(view, /import TaskProgress from '@\/shared\/ui\/TaskProgress\.vue'/);
-  assert.match(view, /const taskProgressValue = computed/);
-  assert.match(view, /const taskProgressMax = computed/);
-  assert.match(view, /const taskProgressStatus = computed/);
+  assert.match(view, /taskProgressValue,/);
+  assert.match(view, /taskProgressMax,/);
+  assert.match(view, /taskProgressStatus,/);
+  assert.match(uploadQueue, /const taskProgressValue = computed/);
+  assert.match(uploadQueue, /const taskProgressMax = computed/);
+  assert.match(uploadQueue, /const taskProgressStatus = computed/);
   assert.match(view, /<TaskProgress\s+class="action-progress"/);
   assert.match(view, /:label="statusLabel"/);
   assert.match(view, /:value="taskProgressValue"/);

@@ -167,7 +167,7 @@ const mapLng = computed(() => toMapCoordinate(
 ));
 
 const mapRegion = computed(() =>
-  locationEditOpen.value ? editForm.location_region : toRegion(props.image?.location_region),
+  locationEditOpen.value ? regionFromSearchRegion(editSearchRegion.value) : toRegion(props.image?.location_region),
 );
 
 const sharePage = async () => {
@@ -179,6 +179,8 @@ const toRegion = (value: string | null | undefined): MapRegion | null =>
   value === 'china' || value === 'global' ? value : null;
 
 const regionFromSearchRegion = (region: GeocodeRegion): MapRegion => (region === 'cn' ? 'china' : 'global');
+const searchRegionFromMapRegion = (region: MapRegion | null | undefined): GeocodeRegion =>
+  region === 'global' ? 'global' : 'cn';
 
 // 编辑时坐标归属跟随用户选择的搜索区域，避免用坐标范围自动误判。
 const syncEditRegionFromSearch = () => {
@@ -213,6 +215,7 @@ const resetForm = (image: ImageRecord | null | undefined) => {
   editForm.location_lat = image?.location_lat ?? '';
   editForm.location_lng = image?.location_lng ?? '';
   editForm.location_region = toRegion(image?.location_region);
+  editSearchRegion.value = searchRegionFromMapRegion(editForm.location_region);
   editForm.is_public = image?.is_public === 0 ? 0 : 1;
   editForm.location_public = image?.location_public === 0 ? 0 : 1;
 };

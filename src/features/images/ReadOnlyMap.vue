@@ -1,13 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import {
-  mapLngLatFromStored,
-  storedLngLatFromMap,
-} from '@/features/upload/map-coordinate';
-import { loadAmap } from '@/features/upload/amap';
-import type { AMapClickEvent, AMapMap, AMapMarker, AMapNamespace } from '@/features/upload/amap';
-
-const DEFAULT_CENTER = { lat: 31.2304, lng: 121.4737 };
+import { createChinaPickAdapter, createWorldPickAdapter, type PickMapAdapter } from '@/features/upload/pick-map';
+import { type LngLat, type MapRegion } from '@/features/upload/map-coordinate';
 
 const props = withDefaults(defineProps<{
   lat?: number | null;
@@ -28,19 +22,8 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ pick: [coords: { lat: number; lng: number }] }>();
 
 const mapEl = ref<HTMLElement | null>(null);
-let map: AMapMap | null = null;
-let marker: AMapMarker | null = null;
-let amap: AMapNamespace | null = null;
-
-const createMarkerElement = () => {
-  const el = document.createElement('span');
-  el.className = 'readonly-map-marker map-location-pin';
-  el.setAttribute('aria-hidden', 'true');
-  const dot = document.createElement('span');
-  dot.className = 'map-location-pin-dot';
-  el.appendChild(dot);
-  return el;
-};
+let adapter: PickMapAdapter | null = null;
+let adapterRegion: MapRegion | null = null;
 
 const getCoordinates = () => {
   if (props.lat === null || props.lng === null) return null;
@@ -52,6 +35,8 @@ const getRegion = () => {
   if (props.region === 'china' || props.region === 'global') return props.region;
   return null;
 };
+
+const interactiveRegion = (): MapRegion => (props.region === 'global' ? 'global' : 'china');
 
 const staticError = ref(false);
 
@@ -68,70 +53,48 @@ const onStaticError = () => {
   staticError.value = true;
 };
 
-const mapCenter = (): [number, number] => {
+const currentStoredCoordinate = (): LngLat | null => {
   const coordinates = getCoordinates();
-  const mapCoordinate = coordinates ? mapLngLatFromStored(coordinates) : null;
-  const defaultCenter = mapLngLatFromStored(DEFAULT_CENTER);
-  return mapCoordinate
-    ? [mapCoordinate.lng, mapCoordinate.lat]
-    : [defaultCenter.lng, defaultCenter.lat];
+  return coordinates ? { lng: coordinates.lng, lat: coordinates.lat } : null;
 };
 
-const placeMarker = () => {
-  if (!map || !amap) return;
-  const coordinates = getCoordinates();
-  marker?.setMap(null);
-  marker = null;
-  map.setCenter(mapCenter());
-  if (!coordinates) return;
-  const mapCoordinate = mapLngLatFromStored(coordinates);
-  marker = new amap.Marker({
-    position: [mapCoordinate.lng, mapCoordinate.lat],
-    content: createMarkerElement(),
-    anchor: 'bottom-center',
-  });
-  marker.setMap(map);
+const createAdapter = (): PickMapAdapter =>
+  interactiveRegion() === 'global' ? createWorldPickAdapter() : createChinaPickAdapter();
+
+const destroyMap = () => {
+  adapter?.destroy();
+  adapter = null;
+  adapterRegion = null;
 };
 
-const setInteractionState = (enabled: boolean) => {
-  if (!map) return;
-  map.setStatus?.({
-    dragEnable: enabled,
-    zoomEnable: enabled,
-    doubleClickZoom: enabled,
-    keyboardEnable: enabled,
-  });
+const syncMarker = (center = false) => {
+  adapter?.setMarker(currentStoredCoordinate(), center);
 };
 
-const handleMapClick = (event: AMapClickEvent) => {
+const emitPick = (stored: LngLat) => {
   if (!props.interactive) return;
-  const storedCoordinate = storedLngLatFromMap({
-    lng: event.lnglat.getLng(),
-    lat: event.lnglat.getLat(),
-  });
-  emit('pick', {
-    lat: Number(storedCoordinate.lat.toFixed(6)),
-    lng: Number(storedCoordinate.lng.toFixed(6)),
-  });
+  emit('pick', { lat: stored.lat, lng: stored.lng });
 };
 
 const initMap = async () => {
-  if (!mapEl.value || map) return;
-  amap = await loadAmap();
-  if (!mapEl.value || map) return;
-  map = new amap.Map(mapEl.value, {
-    center: mapCenter(),
-    zoom: 10,
-    lang: 'zh_cn',
-    viewMode: '2D',
-    dragEnable: props.interactive,
-    zoomEnable: props.interactive,
-    doubleClickZoom: props.interactive,
-    keyboardEnable: props.interactive,
-  });
-  map.on('click', handleMapClick);
-  setInteractionState(props.interactive);
-  placeMarker();
+  if (!props.interactive || !mapEl.value || adapter) return;
+  const nextAdapter = createAdapter();
+  const nextRegion = interactiveRegion();
+  adapter = nextAdapter;
+  adapterRegion = nextRegion;
+  await nextAdapter.init(
+    mapEl.value,
+    () => {
+      if (adapter !== nextAdapter) return;
+      nextAdapter.setMarker(currentStoredCoordinate(), true);
+    },
+    emitPick,
+  );
+};
+
+const remountMap = async () => {
+  destroyMap();
+  await initMap();
 };
 
 onMounted(() => {
@@ -142,7 +105,7 @@ watch(
   () => [props.lat, props.lng],
   () => {
     staticError.value = false;
-    placeMarker();
+    syncMarker(true);
   },
 );
 
@@ -151,20 +114,25 @@ watch(
   async (interactive) => {
     if (interactive) {
       await initMap();
-      setInteractionState(true);
+      syncMarker(true);
     } else {
-      setInteractionState(false);
+      destroyMap();
     }
   },
 );
 
+watch(
+  () => props.region,
+  async () => {
+    staticError.value = false;
+    if (!props.interactive) return;
+    if (interactiveRegion() === adapterRegion) return;
+    await remountMap();
+  },
+);
+
 onBeforeUnmount(() => {
-  marker?.setMap(null);
-  marker = null;
-  map?.off('click', handleMapClick);
-  map?.destroy();
-  map = null;
-  amap = null;
+  destroyMap();
 });
 </script>
 
@@ -240,12 +208,9 @@ onBeforeUnmount(() => {
   opacity: 0.65;
 }
 
-:deep(.readonly-map-marker) {
+:deep(.map-location-pin) {
   --pin-color: rgb(255, 79, 216);
   --pin-glow: rgba(255, 79, 216, 0.48);
-}
-
-:deep(.map-location-pin) {
   position: relative;
   display: block;
   width: 1.65rem;

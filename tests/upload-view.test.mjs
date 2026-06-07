@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const view = readFileSync('src/features/upload/UploadView.vue', 'utf8').replace(/\r\n/g, '\n');
+const uploadQueue = readFileSync('src/features/upload/useUploadQueue.ts', 'utf8');
 const uploadApi = readFileSync('src/features/upload/upload.api.ts', 'utf8');
 const aiPreviewApi = readFileSync('src/features/upload/ai-preview.api.ts', 'utf8');
 const geocodeApi = readFileSync('src/features/images/geocode.api.ts', 'utf8');
@@ -106,10 +107,10 @@ test('upload page calls the real upload API instead of console-only FormData log
 
 test('upload page stays on the upload screen and stores results on each queue entry', () => {
   assert.doesNotMatch(view, /useRouter|router\.push/);
-  assert.match(view, /uploadResult:\s*ImageRecord\s*\|\s*null/);
+  assert.match(uploadQueue, /uploadResult:\s*ImageRecord\s*\|\s*null/);
   assert.match(view, /entry\.uploadResult\s*=\s*record/);
   assert.match(view, /entry\.uploadResult\s*=\s*existing/);
-  assert.match(view, /doneEntries\s*=\s*computed/);
+  assert.match(view, /useUploadQueue\(\)/);
 });
 
 test('upload page surfaces Telegram archive status after fast upload responses', () => {
@@ -144,8 +145,8 @@ test('upload page keeps Telegram archive polling alive for slow archive results'
 });
 
 test('upload page can retry failed Telegram archive with the local original file', () => {
-  assert.match(view, /archiveRetrying:\s*boolean/);
-  assert.match(view, /archiveRetryError:\s*string\s*\|\s*null/);
+  assert.match(uploadQueue, /archiveRetrying:\s*boolean/);
+  assert.match(uploadQueue, /archiveRetryError:\s*string\s*\|\s*null/);
   assert.match(view, /const\s+retryArchiveForCurrent\s*=\s*async\s*\(\)/);
   assert.match(view, /await\s+retryTelegramArchive\(entry\.uploadResult\.key,\s*entry\.file\)/);
   assert.match(view, /void\s+watchTelegramArchive\(entry,\s*record\.key\)/);
@@ -162,7 +163,7 @@ test('upload page submits compressed image dimensions with the form data', () =>
 
 test('upload page runs AI preview after compression and keeps fields editable', () => {
   assert.match(view, /import\s+\{\s*previewAiAnnotation\s*\}\s+from\s+'\.\/ai-preview\.api'/);
-  assert.match(view, /aiRequestId:\s*number/);
+  assert.match(uploadQueue, /aiRequestId:\s*number/);
   assert.match(view, /const\s+runAiPreview\s*=\s*async\s*\(entry:\s*UploadEntry\)/);
   assert.match(view, /const\s+requestId\s*=\s*\+\+entry\.aiRequestId/);
   assert.match(view, /enqueueAi\(entry\)/);
@@ -197,7 +198,7 @@ test('upload page limits processing AI and upload concurrency instead of seriali
 test('upload page sends a smaller derived image to AI preview', () => {
   assert.match(view, /const\s+AI_PREVIEW_MAX_EDGE\s*=\s*1280/);
   assert.match(view, /const\s+AI_PREVIEW_RECOMPRESS_BYTES\s*=\s*768\s*\*\s*1024/);
-  assert.match(view, /aiPreviewFile:\s*File\s*\|\s*null/);
+  assert.match(uploadQueue, /aiPreviewFile:\s*File\s*\|\s*null/);
   assert.match(view, /const\s+prepareAiPreviewFile\s*=\s*async\s*\(file:\s*File\):\s*Promise<File>/);
   assert.match(view, /maxWidthOrHeight:\s*AI_PREVIEW_MAX_EDGE/);
   assert.match(view, /initialQuality:\s*0\.72/);
@@ -213,10 +214,21 @@ test('upload duplicate check failure is not silently treated as a new image', ()
 test('upload location region follows the selected region while EXIF can detect overseas coordinates', () => {
   assert.doesNotMatch(view, /mapRegionForStoredCoordinate/);
   assert.match(view, /const\s+regionFromPickRegion\s*=\s*\(region:\s*GeocodeRegion\):\s*MapRegion\s*=>\s*\(region === 'cn' \? 'china' : 'global'\)/);
+  assert.match(view, /const searchRegionFromMapRegion = \(region: MapRegion \| null \| undefined\): GeocodeRegion =>/);
   assert.match(view, /region:\s*GeocodeRegion\s*=\s*pickRegion\.value/);
   assert.match(view, /entry\.meta\.location_region\s*=\s*lat === null \|\| lng === null \? null : regionFromPickRegion\(region\)/);
   assert.match(view, /const geocodeRegionForCoordinate = \(lat: number, lng: number\): GeocodeRegion =>/);
   assert.match(view, /setEntryCoordinates\(entry, nextExif\.location_lat, nextExif\.location_lng, entry\.id === currentEntryId\.value, exifRegion\)/);
+});
+
+test('upload queue selection restores the picker region from the selected entry', () => {
+  assert.match(view, /const syncPickRegionFromEntry = \(entry: UploadEntry \| null\) => \{/);
+  assert.match(view, /const nextRegion = searchRegionFromMapRegion\(entry\?\.meta\.location_region\)/);
+  assert.match(view, /if \(nextRegion === pickRegion\.value\) return;/);
+  assert.match(view, /pickRegion\.value = nextRegion;\s*void remountMap\(\);/);
+  assert.match(view, /const entry = entries\.value\.find\(\(item\) => item\.id === entryId\) \?\? null;[\s\S]*currentEntryId\.value = entryId;[\s\S]*syncPickRegionFromEntry\(entry\);/);
+  assert.match(view, /currentEntryId\.value = nextEntry\?\.id \?\? null;\s*syncPickRegionFromEntry\(nextEntry\);/);
+  assert.match(view, /currentEntryId\.value = null;\s*syncPickRegionFromEntry\(null\);/);
 });
 
 test('upload location region controls do not render implementation-source hint text', () => {

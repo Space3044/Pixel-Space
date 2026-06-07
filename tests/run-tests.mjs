@@ -16,6 +16,7 @@ for (const path of [
   './site-metadata.test.mjs',
   './home-view.test.mjs',
   './exif.test.mjs',
+  './upload-queue.test.mjs',
   './upload-form.test.mjs',
   './map-style.test.mjs',
   './map-coordinate.test.mjs',
