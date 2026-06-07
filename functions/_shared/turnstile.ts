@@ -1,4 +1,4 @@
-import { forbidden, serverError } from './http';
+import { forbidden, json, serverError } from './http';
 import type { RequestLogger } from './logger';
 import type { Env } from '../types';
 
@@ -6,6 +6,10 @@ const COOKIE_NAME = 'visitor_challenge';
 const COOKIE_TTL_SECONDS = 24 * 60 * 60;
 const COOKIE_TTL_MS = COOKIE_TTL_SECONDS * 1000;
 const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+const FAILED_CODE_LIMIT = 5;
+const FAILED_CODE_WINDOW_MS = 10 * 60 * 1000;
+
+const failedCodeAttempts = new Map<string, { count: number; resetAt: number }>();
 
 interface TurnstileVerificationResponse {
   success?: boolean;
@@ -26,6 +30,48 @@ const textEncoder = new TextEncoder();
 
 const isCloudflareRequest = (request: Request): boolean =>
   Boolean((request as Request & { cf?: unknown }).cf);
+
+export const visitorIp = (request: Request): string =>
+  request.headers.get('cf-connecting-ip') ?? request.headers.get('x-forwarded-for') ?? 'unknown';
+
+const failedAttemptKey = (request: Request, challenge: VisitorChallenge): string =>
+  `${visitorIp(request)}:${challenge.visitorId}`;
+
+const retryAfterSeconds = (resetAt: number): number => Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+
+export const tooManyVisitorAttempts = (retryAfter: number): Response => {
+  const response = json({ error: 'too_many_attempts' }, 429);
+  response.headers.set('retry-after', String(retryAfter));
+  return response;
+};
+
+export const blockedVisitorCodeRetryAfter = (request: Request, challenge: VisitorChallenge): number | null => {
+  const key = failedAttemptKey(request, challenge);
+  const bucket = failedCodeAttempts.get(key);
+  if (!bucket) return null;
+  if (bucket.resetAt <= Date.now()) {
+    failedCodeAttempts.delete(key);
+    return null;
+  }
+  return bucket.count >= FAILED_CODE_LIMIT ? retryAfterSeconds(bucket.resetAt) : null;
+};
+
+export const recordFailedVisitorCode = (request: Request, challenge: VisitorChallenge): number | null => {
+  const key = failedAttemptKey(request, challenge);
+  const now = Date.now();
+  const bucket = failedCodeAttempts.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    failedCodeAttempts.set(key, { count: 1, resetAt: now + FAILED_CODE_WINDOW_MS });
+    return null;
+  }
+
+  bucket.count += 1;
+  return bucket.count > FAILED_CODE_LIMIT ? retryAfterSeconds(bucket.resetAt) : null;
+};
+
+export const clearFailedVisitorCodes = (request: Request, challenge: VisitorChallenge): void => {
+  failedCodeAttempts.delete(failedAttemptKey(request, challenge));
+};
 
 const base64Url = (buffer: ArrayBuffer): string => {
   const bytes = new Uint8Array(buffer);

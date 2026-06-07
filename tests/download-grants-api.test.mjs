@@ -541,6 +541,68 @@ await test('POST /api/download-grants/original/:key streams an authorized origin
   assert.equal(calls.prepared.some((sql) => /rate_limits/i.test(sql)), false);
 });
 
+await test('POST /api/download-grants/original/:key requires a visitor challenge before checking codes', async () => {
+  const { env, calls } = makeVisitorEnv();
+  const response = await withMockedFetch(
+    async () => {
+      throw new Error('telegram_should_not_be_called');
+    },
+    () =>
+      downloadGrantOriginal({
+        env: turnstileEnv(env),
+        params: { key: 'img-1' },
+        request: makeGrantRequest('https://example.test/api/download-grants/original/img-1', { code: 'A7K9P2QX' }),
+      }),
+  );
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: 'turnstile_required' });
+  assert.equal(calls.prepared.some((sql) => /from\s+download_grants/i.test(sql)), false);
+});
+
+await test('POST /api/download-grants/original/:key shares failed code throttling with verify', async () => {
+  const { env: validEnv } = makeVisitorEnv();
+  const verified = await withMockedFetch(mockTurnstileSuccess, () =>
+    verifyGrant({
+      env: turnstileEnv(validEnv),
+      request: makeGrantRequest(
+        'https://example.test/api/download-grants/verify',
+        { code: 'A7K9P2QX', turnstileToken: 'visitor-token' },
+        { 'cf-connecting-ip': '198.51.100.13' },
+      ),
+    }),
+  );
+  const cookie = cookieHeader(verified);
+  assert.ok(cookie);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { env: invalidEnv } = makeVisitorEnv({ grant: null });
+    const response = await downloadGrantOriginal({
+      env: turnstileEnv(invalidEnv),
+      params: { key: 'img-1' },
+      request: makeGrantRequest(
+        'https://example.test/api/download-grants/original/img-1',
+        { code: 'BADCODE1' },
+        { cookie, 'cf-connecting-ip': '198.51.100.13' },
+      ),
+    });
+    assert.equal(response.status, 404);
+  }
+
+  const { env: invalidEnv } = makeVisitorEnv({ grant: null });
+  const response = await verifyGrant({
+    env: turnstileEnv(invalidEnv),
+    request: makeGrantRequest(
+      'https://example.test/api/download-grants/verify',
+      { code: 'BADCODE1' },
+      { cookie, 'cf-connecting-ip': '198.51.100.13' },
+    ),
+  });
+
+  assert.equal(response.status, 429);
+  assert.deepEqual(await response.json(), { error: 'too_many_attempts' });
+});
+
 await test('POST /api/download-grants/original/:key rejects images outside the grant', async () => {
   const { env } = makeVisitorEnv({ belongs: false });
   const response = await downloadGrantOriginal({
