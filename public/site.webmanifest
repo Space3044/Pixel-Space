@@ -1,0 +1,23 @@
+{
+  "name": "Pixel Space",
+  "short_name": "Pixel Space",
+  "description": "个人图床与影像归档空间",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070713",
+  "theme_color": "#070713",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
