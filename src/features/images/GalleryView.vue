@@ -206,9 +206,17 @@ const clearSearch = async () => {
 
       <div
         ref="containerRef"
-        class="relative w-full"
+        class="gallery-stage relative w-full"
         :style="{ height: layout.containerHeight + 'px', minHeight: loading ? '12rem' : '0' }"
       >
+        <div v-if="loading" class="gallery-loading" role="status" aria-live="polite">
+          <span>加载中</span>
+          <div class="gallery-loading-dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
         <button
           v-for="(box, i) in layout.boxes"
           :key="displayImages[i].key"
@@ -240,8 +248,7 @@ const clearSearch = async () => {
       </div>
 
       <p v-if="folderLoadError" class="px-1 text-sm text-rose-400">文件夹加载失败：{{ folderLoadError }}</p>
-      <LoadingState v-if="loading" title="正在加载图库" message="同步图片列表" />
-      <LoadingState v-else-if="loadError" title="图库加载失败" :error="loadError" />
+      <LoadingState v-if="!loading && loadError" class="gallery-loading-state" title="图库加载失败" :error="loadError" />
       <p v-else-if="images.length === 0" class="px-1 text-sm text-slate-500">还没有公开图片。</p>
       <div v-if="hasMore && !loadError" class="load-more-row">
         <button
@@ -382,6 +389,71 @@ const clearSearch = async () => {
   color: rgb(165, 243, 252);
 }
 
+.gallery-stage {
+  isolation: isolate;
+}
+
+.gallery-loading {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.gallery-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.gallery-loading-dots span {
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: rgb(53, 243, 255);
+  box-shadow: 0 0 10px rgba(53, 243, 255, 0.55);
+  animation: gallery-dot-jump 1.05s ease-in-out infinite;
+}
+
+.gallery-loading-dots span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.gallery-loading-dots span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-loading-dots span {
+    animation: none;
+  }
+}
+
+.gallery-loading-state {
+  width: min(100%, 22rem);
+  margin: 3.5rem auto;
+}
+
+@keyframes gallery-dot-jump {
+  0%,
+  80%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-0.34rem);
+  }
+}
+
 .load-more-row {
   display: flex;
   justify-content: center;
@@ -423,4 +495,5 @@ const clearSearch = async () => {
     flex: 1 1 100%;
   }
 }
+
 </style>
