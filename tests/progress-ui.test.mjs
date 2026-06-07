@@ -37,7 +37,11 @@ test('shared progress components exist with accessible determinate and indetermi
 });
 
 test('upload page uses the shared progress component for queue and upload status', () => {
-  const view = read('src/features/upload/UploadView.vue');
+  const view = [
+    read('src/features/upload/UploadView.vue'),
+    read('src/features/upload/UploadActionRow.vue'),
+    read('src/features/upload/upload-view.css'),
+  ].join('\n');
   const uploadQueue = read('src/features/upload/useUploadQueue.ts');
   assert.match(view, /import TaskProgress from '@\/shared\/ui\/TaskProgress\.vue'/);
   assert.match(view, /taskProgressValue,/);
@@ -54,7 +58,7 @@ test('upload page uses the shared progress component for queue and upload status
   assert.doesNotMatch(view, /class="state-dot"/);
 });
 
-test('page loading and error states share the same LoadingState component', () => {
+test('page loading and error states use appropriate shared and page-specific states', () => {
   const gallery = read('src/features/images/GalleryView.vue');
   const library = read('src/features/library/LibraryView.vue');
   const footprints = read('src/features/footprints/FootprintsView.vue');
@@ -64,7 +68,16 @@ test('page loading and error states share the same LoadingState component', () =
     assert.match(view, /<LoadingState/);
   }
 
-  assert.match(gallery, /title="正在加载图库"/);
+  assert.match(gallery, /class="gallery-loading"/);
+  assert.match(gallery, />加载中</);
+  assert.match(gallery, /class="gallery-loading-dots"/);
+  assert.match(gallery, /\.gallery-loading\s*\{[^}]*position:\s*absolute;[^}]*justify-content:\s*center;/s);
+  assert.match(gallery, /\.gallery-loading-dots span:nth-child\(2\)\s*\{[^}]*animation-delay:\s*0\.14s;/s);
+  assert.match(gallery, /\.gallery-loading-dots span:nth-child\(3\)\s*\{[^}]*animation-delay:\s*0\.28s;/s);
+  assert.match(gallery, /@keyframes gallery-dot-jump/);
+  assert.match(gallery, /prefers-reduced-motion:\s*reduce/);
+  assert.doesNotMatch(gallery, /gallery-skeleton/);
+  assert.doesNotMatch(gallery, /title="正在加载图库"/);
   assert.match(gallery, /:error="loadError"/);
   assert.match(library, /title="正在加载控制台"/);
   assert.match(library, /:error="loadError"/);

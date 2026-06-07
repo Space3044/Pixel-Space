@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const view = readFileSync('src/features/library/LibraryView.vue', 'utf8');
+const librarySurfaceFiles = [
+  'src/features/library/LibraryView.vue',
+  'src/features/library/LibraryContent.vue',
+  'src/features/library/LibraryHeader.vue',
+  'src/features/library/LibraryMoveBar.vue',
+  'src/features/library/library-view.css',
+];
+const view = librarySurfaceFiles.map((path) => readFileSync(path, 'utf8')).join('\n');
+const directory = readFileSync('src/features/library/useLibraryDirectory.ts', 'utf8');
+const actions = readFileSync('src/features/library/useLibraryActions.ts', 'utf8');
 const api = readFileSync('src/features/library/library.api.ts', 'utf8');
 const readme = readFileSync('README.md', 'utf8');
 const grantDialog = readFileSync('src/features/library/DownloadGrantDialog.vue', 'utf8');
@@ -22,7 +31,8 @@ test('LibraryView keeps the original header layout and puts AI settings on the r
   assert.match(view, /<h1>控制台<\/h1>/);
   assert.match(view, /<header class="library-header">[\s\S]*<div class="library-main">[\s\S]*<nav class="breadcrumb"/);
   assert.match(view, /<header class="library-header">[\s\S]*<aside class="ai-settings-panel" aria-labelledby="ai-settings-title">[\s\S]*<h2 id="ai-settings-title">AI 配置<\/h2>/);
-  assert.match(view, /<form class="ai-settings-form" @submit\.prevent="saveAiSettings">/);
+  assert.match(view, /<form class="ai-settings-form" @submit\.prevent="emit\('saveAiSettings'\)">/);
+  assert.match(view, /@save-ai-settings="saveAiSettings"/);
   assert.match(view, /v-model="aiSettingsForm\.proxy_url"/);
   assert.match(view, /v-model="aiSettingsForm\.model"/);
   assert.match(view, /v-model="aiSettingsForm\.prompt"/);
@@ -39,17 +49,18 @@ test('LibraryView keeps the original header layout and puts AI settings on the r
 });
 
 test('LibraryView loads and saves AI settings through library API helpers', () => {
-  assert.match(view, /import \{[\s\S]*fetchAiSettings,[\s\S]*updateAiSettings,[\s\S]*type AiSettings,[\s\S]*\} from '\.\/library\.api'/);
-  assert.match(view, /const aiSettingsForm = reactive<AiSettings>\(\{\s*proxy_url:\s*'',\s*model:\s*'',\s*prompt:\s*'',\s*\}\)/);
-  assert.match(view, /const aiSettingsSaving = ref\(false\)/);
-  assert.match(view, /import \{\s*listAdminImages\s*\} from '@\/features\/images\/images\.api'/);
-  assert.match(view, /Promise\.all\(\[\s*fetchAdminFolders\(\),\s*listAdminImages\(\),\s*fetchAiSettings\(\),\s*fetchDownloadGrants\(\),\s*\]\)/);
-  assert.match(view, /aiSettingsForm\.proxy_url = aiSettings\.proxy_url/);
-  assert.match(view, /aiSettingsForm\.model = aiSettings\.model/);
-  assert.match(view, /aiSettingsForm\.prompt = aiSettings\.prompt/);
-  assert.match(view, /const saved = await updateAiSettings\(\{\s*proxy_url:\s*aiSettingsForm\.proxy_url,\s*model:\s*aiSettingsForm\.model,\s*prompt:\s*aiSettingsForm\.prompt,\s*\}\)/);
-  assert.match(view, /aiSettingsForm\.prompt = saved\.prompt/);
-  assert.match(view, /actionMessage\.value = 'AI 配置已保存'/);
+  assert.match(view, /import \{ useLibraryActions \} from '\.\/useLibraryActions'/);
+  assert.match(actions, /import \{[\s\S]*fetchAiSettings,[\s\S]*updateAiSettings,[\s\S]*type AiSettings,[\s\S]*\} from '\.\/library\.api'/);
+  assert.match(actions, /const aiSettingsForm = reactive<AiSettings>\(\{\s*proxy_url:\s*'',\s*model:\s*'',\s*prompt:\s*'',\s*\}\)/);
+  assert.match(actions, /const aiSettingsSaving = ref\(false\)/);
+  assert.match(actions, /import \{\s*listAdminImages\s*\} from '@\/features\/images\/images\.api'/);
+  assert.match(actions, /Promise\.all\(\[\s*fetchAdminFolders\(\),\s*listAdminImages\(\),\s*fetchAiSettings\(\),\s*fetchDownloadGrants\(\),\s*\]\)/);
+  assert.match(actions, /aiSettingsForm\.proxy_url = aiSettings\.proxy_url/);
+  assert.match(actions, /aiSettingsForm\.model = aiSettings\.model/);
+  assert.match(actions, /aiSettingsForm\.prompt = aiSettings\.prompt/);
+  assert.match(actions, /const saved = await updateAiSettings\(\{\s*proxy_url:\s*aiSettingsForm\.proxy_url,\s*model:\s*aiSettingsForm\.model,\s*prompt:\s*aiSettingsForm\.prompt,\s*\}\)/);
+  assert.match(actions, /aiSettingsForm\.prompt = saved\.prompt/);
+  assert.match(actions, /actionMessage\.value = 'AI 配置已保存'/);
 });
 
 test('library.api keeps public and admin folder loaders separate', () => {
@@ -71,10 +82,12 @@ test('LibraryView renders virtual folders as folder-style cards with image count
 
 test('LibraryView uses the shared explore image sorting control for each directory', () => {
   assert.match(view, /import SelectPopover from '@\/shared\/ui\/SelectPopover\.vue'/);
-  assert.match(view, /import \{ imageSortOptions, sortImagesByMode, type ImageSortMode \} from '@\/features\/images\/image-sort'/);
-  assert.match(view, /const sortMode = ref<ImageSortMode>\('created-desc'\)/);
-  assert.match(view, /const filteredCurrentImages = computed<ImageRecord\[\]>\(\(\) => \{/);
-  assert.match(view, /const currentImages = computed<ImageRecord\[\]>\(\(\) => sortImagesByMode\(filteredCurrentImages\.value, sortMode\.value\)\)/);
+  assert.match(view, /import \{[^}]*imageSortOptions[^}]*\} from '@\/features\/images\/image-sort'/);
+  assert.match(view, /useLibraryDirectory\(\{ folders, images, downloadGrants \}\)/);
+  assert.match(directory, /import \{ sortImagesByMode, type ImageSortMode \} from '\.\.\/images\/image-sort'/);
+  assert.match(directory, /const sortMode = ref<ImageSortMode>\('created-desc'\)/);
+  assert.match(directory, /const filteredCurrentImages = computed<ImageRecord\[\]>\(\(\) => \{/);
+  assert.match(directory, /const currentImages = computed<ImageRecord\[\]>\(\(\) => sortImagesByMode\(filteredCurrentImages\.value, sortMode\.value\)\)/);
   assert.match(view, /<SelectPopover v-model="sortMode" :options="imageSortOptions" aria-label="排序方式">/);
   assert.match(view, /<section v-if="currentImages\.length > 0" class="image-section">[\s\S]*<header class="image-section-header">[\s\S]*<SelectPopover v-model="sortMode" :options="imageSortOptions" aria-label="排序方式">[\s\S]*<\/SelectPopover>/);
 });
@@ -128,26 +141,29 @@ test('DownloadGrantDialog exposes expiration presets and generated code result',
 test('LibraryView opens the download grant dialog from selected images', () => {
   assert.match(view, /import DownloadGrantDialog from '\.\/DownloadGrantDialog\.vue'/);
   assert.match(view, /import DownloadGrantManager from '\.\/DownloadGrantManager\.vue'/);
-  assert.match(view, /createDownloadGrant/);
-  assert.match(view, /fetchDownloadGrants/);
-  assert.match(view, /const grantDialogOpen = ref\(false\)/);
-  assert.match(view, /const VIRTUAL_DOWNLOAD_GRANTS = '__download_grants__'/);
-  assert.match(view, /name: '验证码管理'/);
-  assert.match(view, /downloadGrants\.value = grantList/);
-  assert.match(view, /const handleCreateDownloadGrant = async \(expiresAt: string\) =>/);
-  assert.match(view, /keys: Array\.from\(selectedKeys\.value\)/);
-  assert.match(view, /downloadGrants\.value = await fetchDownloadGrants\(\)/);
-  assert.match(view, /<button type="button" class="library-btn primary" @click="grantDialogOpen = true">生成验证码<\/button>/);
-  assert.match(view, /<DownloadGrantManager[\s\S]*v-if="currentFolderId === VIRTUAL_DOWNLOAD_GRANTS"[\s\S]*:grants="downloadGrants"[\s\S]*@update="handleUpdateDownloadGrant"[\s\S]*@delete="handleDeleteDownloadGrant"/);
+  assert.match(actions, /createDownloadGrant/);
+  assert.match(actions, /fetchDownloadGrants/);
+  assert.match(actions, /const grantDialogOpen = ref\(false\)/);
+  assert.match(directory, /export const VIRTUAL_DOWNLOAD_GRANTS = '__download_grants__'/);
+  assert.match(directory, /name: '验证码管理'/);
+  assert.match(actions, /downloadGrants\.value = grantList/);
+  assert.match(actions, /const handleCreateDownloadGrant = async \(expiresAt: string\) =>/);
+  assert.match(actions, /keys: Array\.from\(selectedKeys\.value\)/);
+  assert.match(actions, /downloadGrants\.value = await fetchDownloadGrants\(\)/);
+  assert.match(view, /<button type="button" class="library-btn primary" @click="emit\('openGrant'\)">生成验证码<\/button>/);
+  assert.match(view, /@open-grant="grantDialogOpen = true"/);
+  assert.match(view, /<DownloadGrantManager[\s\S]*v-if="currentFolderId === VIRTUAL_DOWNLOAD_GRANTS"[\s\S]*:grants="downloadGrants"[\s\S]*@update="\([^"]*emit\('updateGrant'/);
+  assert.match(view, /@update-grant="handleUpdateDownloadGrant"/);
+  assert.match(view, /@delete-grant="handleDeleteDownloadGrant"/);
   assert.match(view, /<DownloadGrantDialog/);
   assert.match(view, /@create="handleCreateDownloadGrant"/);
 });
 
 test('LibraryView reports batch image delete failures when R2 cleanup preserves records', () => {
   assert.match(api, /failed: string\[\]/);
-  assert.match(view, /const failedCount = result\.failed\.length/);
-  assert.match(view, /清理失败，已保留记录/);
-  assert.match(view, /!result\.failed\.includes\(k\)/);
+  assert.match(actions, /const failedCount = result\.failed\.length/);
+  assert.match(actions, /清理失败，已保留记录/);
+  assert.match(actions, /!result\.failed\.includes\(k\)/);
 });
 
 test('DownloadGrantManager shows codes images expiration editing and delete actions', () => {

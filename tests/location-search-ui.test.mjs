@@ -3,8 +3,22 @@ import { readFileSync } from 'node:fs';
 
 const locationSearch = readFileSync('src/features/images/LocationSearch.vue', 'utf8');
 const geocodeApi = readFileSync('src/features/images/geocode.api.ts', 'utf8');
-const upload = readFileSync('src/features/upload/UploadView.vue', 'utf8');
-const lightbox = readFileSync('src/features/images/ImageLightbox.vue', 'utf8');
+const upload = [
+  readFileSync('src/features/upload/UploadView.vue', 'utf8'),
+  readFileSync('src/features/upload/UploadMetaSidebar.vue', 'utf8'),
+  readFileSync('src/features/upload/UploadMetadataSection.vue', 'utf8'),
+  readFileSync('src/features/upload/upload-view.css', 'utf8'),
+].join('\n');
+const uploadLocationSync = readFileSync('src/features/upload/useUploadLocationSync.ts', 'utf8');
+const uploadPickMap = readFileSync('src/features/upload/useUploadPickMap.ts', 'utf8');
+const uploadProcessing = readFileSync('src/features/upload/useUploadProcessing.ts', 'utf8');
+const lightbox = [
+  readFileSync('src/features/images/ImageLightbox.vue', 'utf8'),
+  readFileSync('src/features/images/ImageLightboxDetailsDrawer.vue', 'utf8'),
+  readFileSync('src/features/images/ImageLightboxLocationSection.vue', 'utf8'),
+].join('\n');
+const lightboxDetails = readFileSync('src/features/images/useImageLightboxDetails.ts', 'utf8');
+const lightboxEditForm = readFileSync('src/features/images/useImageLightboxEditForm.ts', 'utf8');
 
 const test = (name, fn) => {
   try {
@@ -66,32 +80,47 @@ test('LocationSearch lets the user choose domestic or global geocoding', () => {
 
 test('UploadView applies selected geocode result to location name and marker coordinates', () => {
   assert.match(upload, /import LocationSearch from '@\/features\/images\/LocationSearch\.vue'/);
-  assert.match(upload, /import \{ reverseGeocodeLocation, type GeocodeRegion, type GeocodeResult \} from '@\/features\/images\/geocode\.api'/);
-  assert.match(upload, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
-  assert.match(upload, /meta\.location_name = result\.name/);
-  assert.match(upload, /setEntryCoordinates\(entry, result\.lat, result\.lng, true\)/);
-  assert.match(upload, /const onSearchRegionChange = \(region: GeocodeRegion\) =>/);
-  assert.match(upload, /:model-value="pickRegion"[\s\S]*class="location-search"[\s\S]*@select="applyLocationSearchResult"[\s\S]*@region-change="onSearchRegionChange"/);
+  assert.match(uploadLocationSync, /import type \{ GeocodeResult \} from '@\/features\/images\/geocode\.api'/);
+  assert.match(uploadPickMap, /import type \{ GeocodeRegion \} from '\.\.\/images\/geocode\.api'/);
+  assert.match(uploadLocationSync, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
+  assert.match(uploadLocationSync, /meta\.location_name = result\.name/);
+  assert.match(uploadLocationSync, /setEntryCoordinates\(entry, result\.lat, result\.lng, true\)/);
+  assert.match(uploadPickMap, /const onSearchRegionChange = async \(region: GeocodeRegion\) =>/);
+  assert.match(upload, /:model-value="pickRegion"[\s\S]*class="location-search"[\s\S]*@select="emit\('applyLocationSearchResult', \$event\)"[\s\S]*@region-change="emit\('searchRegionChange', \$event\)"/);
+  assert.match(upload, /@apply-location-search-result="applyLocationSearchResult"/);
+  assert.match(upload, /@search-region-change="onSearchRegionChange"/);
 });
 
 test('UploadView reverse geocodes EXIF coordinates with the detected overseas region', () => {
-  assert.match(upload, /const geocodeRegionForCoordinate = \(lat: number, lng: number\): GeocodeRegion =>/);
-  assert.match(upload, /const exifRegion = geocodeRegionForCoordinate\(nextExif\.location_lat, nextExif\.location_lng\)/);
-  assert.match(upload, /reverseGeocodeLocation\(nextExif\.location_lat, nextExif\.location_lng, exifRegion\)/);
+  assert.match(uploadPickMap, /export const geocodeRegionForCoordinate = \(lat: number, lng: number\): GeocodeRegion =>/);
+  assert.match(uploadProcessing, /const exifRegion = geocodeRegionForCoordinate\(nextExif\.location_lat, nextExif\.location_lng\)/);
+  assert.match(uploadProcessing, /reverseGeocodeLocation\(nextExif\.location_lat, nextExif\.location_lng, exifRegion\)/);
 });
 
 test('ImageLightbox applies selected geocode result while editing location', () => {
   assert.match(lightbox, /import LocationSearch from '\.\/LocationSearch\.vue'/);
-  assert.match(lightbox, /import type \{ GeocodeRegion, GeocodeResult \} from '\.\/geocode\.api'/);
-  assert.match(lightbox, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
-  assert.match(lightbox, /editForm\.location_name = result\.name/);
-  assert.match(lightbox, /editForm\.location_lat = result\.lat/);
-  assert.match(lightbox, /editForm\.location_lng = result\.lng/);
-  assert.match(lightbox, /:model-value="editSearchRegion"[\s\S]*@select="applyLocationSearchResult"[\s\S]*@region-change="onEditSearchRegionChange"/);
+  assert.match(lightbox, /useImageLightboxEditForm/);
+  assert.match(lightboxEditForm, /import type \{ GeocodeRegion, GeocodeResult \} from '\.\/geocode\.api'/);
+  assert.match(lightboxEditForm, /const applyLocationSearchResult = \(result: GeocodeResult\) => \{/);
+  assert.match(lightboxEditForm, /editForm\.location_name = result\.name/);
+  assert.match(lightboxEditForm, /editForm\.location_lat = result\.lat/);
+  assert.match(lightboxEditForm, /editForm\.location_lng = result\.lng/);
+  assert.match(lightbox, /:model-value="editSearchRegion"[\s\S]*@select="emit\('applyLocationSearchResult', \$event\)"[\s\S]*@region-change="emit\('editSearchRegionChange', \$event\)"/);
+  assert.match(lightbox, /@apply-location-search-result="applyLocationSearchResult"/);
+  assert.match(lightbox, /@edit-search-region-change="onEditSearchRegionChange"/);
 });
 
 test('ImageLightbox restores the edit search region from the saved location region', () => {
-  assert.match(lightbox, /const searchRegionFromMapRegion = \(region: MapRegion \| null \| undefined\): GeocodeRegion =>/);
-  assert.match(lightbox, /locationEditOpen\.value \? regionFromSearchRegion\(editSearchRegion\.value\) : toRegion\(props\.image\?\.location_region\)/);
-  assert.match(lightbox, /editSearchRegion\.value = searchRegionFromMapRegion\(editForm\.location_region\)/);
+  assert.match(lightboxEditForm, /export const searchRegionFromMapRegion = \(region: MapRegion \| null \| undefined\): GeocodeRegion =>/);
+  assert.match(lightboxDetails, /locationEditOpen\.value \? regionFromSearchRegion\(editSearchRegion\.value\) : toRegion\(image\.value\?\.location_region\)/);
+  assert.match(lightboxEditForm, /editSearchRegion\.value = searchRegionFromMapRegion\(editForm\.location_region\)/);
+});
+
+test('ImageLightbox uses only the search region toggle while editing location', () => {
+  assert.match(lightbox, /:model-value="editSearchRegion"[\s\S]*@region-change="emit\('editSearchRegionChange', \$event\)"/);
+  assert.match(lightbox, /@edit-search-region-change="onEditSearchRegionChange"/);
+  assert.doesNotMatch(lightbox, />归属区域</);
+  assert.doesNotMatch(lightbox, /class="edit-region"/);
+  assert.doesNotMatch(lightbox, /setEditRegion/);
+  assert.doesNotMatch(lightboxEditForm, /const setEditRegion/);
 });

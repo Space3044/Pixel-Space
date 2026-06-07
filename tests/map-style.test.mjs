@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const amapLoader = readFileSync('src/features/upload/amap.ts', 'utf8');
-const uploadView = readFileSync('src/features/upload/UploadView.vue', 'utf8');
+const uploadView = [
+  readFileSync('src/features/upload/UploadView.vue', 'utf8'),
+  readFileSync('src/features/upload/upload-view.css', 'utf8'),
+].join('\n');
 const pickMap = readFileSync('src/features/upload/pick-map.ts', 'utf8');
 const readOnlyMap = readFileSync('src/features/images/ReadOnlyMap.vue', 'utf8');
 const footprintsView = readFileSync('src/features/footprints/FootprintsView.vue', 'utf8');
