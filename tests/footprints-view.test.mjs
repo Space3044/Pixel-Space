@@ -60,6 +60,10 @@ test('FootprintsView keeps the stats, selection detail and globe', () => {
   assert.match(view, /const visitedCoordinates = computed/);
 });
 
+test('FootprintsView lets the globe card size to mobile content instead of desktop height', () => {
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*\.globe-boundary-card\s*\{[\s\S]*min-height:\s*auto;[\s\S]*padding:\s*0\.75rem;/);
+});
+
 test('FootprintFlatMap drives one map through a source adapter', () => {
   assert.match(flatMap, /createChinaAdapter/);
   assert.match(flatMap, /createWorldAdapter/);

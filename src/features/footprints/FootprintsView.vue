@@ -522,5 +522,10 @@ onMounted(() => {
   .map-card-body {
     min-height: 24rem;
   }
+
+  .globe-boundary-card {
+    min-height: auto;
+    padding: 0.75rem;
+  }
 }
 </style>

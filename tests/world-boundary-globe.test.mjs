@@ -142,6 +142,11 @@ test('WorldBoundaryGlobe renders only boundary globe without image location mark
   assert.match(component, /cursor:\s*default/);
 });
 
+test('WorldBoundaryGlobe keeps the mobile canvas centered inside the card content width', () => {
+  assert.match(component, /@media \(max-width:\s*720px\)\s*\{[\s\S]*\.boundary-globe-stage\s*\{[\s\S]*width:\s*min\(100%,\s*31rem\);[\s\S]*aspect-ratio:\s*1;[\s\S]*height:\s*auto;[\s\S]*min-height:\s*0;/);
+  assert.doesNotMatch(component, /width:\s*min\(92vw,\s*31rem\)/);
+});
+
 test('WorldBoundaryGlobe cleans up WebGL resources and listeners', () => {
   assert.match(component, /cancelAnimationFrame\(sceneState\.animationId\)/);
   assert.match(component, /controls\.dispose\(\)/);

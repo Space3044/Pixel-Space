@@ -704,7 +704,8 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   width: min(78svh, 49rem, 100%);
-  height: min(78svh, 49rem);
+  aspect-ratio: 1;
+  height: auto;
   min-height: 24rem;
   cursor: default;
   touch-action: none;
@@ -753,9 +754,10 @@ onBeforeUnmount(() => {
   }
 
   .boundary-globe-stage {
-    width: min(92vw, 31rem);
-    height: min(92vw, 31rem);
-    min-height: 18rem;
+    width: min(100%, 31rem);
+    aspect-ratio: 1;
+    height: auto;
+    min-height: 0;
   }
 
   .boundary-globe-status {
