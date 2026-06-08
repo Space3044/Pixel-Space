@@ -4,6 +4,13 @@ import type { UploadEntry } from './useUploadQueue';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
+type FileWithRelativePath = File & { webkitRelativePath?: string };
+
+const queueFileKey = (file: File): string => {
+  const path = (file as FileWithRelativePath).webkitRelativePath || file.name;
+  return [path, file.size, file.type, file.lastModified].join('\u0000');
+};
+
 interface UseUploadFileSelectionOptions {
   entries: Ref<UploadEntry[]>;
   currentEntryId: Ref<string | null>;
@@ -38,6 +45,7 @@ export const useUploadFileSelection = ({
   const addFiles = (files: File[]) => {
     globalError.value = null;
     const accepted: UploadEntry[] = [];
+    const queuedFileKeys = new Set(entries.value.map((entry) => queueFileKey(entry.file)));
     for (const file of files) {
       if (!file.type.startsWith('image/')) {
         globalError.value = `已跳过非图片文件：${file.name}`;
@@ -47,9 +55,15 @@ export const useUploadFileSelection = ({
         globalError.value = `已跳过超过 50MB 的文件：${file.name}`;
         continue;
       }
+      const fileKey = queueFileKey(file);
+      if (queuedFileKeys.has(fileKey)) {
+        globalError.value = `已跳过队列中重复文件：${file.name}`;
+        continue;
+      }
       const entry = createEntry(file);
       entries.value.push(entry);
       accepted.push(entry);
+      queuedFileKeys.add(fileKey);
     }
     if (accepted.length === 0) return;
     if (currentEntryId.value === null) {
