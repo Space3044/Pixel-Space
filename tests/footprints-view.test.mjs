@@ -21,7 +21,7 @@ test('FootprintsView is a container that splits footprints into domestic and ove
   assert.match(view, /import\s+\{\s*groupFootprints[^}]*\}\s+from\s+'\.\/footprint'/);
   assert.match(view, /import\s+FootprintFlatMap\s+from\s+'\.\/FootprintFlatMap\.vue'/);
   assert.match(view, /import\s+WorldBoundaryGlobe\s+from\s+'\.\/WorldBoundaryGlobe\.vue'/);
-  assert.match(view, /import\s+\{\s*listImages\s*\}\s+from\s+'@\/features\/images\/images\.api'/);
+  assert.match(view, /import\s+\{[^}]*listImages[^}]*\}\s+from\s+'@\/features\/images\/images\.api'/);
   assert.match(view, /const domesticFootprints = computed/);
   assert.match(view, /const overseasFootprints = computed/);
   assert.match(view, /footprint\.region === 'china'/);
@@ -33,6 +33,13 @@ test('FootprintsView is a container that splits footprints into domestic and ove
   assert.match(view, /class="dual-map-grid/);
   assert.match(view, /class="globe-boundary-card/);
   assert.match(view, /<WorldBoundaryGlobe\s+:visited-places="visitedPlaces"\s+:visited-coordinates="visitedCoordinates"/);
+});
+
+test('FootprintsView loads all images for admins and public images for visitors', () => {
+  assert.match(view, /import\s+\{\s*isAdmin\s*\}\s+from\s+'@\/shared\/auth\/useAdmin'/);
+  assert.match(view, /import\s+\{[^}]*listAdminImages[^}]*\}\s+from\s+'@\/features\/images\/images\.api'/);
+  assert.match(view, /import\s+\{[^}]*listImages[^}]*\}\s+from\s+'@\/features\/images\/images\.api'/);
+  assert.match(view, /isAdmin\.value\s*\?\s*listAdminImages\(\)\s*:\s*listImages\(\)/);
 });
 
 test('FootprintsView keeps the stats, selection detail and globe', () => {

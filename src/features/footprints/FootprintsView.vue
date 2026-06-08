@@ -3,7 +3,8 @@ import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import AppShell from '@/shared/ui/AppShell.vue';
 import LoadingState from '@/shared/ui/LoadingState.vue';
 import type { ImageRecord } from '@/features/images/image.types';
-import { listImages } from '@/features/images/images.api';
+import { listAdminImages, listImages } from '@/features/images/images.api';
+import { isAdmin } from '@/shared/auth/useAdmin';
 import { groupFootprints, type FootprintGroup } from './footprint';
 import FootprintFlatMap from './FootprintFlatMap.vue';
 import WorldBoundaryGlobe from './WorldBoundaryGlobe.vue';
@@ -69,12 +70,14 @@ const removeImage = (key: string) => {
   lightboxImage.value = null;
 };
 
+const loadFootprintImages = () => (isAdmin.value ? listAdminImages() : listImages());
+
 const loadFootprints = async () => {
   loading.value = true;
   loadError.value = null;
 
   try {
-    images.value = await listImages();
+    images.value = await loadFootprintImages();
     activeFootprintKey.value = null;
   } catch (error) {
     loadError.value = (error as Error).message;
