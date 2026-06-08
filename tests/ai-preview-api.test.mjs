@@ -111,6 +111,86 @@ await test('POST /api/admin/ai/preview calls CPA with configured URL and model a
   });
 });
 
+await test('POST /api/admin/ai/preview retries proxy rate limits before returning normalized JSON', async () => {
+  const { env } = makeEnv();
+  const proxyRequests = [];
+
+  const response = await withMockedFetch(
+    async (url, init) => {
+      proxyRequests.push({ url: String(url), init });
+      if (proxyRequests.length === 1) {
+        return Response.json(
+          {
+            error: { message: 'rate limited' },
+            parameters: { retry_after: 0 },
+          },
+          { status: 429 },
+        );
+      }
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: '重试成功',
+                caption: '代理限流后再次请求成功，返回可用的图片分析结果。',
+                tags: ['重试', '限流'],
+                search_content: '重试 限流',
+                dominant_color: '蓝色 #336699',
+                palette: ['#336699'],
+                composition: '中心构图',
+              }),
+            },
+          },
+        ],
+      });
+    },
+    () => onRequestPost({ env, params: {}, request: makeRequest() }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(proxyRequests.length, 2);
+  const data = await response.json();
+  assert.equal(data.title, '重试成功');
+});
+
+await test('POST /api/admin/ai/preview retries temporary proxy fetch failures before returning normalized JSON', async () => {
+  const { env } = makeEnv();
+  let attempts = 0;
+
+  const response = await withMockedFetch(
+    async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('temporary proxy network failure');
+
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: '网络恢复',
+                caption: '临时网络失败后再次请求成功，返回可用的图片分析结果。',
+                tags: ['重试', '网络'],
+                search_content: '重试 网络',
+                dominant_color: '青色 #00FFFF',
+                palette: ['#00FFFF'],
+                composition: '主体居中',
+              }),
+            },
+          },
+        ],
+      });
+    },
+    () => onRequestPost({ env, params: {}, request: makeRequest() }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(attempts, 2);
+  const data = await response.json();
+  assert.equal(data.title, '网络恢复');
+});
+
 await test('POST /api/admin/ai/preview rejects missing AI settings before calling CPA', async () => {
   const { env } = makeEnv({ proxy_url: '', model: '' });
   let called = false;
