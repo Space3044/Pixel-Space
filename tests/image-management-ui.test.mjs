@@ -39,6 +39,11 @@ test('GalleryView wires the search box to listImages(query)', () => {
   assert.match(gallery, /const GALLERY_PAGE_SIZE = 48/);
   assert.match(gallery, /const nextCursor = ref<string \| null>\(null\)/);
   assert.match(gallery, /const loadMoreImages = async \(\) => \{/);
+  assert.match(gallery, /const loadMoreSentinelRef = ref<HTMLElement \| null>\(null\)/);
+  assert.match(gallery, /new IntersectionObserver/);
+  assert.match(gallery, /rootMargin:\s*'600px 0px'/);
+  assert.match(gallery, /loadMoreObserver\?\.disconnect\(\)/);
+  assert.match(gallery, /ref="loadMoreSentinelRef"/);
   assert.match(gallery, /加载更多/);
   assert.match(gallery, /@submit\.prevent="loadImages"/);
   assert.match(gallery, /placeholder="搜索标题、描述、文件名或位置"/);

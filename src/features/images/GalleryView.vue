@@ -31,6 +31,7 @@ const folderFilter = ref<string>('');
 const folders = ref<FolderRecord[]>([]);
 
 const containerRef = ref<HTMLElement | null>(null);
+const loadMoreSentinelRef = ref<HTMLElement | null>(null);
 const containerWidth = ref(0);
 
 const lightboxOpen = ref(false);
@@ -104,6 +105,11 @@ const loadMoreImages = async () => {
   }
 };
 
+const maybeAutoLoadMore = () => {
+  if (!hasMore.value || loading.value || loadingMore.value || loadError.value) return;
+  void loadMoreImages();
+};
+
 const loadFolders = async () => {
   folderLoadError.value = null;
   try {
@@ -114,6 +120,21 @@ const loadFolders = async () => {
 };
 
 let resizeObserver: ResizeObserver | null = null;
+let loadMoreObserver: IntersectionObserver | null = null;
+
+const observeLoadMoreSentinel = (element: HTMLElement | null) => {
+  loadMoreObserver?.disconnect();
+  loadMoreObserver = null;
+  if (!element || typeof IntersectionObserver === 'undefined') return;
+
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) maybeAutoLoadMore();
+    },
+    { rootMargin: '600px 0px' },
+  );
+  loadMoreObserver.observe(element);
+};
 
 onMounted(async () => {
   if (containerRef.value) {
@@ -131,7 +152,11 @@ onMounted(async () => {
 onUnmounted(() => {
   resizeObserver?.disconnect();
   resizeObserver = null;
+  loadMoreObserver?.disconnect();
+  loadMoreObserver = null;
 });
+
+watch(loadMoreSentinelRef, observeLoadMoreSentinel, { flush: 'post' });
 
 // 切换文件夹时立刻重新拉取，跟刷新一致。
 watch(folderFilter, () => {
@@ -251,6 +276,7 @@ const clearSearch = async () => {
       <LoadingState v-if="!loading && loadError" class="gallery-loading-state" title="图库加载失败" :error="loadError" />
       <p v-else-if="images.length === 0" class="px-1 text-sm text-slate-500">还没有公开图片。</p>
       <div v-if="hasMore && !loadError" class="load-more-row">
+        <div ref="loadMoreSentinelRef" class="load-more-sentinel" aria-hidden="true" />
         <button
           type="button"
           class="load-more-button"
@@ -455,9 +481,16 @@ const clearSearch = async () => {
 }
 
 .load-more-row {
+  position: relative;
   display: flex;
   justify-content: center;
   padding: 0.25rem 0 1rem;
+}
+
+.load-more-sentinel {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .load-more-button {
