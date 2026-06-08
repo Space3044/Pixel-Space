@@ -15,6 +15,7 @@ export interface Env {
   MAPBOX_PUBLIC_TOKEN?: string;
   MAPTILER_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  VITE_TURNSTILE_SITE_KEY?: string;
   // 仅本地开发可用。线上 (request.cf 存在) 时被强制忽略，绝不参与生产鉴权。
   // 取值: 'admin' | 'visitor'，缺省视为 'admin'。
   LOCAL_ROLE?: string;

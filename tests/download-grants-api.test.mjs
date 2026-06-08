@@ -324,6 +324,12 @@ const makeGrantRequest = (url, body, headers = {}) =>
     body: JSON.stringify(body),
   });
 
+const makeCloudflareGrantRequest = (url, body, headers = {}) => {
+  const request = makeGrantRequest(url, body, headers);
+  Object.defineProperty(request, 'cf', { value: { colo: 'TEST' } });
+  return request;
+};
+
 const makeVisitorEnv = ({
   grant = { id: 'grant-1', expires_at: '2999-01-01T00:00:00.000Z' },
   belongs = true,
@@ -367,7 +373,11 @@ const withMockedFetch = async (fetchImpl, fn) => {
   }
 };
 
-const turnstileEnv = (env) => ({ ...env, TURNSTILE_SECRET_KEY: 'turnstile-secret' });
+const turnstileEnv = (env) => ({
+  ...env,
+  TURNSTILE_SECRET_KEY: 'turnstile-secret',
+  VITE_TURNSTILE_SITE_KEY: 'turnstile-site-key',
+});
 
 const mockTurnstileSuccess = async (url) => {
   assert.equal(String(url), 'https://challenges.cloudflare.com/turnstile/v0/siteverify');
@@ -386,6 +396,35 @@ await test('POST /api/download-grants/verify requires Turnstile before checking 
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), { error: 'turnstile_required' });
   assert.equal(calls.prepared.some((sql) => /from\s+download_grants/i.test(sql)), false);
+});
+
+await test('POST /api/download-grants/verify falls back to code checks when Turnstile is not configured on Cloudflare', async () => {
+  const { env } = makeVisitorEnv();
+  const response = await verifyGrant({
+    env,
+    request: makeCloudflareGrantRequest('https://example.test/api/download-grants/verify', { code: 'A7K9P2QX' }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.has('set-cookie'), false);
+  assert.equal((await response.json()).expires_at, '2999-01-01T00:00:00.000Z');
+});
+
+await test('POST /api/download-grants/verify ignores a partial Turnstile configuration', async () => {
+  const { env } = makeVisitorEnv();
+  const response = await withMockedFetch(
+    async () => {
+      throw new Error('turnstile_should_not_be_called');
+    },
+    () =>
+      verifyGrant({
+        env: { ...env, TURNSTILE_SECRET_KEY: 'turnstile-secret' },
+        request: makeCloudflareGrantRequest('https://example.test/api/download-grants/verify', { code: 'A7K9P2QX' }),
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.has('set-cookie'), false);
 });
 
 await test('POST /api/download-grants/verify accepts a valid Turnstile token and sets a visitor challenge cookie', async () => {

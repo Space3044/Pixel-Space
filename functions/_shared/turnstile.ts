@@ -1,4 +1,4 @@
-import { forbidden, json, serverError } from './http';
+import { forbidden, json } from './http';
 import type { RequestLogger } from './logger';
 import type { Env } from '../types';
 
@@ -163,15 +163,26 @@ const verifyTurnstileToken = async (
 
 export const requireVisitorChallenge = async (
   request: Request,
-  env: Pick<Env, 'TURNSTILE_SECRET_KEY'>,
+  env: Pick<Env, 'TURNSTILE_SECRET_KEY' | 'VITE_TURNSTILE_SITE_KEY'>,
   token: unknown,
   logger?: RequestLogger,
 ): Promise<VisitorChallengeResult> => {
   const secret = env.TURNSTILE_SECRET_KEY?.trim();
-  if (!secret) {
-    if (!isCloudflareRequest(request)) return { ok: true, challenge: { visitorId: 'local-dev' } };
-    logger?.error('Turnstile secret is not configured');
-    return { ok: false, response: serverError('turnstile_not_configured') };
+  const siteKey = env.VITE_TURNSTILE_SITE_KEY?.trim();
+  const cloudflareRequest = isCloudflareRequest(request);
+  if (!secret || !siteKey) {
+    if (cloudflareRequest) {
+      logger?.warn('Turnstile is not fully configured; visitor challenge disabled', {
+        context: {
+          serverConfigured: Boolean(secret),
+          widgetConfigured: Boolean(siteKey),
+        },
+      });
+    }
+    return {
+      ok: true,
+      challenge: { visitorId: cloudflareRequest ? 'turnstile-disabled' : 'local-dev' },
+    };
   }
 
   const cookieChallenge = await readCookieChallenge(request, secret);
