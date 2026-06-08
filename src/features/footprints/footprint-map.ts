@@ -13,12 +13,18 @@ export interface FootprintPoint {
   lat: number;
 }
 
+export interface FootprintScreenPoint {
+  x: number;
+  y: number;
+}
+
 export interface FootprintMapAdapter {
   readonly zoomMin: number;
   readonly zoomMax: number;
   init(container: HTMLElement, onReady: () => void, onZoom: (zoom: number) => void): Promise<void>;
   placeMarker(key: string, lng: number, lat: number, element: HTMLElement): void;
   removeMarker(key: string): void;
+  project(lng: number, lat: number): FootprintScreenPoint | null;
   focus(lng: number, lat: number, zoom?: number): void;
   fitAll(points: FootprintPoint[]): void;
   setZoom(zoom: number): void;
@@ -81,6 +87,12 @@ export const createChinaAdapter = (): FootprintMapAdapter => {
     removeMarker(key) {
       markers.get(key)?.setMap(null);
       markers.delete(key);
+    },
+    project(lng, lat) {
+      if (!map?.lngLatToContainer) return null;
+      const c = mapLngLatFromStored({ lng, lat });
+      const point = map.lngLatToContainer([c.lng, c.lat]);
+      return { x: point.getX(), y: point.getY() };
     },
     focus,
     fitAll(points) {
@@ -169,6 +181,11 @@ export const createWorldAdapter = (): FootprintMapAdapter => {
     removeMarker(key) {
       markers.get(key)?.remove();
       markers.delete(key);
+    },
+    project(lng, lat) {
+      if (!map) return null;
+      const point = map.project([lng, lat]);
+      return { x: point.x, y: point.y };
     },
     focus,
     fitAll(points) {

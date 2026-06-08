@@ -5,6 +5,7 @@ import { groupFootprints } from '../src/features/footprints/footprint.ts';
 const view = readFileSync('src/features/footprints/FootprintsView.vue', 'utf8');
 const flatMap = readFileSync('src/features/footprints/FootprintFlatMap.vue', 'utf8');
 const footprint = readFileSync('src/features/footprints/footprint.ts', 'utf8');
+const footprintMap = readFileSync('src/features/footprints/footprint-map.ts', 'utf8');
 
 const test = (name, fn) => {
   try {
@@ -73,6 +74,30 @@ test('FootprintFlatMap drives one map through a source adapter', () => {
   assert.match(flatMap, /adapter\.placeMarker/);
   assert.match(flatMap, /class="zoom-slider/);
   assert.doesNotMatch(flatMap, /new amap\.InfoWindow|maplibregl-popup/);
+});
+
+test('FootprintFlatMap clusters dense projected markers and supports expanded clusters', () => {
+  assert.match(flatMap, /clusterProjectedMarkers/);
+  assert.match(flatMap, /createSpiderfyOffsets/);
+  assert.match(flatMap, /footprint-cluster-marker/);
+  assert.match(flatMap, /expandedClusterId/);
+  assert.match(flatMap, /adapter\.project/);
+  assert.match(flatMap, /count\.textContent\s*=\s*formatMarkerCount\(cluster\.imagesCount\)/);
+  assert.match(flatMap, /images\.textContent\s*=\s*formatMarkerCount\(cluster\.points\.length\)/);
+  assert.doesNotMatch(flatMap, /images\.textContent\s*=\s*`[^`]*图/);
+  assert.match(flatMap, /restartMarkerAnimation/);
+  assert.match(flatMap, /is-fusing/);
+  assert.match(flatMap, /is-splitting/);
+  assert.match(flatMap, /@keyframes cluster-fuse-in/);
+  assert.match(flatMap, /@keyframes spiderfy-split-in/);
+  assert.match(flatMap, /width:\s*38px;/);
+  assert.match(flatMap, /height:\s*38px;/);
+});
+
+test('footprint map adapters expose screen projection for shared clustering', () => {
+  assert.match(footprintMap, /project\(lng: number, lat: number\)/);
+  assert.match(footprintMap, /lngLatToContainer/);
+  assert.match(footprintMap, /map\.project/);
 });
 
 test('footprint grouping resolves region per point', () => {

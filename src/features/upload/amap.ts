@@ -12,6 +12,11 @@ export interface AMapLngLat {
   getLat(): number;
 }
 
+export interface AMapPixel {
+  getX(): number;
+  getY(): number;
+}
+
 export interface AMapClickEvent {
   lnglat: AMapLngLat;
 }
@@ -26,6 +31,7 @@ export interface AMapMap {
   getCenter(): AMapLngLat;
   getZoom(): number;
   getZooms?(): [number, number];
+  lngLatToContainer?(position: AMapPosition): AMapPixel;
   setCenter(center: AMapPosition): void;
   setZoom(zoom: number): void;
   setZoomAndCenter(zoom: number, center: AMapPosition): void;

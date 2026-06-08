@@ -2,6 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { FootprintGroup } from './footprint';
 import { createChinaAdapter, createWorldAdapter, type FootprintMapAdapter } from './footprint-map';
+import {
+  clusterProjectedMarkers,
+  createSpiderfyOffsets,
+  type FootprintMarkerCluster,
+  type ProjectedFootprintMarker,
+  type SpiderfyOffset,
+} from './marker-clustering';
 
 const props = defineProps<{
   footprints: FootprintGroup[];
@@ -16,6 +23,9 @@ const emit = defineEmits<{ select: [footprint: FootprintGroup]; preview: [footpr
 
 const TRACK_HEIGHT = 120;
 const THUMB_SIZE = 13;
+const CLUSTER_RADIUS = 44;
+const CLUSTER_ZOOM_STEP = 2;
+const SPIDERFY_RADIUS = 36;
 
 const adapter: FootprintMapAdapter = props.source === 'china' ? createChinaAdapter() : createWorldAdapter();
 const zoomMin = adapter.zoomMin;
@@ -26,15 +36,38 @@ const sliderEl = ref<HTMLElement | null>(null);
 const currentZoom = ref(zoomMin);
 const zoomReady = ref(false);
 const dragging = ref(false);
+const expandedClusterId = ref<string | null>(null);
 
 const elementsByKey = new Map<string, HTMLElement>();
+const clusterElementsById = new Map<string, HTMLElement>();
+const clustersById = new Map<string, FootprintMarkerCluster>();
+const mountedMarkerKeys = new Set<string>();
 
 const activeFootprint = computed(() => props.footprints.find((f) => f.key === props.activeKey) ?? null);
+const footprintsByKey = computed(() => new Map(props.footprints.map((footprint) => [footprint.key, footprint])));
+
+const footprintMarkerKey = (key: string) => `footprint:${key}`;
+const clusterMarkerKey = (id: string) => `cluster-marker:${id}`;
+
+const formatMarkerCount = (count: number) => (count > 99 ? '99+' : String(count));
+
+const restartMarkerAnimation = (element: HTMLElement, className: string) => {
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+};
 
 const updateMarkerStyles = () => {
   for (const [key, element] of elementsByKey) {
     element.classList.toggle('is-active', key === props.activeKey);
     element.classList.toggle('is-hovered', key === props.hoveredKey);
+  }
+  for (const [id, element] of clusterElementsById) {
+    const cluster = clustersById.get(id);
+    const hasActivePoint = cluster?.points.some((point) => point.key === props.activeKey) ?? false;
+    const hasHoveredPoint = cluster?.points.some((point) => point.key === props.hoveredKey) ?? false;
+    element.classList.toggle('is-active', hasActivePoint);
+    element.classList.toggle('is-hovered', hasHoveredPoint);
   }
 };
 
@@ -67,19 +100,178 @@ const createMarkerElement = (footprint: FootprintGroup) => {
   return marker;
 };
 
-const renderMarkers = () => {
-  const nextKeys = new Set<string>();
+const openCluster = (cluster: FootprintMarkerCluster) => {
+  if (adapter.getZoom() < zoomMax - 1) {
+    expandedClusterId.value = null;
+    adapter.focus(cluster.lng, cluster.lat, Math.min(zoomMax, adapter.getZoom() + CLUSTER_ZOOM_STEP));
+    return;
+  }
+
+  expandedClusterId.value = expandedClusterId.value === cluster.id ? null : cluster.id;
+  renderMarkers();
+};
+
+const createClusterElement = (clusterId: string) => {
+  const marker = document.createElement('button');
+  marker.type = 'button';
+  marker.className = 'footprint-cluster-marker';
+
+  const halo = document.createElement('span');
+  halo.className = 'footprint-cluster-halo';
+  marker.appendChild(halo);
+
+  const count = document.createElement('span');
+  count.className = 'footprint-cluster-count';
+  marker.appendChild(count);
+
+  const images = document.createElement('span');
+  images.className = 'footprint-cluster-images';
+  marker.appendChild(images);
+
+  marker.addEventListener('click', () => {
+    const cluster = clustersById.get(clusterId);
+    if (cluster) openCluster(cluster);
+  });
+
+  clusterElementsById.set(clusterId, marker);
+  return marker;
+};
+
+const updateClusterElement = (element: HTMLElement, cluster: FootprintMarkerCluster) => {
+  const count = element.querySelector<HTMLElement>('.footprint-cluster-count');
+  const images = element.querySelector<HTMLElement>('.footprint-cluster-images');
+  if (count) count.textContent = formatMarkerCount(cluster.imagesCount);
+  if (images) images.textContent = formatMarkerCount(cluster.points.length);
+  element.setAttribute('aria-label', `${cluster.imagesCount} 张图片，${cluster.points.length} 个相近地点，点击放大或展开`);
+};
+
+const projectFootprints = (): ProjectedFootprintMarker[] => {
+  const projected: ProjectedFootprintMarker[] = [];
+
   for (const footprint of props.footprints) {
-    nextKeys.add(footprint.key);
-    const element = elementsByKey.get(footprint.key) ?? createMarkerElement(footprint);
-    adapter.placeMarker(footprint.key, footprint.lng, footprint.lat, element);
+    const point = adapter.project(footprint.lng, footprint.lat);
+    if (!point) continue;
+    projected.push({
+      key: footprint.key,
+      name: footprint.name,
+      lng: footprint.lng,
+      lat: footprint.lat,
+      x: point.x,
+      y: point.y,
+      imagesCount: footprint.images.length,
+    });
   }
+
+  return projected;
+};
+
+const setMarkerOffset = (element: HTMLElement, offset: SpiderfyOffset | null) => {
+  element.classList.toggle('is-spidered', Boolean(offset));
+  element.style.setProperty('--marker-offset-x', `${offset?.x ?? 0}px`);
+  element.style.setProperty('--marker-offset-y', `${offset?.y ?? 0}px`);
+  if (offset) {
+    restartMarkerAnimation(element, 'is-splitting');
+  } else {
+    element.classList.remove('is-splitting');
+  }
+};
+
+const placeFootprintMarker = (
+  footprint: FootprintGroup,
+  lng: number,
+  lat: number,
+  nextMarkerKeys: Set<string>,
+  offset: SpiderfyOffset | null = null,
+) => {
+  const key = footprintMarkerKey(footprint.key);
+  const element = elementsByKey.get(footprint.key) ?? createMarkerElement(footprint);
+  setMarkerOffset(element, offset);
+  nextMarkerKeys.add(key);
+  adapter.placeMarker(key, lng, lat, element);
+};
+
+const placeClusterMarker = (cluster: FootprintMarkerCluster, nextMarkerKeys: Set<string>) => {
+  const key = clusterMarkerKey(cluster.id);
+  const element = clusterElementsById.get(cluster.id) ?? createClusterElement(cluster.id);
+  const wasMounted = mountedMarkerKeys.has(key);
+  updateClusterElement(element, cluster);
+  if (!wasMounted) restartMarkerAnimation(element, 'is-fusing');
+  nextMarkerKeys.add(key);
+  adapter.placeMarker(key, cluster.lng, cluster.lat, element);
+};
+
+const removeStaleMarkers = (nextMarkerKeys: Set<string>) => {
+  for (const key of [...mountedMarkerKeys]) {
+    if (nextMarkerKeys.has(key)) continue;
+    adapter.removeMarker(key);
+    mountedMarkerKeys.delete(key);
+  }
+  for (const key of nextMarkerKeys) mountedMarkerKeys.add(key);
+};
+
+const pruneCachedElements = (nextFootprintKeys: Set<string>, nextClusterIds: Set<string>) => {
   for (const key of [...elementsByKey.keys()]) {
-    if (!nextKeys.has(key)) {
-      adapter.removeMarker(key);
-      elementsByKey.delete(key);
-    }
+    if (nextFootprintKeys.has(key)) continue;
+    elementsByKey.delete(key);
   }
+  for (const id of [...clusterElementsById.keys()]) {
+    if (nextClusterIds.has(id)) continue;
+    clusterElementsById.delete(id);
+  }
+};
+
+const renderMarkers = () => {
+  const nextMarkerKeys = new Set<string>();
+  const nextFootprintKeys = new Set(props.footprints.map((footprint) => footprint.key));
+  const nextClusterIds = new Set<string>();
+  const projected = projectFootprints();
+
+  clustersById.clear();
+
+  if (projected.length !== props.footprints.length) {
+    expandedClusterId.value = null;
+    for (const footprint of props.footprints) {
+      placeFootprintMarker(footprint, footprint.lng, footprint.lat, nextMarkerKeys);
+    }
+    removeStaleMarkers(nextMarkerKeys);
+    pruneCachedElements(nextFootprintKeys, nextClusterIds);
+    updateMarkerStyles();
+    return;
+  }
+
+  const clusters = clusterProjectedMarkers(projected, { radius: CLUSTER_RADIUS });
+
+  for (const cluster of clusters) {
+    clustersById.set(cluster.id, cluster);
+    if (cluster.kind === 'cluster') nextClusterIds.add(cluster.id);
+  }
+
+  if (expandedClusterId.value && !clustersById.has(expandedClusterId.value)) {
+    expandedClusterId.value = null;
+  }
+
+  for (const cluster of clusters) {
+    if (cluster.kind === 'single') {
+      const point = cluster.points[0];
+      const footprint = footprintsByKey.value.get(point.key);
+      if (footprint) placeFootprintMarker(footprint, point.lng, point.lat, nextMarkerKeys);
+      continue;
+    }
+
+    if (expandedClusterId.value === cluster.id) {
+      const offsets = createSpiderfyOffsets(cluster.points.length, { radius: SPIDERFY_RADIUS });
+      cluster.points.forEach((point, index) => {
+        const footprint = footprintsByKey.value.get(point.key);
+        if (footprint) placeFootprintMarker(footprint, cluster.lng, cluster.lat, nextMarkerKeys, offsets[index]);
+      });
+      continue;
+    }
+
+    placeClusterMarker(cluster, nextMarkerKeys);
+  }
+
+  removeStaleMarkers(nextMarkerKeys);
+  pruneCachedElements(nextFootprintKeys, nextClusterIds);
   updateMarkerStyles();
 };
 
@@ -164,6 +356,7 @@ watch(
   () => props.footprints,
   () => {
     if (!zoomReady.value) return;
+    expandedClusterId.value = null;
     renderMarkers();
     if (!activeFootprint.value) fitView();
   },
@@ -191,6 +384,9 @@ onMounted(() => {
     },
     (zoom) => {
       currentZoom.value = zoom;
+      if (!zoomReady.value) return;
+      expandedClusterId.value = null;
+      renderMarkers();
     },
   );
 });
@@ -198,6 +394,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   adapter.destroy();
   elementsByKey.clear();
+  clusterElementsById.clear();
+  clustersById.clear();
+  mountedMarkerKeys.clear();
 });
 </script>
 
@@ -286,6 +485,19 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: transparent;
   cursor: pointer;
+  transform: translate(var(--marker-offset-x, 0), var(--marker-offset-y, 0));
+  transition: transform 180ms ease, filter 180ms ease;
+  will-change: transform;
+  z-index: 2;
+}
+
+:deep(.footprint-marker.is-spidered) {
+  z-index: 8;
+  filter: drop-shadow(0 0 10px rgba(53, 243, 255, 0.45));
+}
+
+:deep(.footprint-marker.is-splitting) {
+  animation: spiderfy-split-in 220ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 
 :deep(.footprint-marker-ring) {
@@ -328,6 +540,87 @@ onBeforeUnmount(() => {
 :deep(.footprint-marker.is-hovered .footprint-marker-ring) {
   border-color: rgba(255, 79, 216, 0.82);
   box-shadow: 0 0 18px rgba(255, 79, 216, 0.5);
+}
+
+:deep(.footprint-cluster-marker) {
+  position: relative;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(53, 243, 255, 0.72);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(53, 243, 255, 0.28), rgba(53, 243, 255, 0.07) 56%, rgba(7, 7, 19, 0.76) 100%),
+    rgba(7, 7, 19, 0.68);
+  color: rgb(236, 254, 255);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 4px rgba(53, 243, 255, 0.07),
+    0 0 18px rgba(53, 243, 255, 0.34);
+  transition: border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+  z-index: 6;
+}
+
+:deep(.footprint-cluster-marker.is-fusing) {
+  animation: cluster-fuse-in 240ms cubic-bezier(0.18, 0.9, 0.2, 1) both;
+}
+
+:deep(.footprint-cluster-marker:hover),
+:deep(.footprint-cluster-marker:focus-visible) {
+  border-color: rgba(125, 249, 255, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 0 5px rgba(53, 243, 255, 0.1),
+    0 0 22px rgba(53, 243, 255, 0.52);
+  filter: saturate(1.15);
+  outline: none;
+}
+
+:deep(.footprint-cluster-marker.is-active),
+:deep(.footprint-cluster-marker.is-hovered) {
+  border-color: rgba(255, 79, 216, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 0 5px rgba(255, 79, 216, 0.11),
+    0 0 24px rgba(255, 79, 216, 0.54);
+}
+
+:deep(.footprint-cluster-halo) {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(53, 243, 255, 0.2);
+  border-radius: 999px;
+  animation: cluster-breathe 2.8s ease-in-out infinite;
+}
+
+:deep(.footprint-cluster-count) {
+  position: relative;
+  z-index: 1;
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 0.78rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+:deep(.footprint-cluster-images) {
+  position: absolute;
+  right: -0.2rem;
+  bottom: -0.22rem;
+  display: grid;
+  min-width: 1.15rem;
+  height: 0.9rem;
+  place-items: center;
+  border: 1px solid rgba(7, 7, 19, 0.72);
+  border-radius: 999px;
+  background: rgb(53, 243, 255);
+  color: rgb(5, 5, 16);
+  font-family: 'Menlo', 'Consolas', monospace;
+  font-size: 0.5rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .footprint-flat-empty {
@@ -457,6 +750,66 @@ onBeforeUnmount(() => {
   100% {
     opacity: 0;
     transform: scale(1.45);
+  }
+}
+
+@keyframes cluster-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes cluster-fuse-in {
+  0% {
+    opacity: 0;
+    filter: blur(2px);
+    transform: scale(0.58);
+  }
+  68% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+
+@keyframes spiderfy-split-in {
+  0% {
+    opacity: 0.5;
+    transform: translate(0, 0) scale(0.72);
+  }
+  68% {
+    opacity: 1;
+    transform: translate(var(--marker-offset-x, 0), var(--marker-offset-y, 0)) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--marker-offset-x, 0), var(--marker-offset-y, 0)) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :deep(.footprint-marker),
+  :deep(.footprint-marker-ring),
+  :deep(.footprint-marker.is-splitting),
+  :deep(.footprint-cluster-marker),
+  :deep(.footprint-cluster-marker.is-fusing),
+  :deep(.footprint-cluster-halo),
+  .zoom-slider,
+  .zoom-btn,
+  .zoom-thumb {
+    animation: none;
+    transition: none;
   }
 }
 </style>

@@ -58,6 +58,7 @@ for (const path of [
   './app-shell.test.mjs',
   './geo-hit.test.mjs',
   './world-boundary-globe.test.mjs',
+  './footprint-marker-clustering.test.mjs',
   './footprints-view.test.mjs',
   './redundancy-cleanup.test.mjs',
   './progress-ui.test.mjs',
