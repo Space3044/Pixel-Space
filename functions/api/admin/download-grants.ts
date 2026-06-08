@@ -5,7 +5,7 @@ import { withRequestLogging } from '../../_shared/logger';
 import { normalizeStringList, parseJsonObject, stringOrNull } from '../../_shared/request';
 import { codeHash, generateAccessCode, normalizeFutureIso } from '../../_shared/download-grants';
 import type { ImageRecord, ImageRow } from '../../_shared/images';
-import { IMAGE_SELECT_COLUMNS, rowToRecord } from '../../_shared/images';
+import { IMAGE_SELECT_COLUMNS, normalizeD1UtcTimestamp, rowToRecord } from '../../_shared/images';
 import { requireSameOrigin } from '../../_shared/security';
 
 interface CreatePayload {
@@ -107,6 +107,7 @@ const loadGrantRecords = async (env: Env): Promise<DownloadGrantRecord[]> => {
     const images = imagesByGrant.get(grant.id) ?? [];
     return {
       ...grant,
+      created_at: normalizeD1UtcTimestamp(grant.created_at),
       image_count: images.length,
       images,
     };

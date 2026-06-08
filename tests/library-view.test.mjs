@@ -175,10 +175,11 @@ test('LibraryView reports batch image delete failures when R2 cleanup preserves 
   assert.match(actions, /!result\.failed\.includes\(k\)/);
 });
 
-test('DownloadGrantManager shows codes images expiration editing and delete actions', () => {
+test('DownloadGrantManager shows codes images creation time expiration editing and delete actions', () => {
   assert.match(grantManager, /defineProps<\{\s*grants: DownloadGrantRecord\[\];\s*loadingId: string \| null;\s*error: string \| null;\s*\}>/);
   assert.match(grantManager, /defineEmits<\{\s*update: \[id: string, expiresAt: string\];\s*delete: \[id: string\];\s*\}>/);
-  assert.match(grantManager, /formatDownloadGrantExpiry\(grant\.expires_at\)/);
+  assert.match(grantManager, /生成于\s*\{\{\s*formatDownloadGrantExpiry\(grant\.created_at\)\s*\}\}/);
+  assert.match(grantManager, /expiresAtById\[grant\.id\] = toDatetimeLocal\(grant\.expires_at\)/);
   assert.match(grantManager, /v-for="grant in grants"/);
   assert.match(grantManager, /\{\{ grant\.code \}\}/);
   assert.doesNotMatch(grantManager, /旧记录|无法反推|'is-missing': !grant\.code/);

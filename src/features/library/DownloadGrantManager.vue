@@ -54,7 +54,7 @@ watch(
           <div class="grant-row-main">
             <p class="grant-code">{{ grant.code }}</p>
             <p class="grant-meta">
-              {{ grant.image_count }} 张图片 · {{ formatDownloadGrantExpiry(grant.expires_at) }}
+              {{ grant.image_count }} 张图片 · 生成于 {{ formatDownloadGrantExpiry(grant.created_at) }}
             </p>
           </div>
 

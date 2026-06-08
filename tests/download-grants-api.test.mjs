@@ -174,6 +174,7 @@ await test('GET /api/admin/download-grants lists generated codes with grouped im
   const data = await response.json();
   assert.equal(data.grants.length, 1);
   assert.equal(data.grants[0].code, 'A7K9P2QX');
+  assert.equal(data.grants[0].created_at, '2026-06-01T10:00:00.000Z');
   assert.equal(data.grants[0].image_count, 1);
   assert.equal(data.grants[0].images[0].key, 'img-1');
   assert.equal(data.grants[0].images[0].public_url, 'https://cdn.test/img-1');
