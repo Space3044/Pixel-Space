@@ -62,6 +62,135 @@ await test('archiveOriginalToTelegram sends the original file as a Telegram docu
   assert.equal(document.type, 'image/jpeg');
 });
 
+await test('archiveOriginalToTelegram retries Telegram rate limits before returning success', async () => {
+  const requests = [];
+
+  await withMockedFetch(
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      if (requests.length === 1) {
+        return Response.json(
+          {
+            ok: false,
+            description: 'Too Many Requests: retry after 0',
+            parameters: { retry_after: 0 },
+          },
+          { status: 429 },
+        );
+      }
+
+      return Response.json({
+        ok: true,
+        result: {
+          message_id: 43,
+          chat: { id: -100123 },
+          document: { file_id: 'telegram-file-id-after-retry' },
+        },
+      });
+    },
+    async () => {
+      const result = await archiveOriginalToTelegram({
+        token: 'token-test',
+        chatId: '-100123',
+        file: new File(['original-bytes'], 'cat.jpg', { type: 'image/jpeg' }),
+        key: 'image-key',
+      });
+
+      assert.deepEqual(result, {
+        file_id: 'telegram-file-id-after-retry',
+        message_id: 43,
+        chat_id: '-100123',
+      });
+    },
+  );
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].init.body.get('caption'), 'imgbed:image-key');
+  assert.equal(requests[1].init.body.get('caption'), 'imgbed:image-key');
+});
+
+await test('archiveOriginalToTelegram retries temporary Telegram server failures before returning success', async () => {
+  const requests = [];
+
+  await withMockedFetch(
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      if (requests.length === 1) {
+        return Response.json(
+          {
+            ok: false,
+            description: 'Bad Gateway',
+          },
+          { status: 502 },
+        );
+      }
+
+      return Response.json({
+        ok: true,
+        result: {
+          message_id: 44,
+          chat: { id: -100123 },
+          document: { file_id: 'telegram-file-id-after-502' },
+        },
+      });
+    },
+    async () => {
+      const result = await archiveOriginalToTelegram({
+        token: 'token-test',
+        chatId: '-100123',
+        file: new File(['original-bytes'], 'cat.jpg', { type: 'image/jpeg' }),
+        key: 'image-key',
+      });
+
+      assert.deepEqual(result, {
+        file_id: 'telegram-file-id-after-502',
+        message_id: 44,
+        chat_id: '-100123',
+      });
+    },
+  );
+
+  assert.equal(requests.length, 2);
+});
+
+await test('archiveOriginalToTelegram retries temporary fetch failures before returning success', async () => {
+  let attempts = 0;
+
+  await withMockedFetch(
+    async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('temporary network failure');
+      }
+
+      return Response.json({
+        ok: true,
+        result: {
+          message_id: 45,
+          chat: { id: -100123 },
+          document: { file_id: 'telegram-file-id-after-network' },
+        },
+      });
+    },
+    async () => {
+      const result = await archiveOriginalToTelegram({
+        token: 'token-test',
+        chatId: '-100123',
+        file: new File(['original-bytes'], 'cat.jpg', { type: 'image/jpeg' }),
+        key: 'image-key',
+      });
+
+      assert.deepEqual(result, {
+        file_id: 'telegram-file-id-after-network',
+        message_id: 45,
+        chat_id: '-100123',
+      });
+    },
+  );
+
+  assert.equal(attempts, 2);
+});
+
 await test('archiveOriginalToTelegram reports Telegram failure without leaking the bot token', async () => {
   await withMockedFetch(
     async () =>
