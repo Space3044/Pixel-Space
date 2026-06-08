@@ -79,3 +79,22 @@ test('language switch code and entry are not kept', () => {
 test('future placeholder tool buttons are not rendered', () => {
   assert.doesNotMatch(shell, /切换主题（阶段|ICONS\.moon|type IconName = [^;]*'moon'/);
 });
+
+test('AppShell provides a bottom tab bar on mobile instead of hiding primary navigation', () => {
+  assert.match(shell, /class="mobile-tabbar md:hidden"/);
+  assert.match(shell, /aria-label="移动端主导航"/);
+  assert.match(shell, /v-for="link in navLinks"/);
+  assert.match(shell, /v-for="link in adminNavLinks"/);
+  assert.match(shell, /class="mobile-tab-label"/);
+});
+
+test('AppShell reserves safe-area space and uses touch-sized mobile tab targets', () => {
+  assert.match(shell, /class="app-shell-main pt-16"/);
+  assert.match(shell, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.app-shell-main\s*\{[\s\S]*?padding-bottom:\s*calc\(5rem \+ env\(safe-area-inset-bottom\)\);/);
+  assert.match(shell, /\.mobile-tab-link\s*\{[\s\S]*?min-width:\s*4\.25rem;[\s\S]*?min-height:\s*3\.5rem;/);
+});
+
+test('AppShell keeps the mobile tab bar hidden on desktop despite scoped CSS order', () => {
+  assert.match(shell, /\.mobile-tabbar\s*\{[\s\S]*?display:\s*none;/);
+  assert.match(shell, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.mobile-tabbar\s*\{[\s\S]*?display:\s*flex;/);
+});

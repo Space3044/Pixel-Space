@@ -214,6 +214,13 @@ test('ImageLightbox toggles the bottom zoom controls from image clicks', () => {
   assert.doesNotMatch(lightbox, /previewHidden|togglePreview|preview-hidden-state|隐藏图片预览|预览已隐藏/);
 });
 
+test('ImageLightbox uses a bottom details sheet on mobile instead of a full-width side drawer', () => {
+  assert.match(lightbox, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.drawer-panel\s*\{[\s\S]*?top:\s*auto;[\s\S]*?height:\s*min\(72svh,\s*38rem\);[\s\S]*?transform:\s*translateY\(100%\);/);
+  assert.match(lightbox, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.drawer-panel\.is-open\s*\{[\s\S]*?transform:\s*translateY\(0\);/);
+  assert.match(lightbox, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.image-canvas\.has-drawer\s*\{[\s\S]*?right:\s*0;[\s\S]*?bottom:\s*min\(72svh,\s*38rem\);/);
+  assert.match(lightbox, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.image-controls\s*\{[\s\S]*?bottom:\s*calc\(0\.75rem \+ env\(safe-area-inset-bottom\)\);/);
+});
+
 test('ReadOnlyMap supports empty coordinates and interactive coordinate picking', () => {
   assert.match(readOnlyMap, /lat\?: number \| null/);
   assert.match(readOnlyMap, /lng\?: number \| null/);

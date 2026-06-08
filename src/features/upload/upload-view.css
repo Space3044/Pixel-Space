@@ -563,7 +563,7 @@
 
 .preview-stage {
   position: relative;
-  min-height: 30rem;
+  min-height: clamp(18rem, 58svh, 30rem);
   overflow: hidden;
   border-radius: 0.6rem;
 }
@@ -1146,4 +1146,98 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.4rem;
+}
+
+@media (max-width: 640px) {
+  .page-inner {
+    gap: 0.85rem;
+    padding: 0.6rem 0.75rem 1.25rem;
+  }
+
+  .drop-zone {
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 1rem;
+  }
+
+  .drop-zone.is-compact {
+    padding: 0.85rem;
+  }
+
+  .drop-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .options-pill {
+    gap: 0.55rem;
+    padding: 0.65rem;
+  }
+
+  .options-cell {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .options-cell:first-of-type {
+    flex: 1 1 100%;
+  }
+
+  .options-cell + .options-cell {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .options-cell :deep(.folder-trigger) {
+    max-width: 100%;
+  }
+
+  .sync-switch {
+    margin-left: auto;
+  }
+
+  .action-pill {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .submit-button {
+    width: 100%;
+  }
+
+  .queue-rail,
+  .meta-sidebar {
+    padding: 0.85rem;
+  }
+
+  .preview-stage {
+    min-height: clamp(16rem, 52svh, 24rem);
+  }
+
+  .preview-caption {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .preview-status-group {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .map-block-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .visibility-inline {
+    margin-left: 0;
+  }
+
+  .map-coords {
+    grid-template-columns: 1fr;
+  }
 }

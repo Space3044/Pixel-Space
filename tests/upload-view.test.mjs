@@ -109,6 +109,21 @@ test('upload page defers progress UI to a later shared component', () => {
   assert.match(plan, /统一进度条组件/);
 });
 
+test('upload action area stacks controls into full-width touch rows on mobile', () => {
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.drop-zone\s*\{[\s\S]*?flex-direction:\s*column;[\s\S]*?padding:\s*1rem;/);
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.options-cell\s*\{[\s\S]*?flex:\s*1 1 100%;/);
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.options-cell \+ \.options-cell\s*\{[\s\S]*?padding-left:\s*0;[\s\S]*?border-left:\s*0;/);
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.action-pill\s*\{[\s\S]*?flex-direction:\s*column;[\s\S]*?align-items:\s*stretch;/);
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.submit-button\s*\{[\s\S]*?width:\s*100%;/);
+});
+
+test('upload preview and metadata blocks avoid oversized mobile heights', () => {
+  assert.match(view, /\.preview-stage\s*\{[\s\S]*?min-height:\s*clamp\(18rem,\s*58svh,\s*30rem\);/);
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.preview-stage\s*\{[\s\S]*?min-height:\s*clamp\(16rem,\s*52svh,\s*24rem\);/);
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.preview-caption\s*\{[\s\S]*?align-items:\s*flex-start;[\s\S]*?flex-direction:\s*column;/);
+  assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*?\.map-coords\s*\{[\s\S]*?grid-template-columns:\s*1fr;/);
+});
+
 test('upload footer uses an upload action label instead of debug FormData copy', () => {
   assert.match(view, /上传图片/);
   assert.doesNotMatch(view, /打印 FormData|FormData 已打印到控制台/);

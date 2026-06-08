@@ -262,22 +262,35 @@
 
 @media (max-width: 640px) {
   .navigation-bar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 14px;
+    align-items: center;
+    flex-direction: row;
+    padding: 10px 12px;
   }
   .nav-actions {
-    width: 100%;
+    width: auto;
     justify-content: flex-end;
+    gap: 6px;
+  }
+  .viewer-action-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .viewer-esc-button {
+    width: 34px;
+    height: 30px;
   }
   .nav-arrow-left {
-    left: 14px;
+    left: 10px;
   }
   .nav-arrow-right {
-    right: 14px;
+    right: 10px;
   }
   .image-canvas.has-drawer {
     right: 0;
+    bottom: min(72svh, 38rem);
+  }
+  .image-controls {
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -302,6 +315,26 @@
   transform: translateX(0);
 }
 @media (max-width: 640px) {
+  .drawer-panel {
+    top: auto;
+    left: 0;
+    width: 100%;
+    height: min(72svh, 38rem);
+    border-top: 1px solid rgba(53, 243, 255, 0.22);
+    border-left: 0;
+    border-radius: 8px 8px 0 0;
+    transform: translateY(100%);
+    box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.58);
+  }
+  .drawer-panel.is-open {
+    transform: translateY(0);
+  }
+  .drawer-content {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 420px) {
   .drawer-panel {
     width: 100%;
   }

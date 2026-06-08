@@ -83,10 +83,10 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
         ? 'border-b border-neon-cyan/30 bg-void/90 shadow-[0_4px_20px_rgba(53,243,255,0.1)] backdrop-blur-2xl'
         : 'border-b border-transparent bg-transparent'"
     >
-      <nav class="relative flex h-full w-full items-center justify-between px-[max(2rem,calc((100vw-1600px)/2))]">
+      <nav class="top-nav relative flex h-full w-full items-center justify-between px-[max(2rem,calc((100vw-1600px)/2))]">
         <RouterLink to="/" class="flex shrink-0 items-center gap-2 transition hover:scale-[1.02]">
-          <span class="font-mono text-xl font-black leading-none tracking-wider text-neon-cyan [text-shadow:0_0_10px_rgba(53,243,255,0.8),0_0_20px_rgba(53,243,255,0.4)]">Pixel</span>
-          <span class="font-mono text-xl font-black leading-none tracking-wider text-neon-pink [text-shadow:0_0_10px_rgba(255,79,216,0.8),0_0_20px_rgba(255,79,216,0.4)]">Space</span>
+          <span class="brand-word font-mono text-xl font-black leading-none tracking-wider text-neon-cyan [text-shadow:0_0_10px_rgba(53,243,255,0.8),0_0_20px_rgba(53,243,255,0.4)]">Pixel</span>
+          <span class="brand-word font-mono text-xl font-black leading-none tracking-wider text-neon-pink [text-shadow:0_0_10px_rgba(255,79,216,0.8),0_0_20px_rgba(255,79,216,0.4)]">Space</span>
         </RouterLink>
 
         <div class="ml-12 hidden flex-1 md:flex">
@@ -175,8 +175,37 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
       </nav>
     </header>
 
+    <nav class="mobile-tabbar md:hidden" aria-label="移动端主导航">
+      <RouterLink
+        v-for="link in navLinks"
+        :key="link.to"
+        :to="link.to"
+        class="mobile-tab-link"
+        active-class="is-active"
+      >
+        <svg :viewBox="ICONS[link.icon].vb" fill="currentColor" class="mobile-tab-icon" aria-hidden="true">
+          <path :d="ICONS[link.icon].d" />
+        </svg>
+        <span class="mobile-tab-label">{{ link.label }}</span>
+      </RouterLink>
+      <template v-if="isAdmin">
+        <RouterLink
+          v-for="link in adminNavLinks"
+          :key="link.to"
+          :to="link.to"
+          class="mobile-tab-link"
+          active-class="is-active"
+        >
+          <svg :viewBox="ICONS[link.icon].vb" fill="currentColor" class="mobile-tab-icon" aria-hidden="true">
+            <path :d="ICONS[link.icon].d" />
+          </svg>
+          <span class="mobile-tab-label">{{ link.label }}</span>
+        </RouterLink>
+      </template>
+    </nav>
+
     <main
-      class="pt-16"
+      class="app-shell-main pt-16"
       :class="fluid ? 'w-full px-3 sm:px-4' : 'mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8'"
     >
       <slot />
@@ -185,6 +214,11 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
 </template>
 
 <style scoped>
+.top-nav {
+  padding-left: max(2rem, calc((100vw - 1600px) / 2));
+  padding-right: max(2rem, calc((100vw - 1600px) / 2));
+}
+
 .nav-item::after {
   content: '';
   position: absolute;
@@ -291,6 +325,64 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
   animation: scan-across 3s infinite;
 }
 
+.mobile-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: none;
+  align-items: stretch;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.35rem 0.5rem calc(0.35rem + env(safe-area-inset-bottom));
+  border-top: 1px solid rgb(var(--c-cyan) / 0.2);
+  background: rgb(var(--c-bg) / 0.92);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 -10px 28px rgb(var(--c-shadow) / 0.4);
+  scrollbar-width: none;
+}
+
+.mobile-tabbar::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-tab-link {
+  position: relative;
+  display: inline-flex;
+  flex: 1 0 4.25rem;
+  min-width: 4.25rem;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.22rem;
+  border-radius: 0.45rem;
+  color: rgb(var(--c-text-muted));
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-decoration: none;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.mobile-tab-link.is-active {
+  background: rgb(var(--c-cyan) / 0.1);
+  color: rgb(var(--c-cyan));
+}
+
+.mobile-tab-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.mobile-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @keyframes scan-across {
   0% { left: 0; opacity: 0; }
   10% { opacity: 1; }
@@ -303,5 +395,29 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
 }
 @media (max-width: 900px) {
   .ml-12 { margin-left: 1.5rem; }
+}
+@media (max-width: 767px) {
+  .top-nav {
+    padding-left: clamp(0.75rem, 4vw, 1rem);
+    padding-right: clamp(0.75rem, 4vw, 1rem);
+  }
+
+  .mobile-tabbar {
+    display: flex;
+  }
+
+  .app-shell-main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 520px) {
+  .dev-role-switch {
+    display: none;
+  }
+
+  .brand-word {
+    font-size: 1.06rem;
+  }
 }
 </style>

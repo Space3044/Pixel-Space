@@ -500,8 +500,13 @@
 }
 
 @media (max-width: 720px) {
+  .library-page {
+    padding-bottom: calc(8rem + env(safe-area-inset-bottom));
+  }
+
   .library-header {
     grid-template-columns: minmax(0, 1fr);
+    padding: 0.9rem;
   }
 
   .ai-settings-panel {
@@ -515,10 +520,35 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .library-actions,
+  .image-section-header {
+    flex-wrap: wrap;
+  }
+
+  .folder-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
   .move-bar {
+    bottom: calc(5rem + env(safe-area-inset-bottom));
     flex-wrap: wrap;
     width: calc(100% - 1.5rem);
     border-radius: 12px;
     justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .library-btn {
+    flex: 1 1 auto;
+  }
+
+  .section-label {
+    flex-basis: 100%;
   }
 }

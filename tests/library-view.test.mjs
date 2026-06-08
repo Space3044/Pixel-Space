@@ -48,6 +48,15 @@ test('LibraryView keeps the original header layout and puts AI settings on the r
   assert.doesNotMatch(view, /proxy_key|PROXY_KEY/);
 });
 
+test('LibraryView adapts console panels and batch actions for mobile', () => {
+  assert.match(view, /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.library-page\s*\{[\s\S]*?padding-bottom:\s*calc\(8rem \+ env\(safe-area-inset-bottom\)\);/);
+  assert.match(view, /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.library-header\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(view, /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.folder-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  assert.match(view, /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.image-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/);
+  assert.match(view, /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.image-section-header\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(view, /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.move-bar\s*\{[\s\S]*?bottom:\s*calc\(5rem \+ env\(safe-area-inset-bottom\)\);/);
+});
+
 test('LibraryView loads and saves AI settings through library API helpers', () => {
   assert.match(view, /import \{ useLibraryActions \} from '\.\/useLibraryActions'/);
   assert.match(actions, /import \{[\s\S]*fetchAiSettings,[\s\S]*updateAiSettings,[\s\S]*type AiSettings,[\s\S]*\} from '\.\/library\.api'/);
