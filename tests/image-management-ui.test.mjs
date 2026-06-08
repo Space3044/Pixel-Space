@@ -59,6 +59,18 @@ test('GalleryView wires the search box to listImages(query)', () => {
   assert.match(gallery, /清空/);
 });
 
+test('GalleryView handles lightbox previous and next navigation', () => {
+  assert.match(gallery, /const showAdjacentImage = \(offset: -1 \| 1\) => \{/);
+  assert.match(gallery, /const items = displayImages\.value/);
+  assert.match(gallery, /findIndex\(\(item\) => item\.key === lightboxImage\.value\?\.key\)/);
+  assert.match(gallery, /const nextIndex = \(currentIndex \+ offset \+ items\.length\) % items\.length/);
+  assert.match(gallery, /lightboxImage\.value = items\[nextIndex\]/);
+  assert.match(gallery, /const showPreviousImage = \(\) => showAdjacentImage\(-1\)/);
+  assert.match(gallery, /const showNextImage = \(\) => showAdjacentImage\(1\)/);
+  assert.match(gallery, /@prev="showPreviousImage"/);
+  assert.match(gallery, /@next="showNextImage"/);
+});
+
 test('images.api exposes admin update and delete helpers', () => {
   assert.match(imagesApi, /from '@\/shared\/api\/http'/);
   assert.match(imagesApi, /export function listImages\(query = '', options: ListImagesOptions = \{\}\)/);
