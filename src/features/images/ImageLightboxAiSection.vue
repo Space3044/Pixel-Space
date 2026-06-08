@@ -9,6 +9,7 @@ defineProps<{
   aiEditOpen: boolean;
   saving: boolean;
   deleting: boolean;
+  aiPreviewing: boolean;
   actionError: string | null;
   editForm: ImageLightboxEditForm;
   aiTags: string[];
@@ -18,6 +19,7 @@ defineProps<{
 
 const emit = defineEmits<{
   cancelAiEditor: [];
+  rerunAiAnalysis: [];
   saveAiMetadata: [];
   toggleAiEditor: [];
 }>();
@@ -30,16 +32,27 @@ const emit = defineEmits<{
         <svg :viewBox="ICONS.robot.vb" fill="currentColor" class="section-icon" aria-hidden="true"><path :d="ICONS.robot.d" /></svg>
         <span>AI 分析</span>
       </span>
-      <button
-        v-if="isAdmin"
-        type="button"
-        class="ai-edit-button"
-        :disabled="saving || deleting"
-        @click="emit('toggleAiEditor')"
-      >
-        {{ aiEditOpen ? '收起' : '编辑' }}
-      </button>
+      <span v-if="isAdmin" class="section-actions">
+        <button
+          v-if="isAdmin && aiEditOpen"
+          type="button"
+          class="ai-preview-button"
+          :disabled="saving || deleting || aiPreviewing"
+          @click="emit('rerunAiAnalysis')"
+        >
+          {{ aiPreviewing ? 'AI 分析中' : '重新 AI 分析' }}
+        </button>
+        <button
+          type="button"
+          class="ai-edit-button"
+          :disabled="saving || deleting || aiPreviewing"
+          @click="emit('toggleAiEditor')"
+        >
+          {{ aiEditOpen ? '收起' : '编辑' }}
+        </button>
+      </span>
     </div>
+    <p v-if="aiEditOpen && actionError" class="action-error ai-action-error">{{ actionError }}</p>
     <div class="detail-items">
       <div class="detail-item">
         <span class="item-label">标题</span>
@@ -137,12 +150,11 @@ const emit = defineEmits<{
         />
         <span class="edit-toggle-switch" aria-hidden="true"></span>
       </label>
-      <p v-if="actionError" class="action-error">{{ actionError }}</p>
       <div class="edit-actions">
-        <button type="submit" class="action-btn" :disabled="saving || deleting">
+        <button type="submit" class="action-btn" :disabled="saving || deleting || aiPreviewing">
           {{ saving ? '保存中…' : '保存' }}
         </button>
-        <button type="button" class="action-btn muted" :disabled="saving || deleting" @click="emit('cancelAiEditor')">
+        <button type="button" class="action-btn muted" :disabled="saving || deleting || aiPreviewing" @click="emit('cancelAiEditor')">
           取消
         </button>
       </div>

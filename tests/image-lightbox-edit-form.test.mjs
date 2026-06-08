@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  applyAiPreviewResultToEditForm,
   paletteTextFromImage,
   regionFromSearchRegion,
   searchRegionFromMapRegion,
@@ -104,4 +105,28 @@ test('image lightbox edit form exposes shared region and text helpers', () => {
   assert.equal(toMapCoordinate('bad'), null);
   assert.equal(tagsTextFromImage(image), 'cat, snow');
   assert.equal(paletteTextFromImage(image), '#336699, #ffffff');
+});
+
+test('image lightbox edit form applies AI preview results to editable fields', () => {
+  const state = useImageLightboxEditForm();
+  state.resetForm(image);
+
+  applyAiPreviewResultToEditForm(state.editForm, {
+    title: 'AI Title',
+    caption: 'AI caption',
+    tags: ['city', 'night'],
+    search_content: 'ignored search content',
+    dominant_color: 'Neon cyan #22D3EE',
+    palette: ['#22D3EE', '#111827'],
+    composition: 'Wide angle',
+  });
+
+  assert.equal(state.editForm.title, 'AI Title');
+  assert.equal(state.editForm.caption, 'AI caption');
+  assert.equal(state.editForm.tags, 'city, night');
+  assert.equal(state.editForm.dominant_color, 'Neon cyan #22D3EE');
+  assert.equal(state.editForm.palette, '#22D3EE, #111827');
+  assert.equal(state.editForm.composition, 'Wide angle');
+  assert.equal(state.editForm.location_name, 'Paris');
+  assert.equal(state.editForm.is_public, 0);
 });

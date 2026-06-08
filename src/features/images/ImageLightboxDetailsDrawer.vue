@@ -18,6 +18,7 @@ defineProps<{
   locationEditOpen: boolean;
   saving: boolean;
   deleting: boolean;
+  aiPreviewing: boolean;
   actionError: string | null;
   editForm: ImageLightboxEditForm;
   editSearchRegion: GeocodeRegion;
@@ -39,6 +40,7 @@ const emit = defineEmits<{
   cancelLocationEditor: [];
   copyValue: [value: string, label: string];
   editSearchRegionChange: [region: GeocodeRegion];
+  rerunAiAnalysis: [];
   saveAiMetadata: [];
   saveLocation: [];
   saveVisibilityFlag: [field: 'is_public' | 'location_public', value: 0 | 1];
@@ -75,12 +77,14 @@ const emit = defineEmits<{
         :ai-edit-open="aiEditOpen"
         :saving="saving"
         :deleting="deleting"
+        :ai-previewing="aiPreviewing"
         :action-error="actionError"
         :edit-form="editForm"
         :ai-tags="aiTags"
         :ai-palette="aiPalette"
         :dominant-color="dominantColor"
         @toggle-ai-editor="emit('toggleAiEditor')"
+        @rerun-ai-analysis="emit('rerunAiAnalysis')"
         @cancel-ai-editor="emit('cancelAiEditor')"
         @save-ai-metadata="emit('saveAiMetadata')"
       />

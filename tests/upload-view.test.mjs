@@ -20,6 +20,7 @@ const uploadProcessing = readFileSync('src/features/upload/useUploadProcessing.t
 const uploadArchiveStatus = readFileSync('src/features/upload/upload-archive-status.ts', 'utf8');
 const uploadApi = readFileSync('src/features/upload/upload.api.ts', 'utf8');
 const aiPreviewApi = readFileSync('src/features/upload/ai-preview.api.ts', 'utf8');
+const imagesAiPreviewApi = readFileSync('src/features/images/ai-preview.api.ts', 'utf8');
 const geocodeApi = readFileSync('src/features/images/geocode.api.ts', 'utf8');
 const plan = readFileSync('docs/PLAN.md', 'utf8');
 
@@ -165,7 +166,8 @@ test('upload page uses admin API helpers and paths', () => {
   assert.match(uploadProcessing, /const latest = await fetchAdminImage\(key\)/);
   assert.match(uploadProcessing, /const existing = await checkAdminImageHash\(hash\)/);
   assert.match(uploadApi, /fetch\('\/api\/admin\/upload'/);
-  assert.match(aiPreviewApi, /fetch\('\/api\/admin\/ai\/preview'/);
+  assert.match(aiPreviewApi, /export \{ previewAiAnnotation \} from '@\/features\/images\/ai-preview\.api'/);
+  assert.match(imagesAiPreviewApi, /fetch\('\/api\/admin\/ai\/preview'/);
   assert.match(geocodeApi, /fetch\(`\/api\/admin\/geocode\?\$\{params\.toString\(\)\}`\)/);
 });
 

@@ -19,6 +19,7 @@ const lightbox = lightboxSurfaceFiles.map((path) => readFileSync(path, 'utf8')).
 const lightboxActions = readFileSync('src/features/images/useImageLightboxActions.ts', 'utf8');
 const lightboxEditForm = readFileSync('src/features/images/useImageLightboxEditForm.ts', 'utf8');
 const lightboxDetails = readFileSync('src/features/images/useImageLightboxDetails.ts', 'utf8');
+const lightboxAiSection = readFileSync('src/features/images/ImageLightboxAiSection.vue', 'utf8').replace(/\r\n/g, '\n');
 const imageMeta = readFileSync('src/features/images/image-meta.ts', 'utf8');
 const readOnlyMap = readFileSync('src/features/images/ReadOnlyMap.vue', 'utf8');
 const imagesApi = readFileSync('src/features/images/images.api.ts', 'utf8');
@@ -142,6 +143,20 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.doesNotMatch(lightbox, /image\.ocr_text/);
   assert.doesNotMatch(lightbox, />OCR</);
   assert.match(lightbox, /class="ai-edit-button"/);
+  assert.match(lightbox, /class="section-actions"/);
+  assert.match(lightbox, /v-if="isAdmin && aiEditOpen"/);
+  assert.match(lightbox, /class="ai-preview-button"/);
+  assert.match(lightbox, /重新 AI 分析/);
+  assert.match(lightbox, /@rerun-ai-analysis="rerunAiAnalysis"/);
+  assert.match(lightbox, /:ai-previewing="aiPreviewing"/);
+  assert.match(
+    lightboxAiSection,
+    /<p v-if="aiEditOpen && actionError" class="action-error ai-action-error">\{\{ actionError \}\}<\/p>\s*<div class="detail-items">/,
+  );
+  assert.doesNotMatch(
+    lightboxAiSection,
+    /<form v-if="aiEditOpen"[\s\S]*?<p v-if="actionError" class="action-error">\{\{ actionError \}\}<\/p>/,
+  );
   assert.match(lightbox, /<form v-if="aiEditOpen" class="ai-edit-form" @submit\.prevent="emit\('saveAiMetadata'\)">/);
   assert.match(lightbox, /@save-ai-metadata="saveAiMetadata"/);
   assert.match(lightbox, /v-model="editForm\.title"/);
@@ -154,6 +169,8 @@ test('ImageLightbox provides edit, delete, original download, copy links and map
   assert.match(lightboxActions, /dominant_color:\s*editForm\.dominant_color/);
   assert.match(lightboxActions, /palette:\s*editForm\.palette/);
   assert.match(lightboxActions, /composition:\s*editForm\.composition/);
+  assert.match(lightboxActions, /previewAiAnnotation\(aiImage\)/);
+  assert.match(lightboxActions, /applyAiPreviewResultToEditForm\(editForm,\s*result\)/);
   assert.match(lightboxEditForm, /export const tagsTextFromImage/);
   assert.match(lightbox, /\.palette-list\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/s);
   assert.match(lightbox, /\.palette-chip\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px;/s);

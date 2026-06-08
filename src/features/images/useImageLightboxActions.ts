@@ -1,9 +1,11 @@
 import { ref, type Ref } from 'vue';
 
+import { previewAiAnnotation } from './ai-preview.api';
 import { buildPublicPageUrl } from './image-links';
 import type { ImageRecord } from './image.types';
 import { deleteImage, updateImage } from './images.api';
 import {
+  applyAiPreviewResultToEditForm,
   paletteTextFromImage,
   tagsTextFromImage,
   type ImageLightboxEditForm,
@@ -23,6 +25,27 @@ interface UseImageLightboxActionsOptions {
   emit: ImageLightboxEmit;
 }
 
+const adminPublicImageUrl = (key: string): string => {
+  const path = key
+    .replace(/^\/+/, '')
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+  return `/api/admin/public/${path}`;
+};
+
+const extensionMimeType = (format: string): string => {
+  const normalized = format.toLowerCase().replace(/^\./, '');
+  if (normalized === 'jpg') return 'image/jpeg';
+  if (normalized === 'svg') return 'image/svg+xml';
+  return normalized ? `image/${normalized}` : 'image/webp';
+};
+
+const aiPreviewFileName = (image: ImageRecord): string => {
+  const name = image.original_filename || image.key.split('/').pop() || 'image';
+  return /\.[a-z0-9]+$/i.test(name) ? name : `${name}.${image.format || 'webp'}`;
+};
+
 export const useImageLightboxActions = ({
   image,
   origin,
@@ -35,6 +58,7 @@ export const useImageLightboxActions = ({
   const locationEditOpen = ref(false);
   const saving = ref(false);
   const deleting = ref(false);
+  const aiPreviewing = ref(false);
   const actionError = ref<string | null>(null);
 
   const sharePage = async () => {
@@ -84,6 +108,30 @@ export const useImageLightboxActions = ({
       actionError.value = (error as Error).message;
     } finally {
       saving.value = false;
+    }
+  };
+
+  const rerunAiAnalysis = async () => {
+    if (!image.value || !aiEditOpen.value || saving.value || deleting.value || aiPreviewing.value) return;
+    aiPreviewing.value = true;
+    actionError.value = null;
+    try {
+      const response = await fetch(adminPublicImageUrl(image.value.key));
+      if (!response.ok) {
+        throw new Error(`读取图片失败：${response.status}`);
+      }
+      const blob = await response.blob();
+      const aiImage = new File(
+        [blob],
+        aiPreviewFileName(image.value),
+        { type: blob.type || extensionMimeType(image.value.format) },
+      );
+      const result = await previewAiAnnotation(aiImage);
+      applyAiPreviewResultToEditForm(editForm, result);
+    } catch (error) {
+      actionError.value = (error as Error).message || 'AI 分析失败。';
+    } finally {
+      aiPreviewing.value = false;
     }
   };
 
@@ -176,12 +224,14 @@ export const useImageLightboxActions = ({
     locationEditOpen,
     saving,
     deleting,
+    aiPreviewing,
     actionError,
     sharePage,
     resetForm,
     openAiEditor,
     cancelAiEditor,
     saveAiMetadata,
+    rerunAiAnalysis,
     openLocationEditor,
     cancelLocationEditor,
     saveLocation,

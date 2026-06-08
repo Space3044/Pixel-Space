@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue';
 
 import type { MapRegion } from '@/features/upload/map-coordinate';
+import type { AiPreviewResult } from './ai-preview.api';
 import type { GeocodeRegion, GeocodeResult } from './geocode.api';
 import type { ImageRecord } from './image.types';
 import { paletteFromImage, tagsFromImage } from './image-meta';
@@ -25,6 +26,18 @@ export const tagsTextFromImage = (image: ImageRecord | null | undefined): string
 
 export const paletteTextFromImage = (image: ImageRecord | null | undefined): string =>
   paletteFromImage(image).join(', ');
+
+export const applyAiPreviewResultToEditForm = (
+  editForm: ImageLightboxEditForm,
+  result: AiPreviewResult,
+) => {
+  editForm.title = result.title || editForm.title;
+  editForm.caption = result.caption;
+  editForm.tags = result.tags.join(', ');
+  editForm.dominant_color = result.dominant_color;
+  editForm.palette = result.palette.join(', ');
+  editForm.composition = result.composition;
+};
 
 export const toRegion = (value: string | null | undefined): MapRegion | null =>
   value === 'china' || value === 'global' ? value : null;

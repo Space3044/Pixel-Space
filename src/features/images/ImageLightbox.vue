@@ -56,12 +56,14 @@ const {
   locationEditOpen,
   saving,
   deleting,
+  aiPreviewing,
   actionError,
   sharePage,
   resetForm,
   openAiEditor,
   cancelAiEditor,
   saveAiMetadata,
+  rerunAiAnalysis,
   openLocationEditor,
   cancelLocationEditor,
   saveLocation,
@@ -216,6 +218,7 @@ onBeforeUnmount(() => {
                 :location-edit-open="locationEditOpen"
                 :saving="saving"
                 :deleting="deleting"
+                :ai-previewing="aiPreviewing"
                 :action-error="actionError"
                 :edit-form="editForm"
                 :edit-search-region="editSearchRegion"
@@ -230,6 +233,7 @@ onBeforeUnmount(() => {
                 :link-rows="linkRows"
                 :format-image-timestamp="formatImageTimestamp"
                 @toggle-ai-editor="aiEditOpen ? cancelAiEditor() : openAiEditor()"
+                @rerun-ai-analysis="rerunAiAnalysis"
                 @cancel-ai-editor="cancelAiEditor"
                 @save-ai-metadata="saveAiMetadata"
                 @toggle-location-editor="locationEditOpen ? cancelLocationEditor() : openLocationEditor()"

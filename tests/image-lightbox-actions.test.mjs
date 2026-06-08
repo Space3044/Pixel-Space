@@ -26,6 +26,7 @@ test('image lightbox mutations live outside the viewer component', () => {
     'openAiEditor',
     'cancelAiEditor',
     'saveAiMetadata',
+    'rerunAiAnalysis',
     'openLocationEditor',
     'cancelLocationEditor',
     'saveLocation',
@@ -37,12 +38,16 @@ test('image lightbox mutations live outside the viewer component', () => {
   }
 });
 
-test('image lightbox actions own admin image mutations', () => {
+test('image lightbox actions own admin image mutations and AI preview refresh', () => {
   assert.match(actions, /import \{ deleteImage, updateImage \} from '\.\/images\.api'/);
+  assert.match(actions, /import \{ previewAiAnnotation \} from '\.\/ai-preview\.api'/);
   assert.match(actions, /await updateImage\(image\.value\.key/);
   assert.match(actions, /await deleteImage\(key\)/);
   assert.match(actions, /tagsTextFromImage\(image\.value\)/);
   assert.match(actions, /paletteTextFromImage\(image\.value\)/);
+  assert.match(actions, /const aiPreviewing = ref\(false\)/);
+  assert.match(actions, /adminPublicImageUrl\(image\.value\.key\)/);
+  assert.match(actions, /previewAiAnnotation\(aiImage\)/);
   assert.match(actions, /await copyValue\(buildPublicPageUrl\(image\.value,\s*origin\),\s*'分享链接'\)/);
 
   assert.doesNotMatch(lightbox, /from '\.\/images\.api'/);
