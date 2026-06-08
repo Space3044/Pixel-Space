@@ -12,6 +12,7 @@ for (const path of [
   './security-headers.test.mjs',
   './download-grants-helpers.test.mjs',
   './migration.test.mjs',
+  './folders-api.test.mjs',
   './access-ui.test.mjs',
   './site-metadata.test.mjs',
   './home-view.test.mjs',

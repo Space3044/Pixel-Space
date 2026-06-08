@@ -1,6 +1,6 @@
 import type { Env } from '../types';
 import { json, serverError } from '../_shared/http';
-import { LIST_FOLDERS_SQL, type FolderRecord } from '../_shared/folders';
+import { LIST_PUBLIC_FOLDERS_SQL, type FolderRecord } from '../_shared/folders';
 import { withRequestLogging } from '../_shared/logger';
 
 // 公开的文件夹列表：访客和管理员都能拿到，用于探索页按目录筛选。
@@ -8,7 +8,7 @@ import { withRequestLogging } from '../_shared/logger';
 // 写操作（新建/重命名/删除）仍走 /api/admin/folders/* 系列接口。
 export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/folders', async ({ env }, logger) => {
   try {
-    const result = await env.DB.prepare(LIST_FOLDERS_SQL).all<FolderRecord>();
+    const result = await env.DB.prepare(LIST_PUBLIC_FOLDERS_SQL).all<FolderRecord>();
     return json({ folders: result.results ?? [] });
   } catch (error) {
     logger.error('GET /api/folders failed', { error });

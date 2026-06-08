@@ -38,6 +38,54 @@ LEFT JOIN (
 ORDER BY f.parent_id, f.name COLLATE NOCASE
 `;
 
+// 公开探索页只展示至少包含一张公开图片的目录分支。
+// 父目录自己没有图片、但后代目录有公开图片时仍保留，避免子目录在树里失去入口。
+export const LIST_PUBLIC_FOLDERS_SQL = `
+WITH RECURSIVE
+public_image_folders(id) AS (
+  SELECT DISTINCT folder_id AS id
+  FROM images
+  WHERE folder_id IS NOT NULL
+    AND is_public = 1
+),
+visible_folders(id) AS (
+  SELECT id
+  FROM public_image_folders
+  UNION
+  SELECT f.parent_id
+  FROM folders f
+  JOIN visible_folders vf ON vf.id = f.id
+  WHERE f.parent_id IS NOT NULL
+),
+image_counts AS (
+  SELECT folder_id, COUNT(*) AS image_count
+  FROM images
+  WHERE folder_id IS NOT NULL
+    AND is_public = 1
+  GROUP BY folder_id
+),
+child_counts AS (
+  SELECT parent_id, COUNT(*) AS child_count
+  FROM folders
+  WHERE parent_id IS NOT NULL
+    AND id IN (SELECT id FROM visible_folders)
+  GROUP BY parent_id
+)
+SELECT
+  f.id,
+  f.parent_id,
+  f.name,
+  f.created_at,
+  f.updated_at,
+  COALESCE(image_counts.image_count, 0) AS image_count,
+  COALESCE(child_counts.child_count, 0) AS child_count
+FROM folders f
+JOIN visible_folders vf ON vf.id = f.id
+LEFT JOIN image_counts ON image_counts.folder_id = f.id
+LEFT JOIN child_counts ON child_counts.parent_id = f.id
+ORDER BY f.parent_id, f.name COLLATE NOCASE
+`;
+
 // 名字规则：长度 1..64，禁用控制字符与 /\ 让前端路径展示不至于歧义。
 const NAME_MIN = 1;
 const NAME_MAX = 64;
