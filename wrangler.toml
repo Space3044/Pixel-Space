@@ -1,6 +1,6 @@
 # Cloudflare Pages 配置：本地 `wrangler pages dev` 与生产部署共用一份。
-# 阶段 4 验收前需要先 `wrangler login` + `wrangler d1 create imgbed`，把返回的
-# database_id 填到下方 [[d1_databases]] 块。
+# 本地开发使用 Wrangler 的本地 D1/R2 存储；部署前再在 Cloudflare 创建真实 D1/R2，
+# 并把远程 D1 database_id 填到下方 [[d1_databases]] 块。
 
 name = "pixel-space"
 compatibility_date = "2026-01-15"
