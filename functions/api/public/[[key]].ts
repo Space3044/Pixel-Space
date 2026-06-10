@@ -7,7 +7,12 @@ interface VisibilityRow {
   is_public: number;
 }
 
-export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/public/:key', async ({ env, params }, logger) => {
+const PUBLIC_OBJECT_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+
+const edgeCache = (): Cache | null => (typeof caches === 'undefined' ? null : caches.default);
+
+export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/public/:key', async (context, logger) => {
+  const { env, params, request } = context;
   const key = keyFromRouteParam(params.key);
   if (!key) return notFound();
 
@@ -17,15 +22,35 @@ export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/public/
 
     if (row.is_public !== 1) return notFound();
 
+    const cache = edgeCache();
+    const cacheKey = new Request(request.url, { method: 'GET' });
+    const cached = cache ? await cache.match(cacheKey) : undefined;
+    if (cached) return cached;
+
     const object = await env.BUCKET.get(key);
     if (!object) return notFound();
 
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('etag', object.httpEtag);
-    headers.set('cache-control', 'public, max-age=31536000, immutable');
+    headers.set('cache-control', PUBLIC_OBJECT_CACHE_CONTROL);
 
-    return new Response(object.body, { headers });
+    const response = new Response(object.body, { headers });
+    if (cache) {
+      const cacheWrite = cache.put(cacheKey, response.clone()).catch((error) => {
+        logger.warn('Public object cache write failed', {
+          error,
+          context: { key },
+        });
+      });
+      if (typeof context.waitUntil === 'function') {
+        context.waitUntil(cacheWrite);
+      } else {
+        await cacheWrite;
+      }
+    }
+
+    return response;
   } catch (error) {
     logger.error('GET /api/public/:key failed', {
       error,
