@@ -215,6 +215,15 @@ test('upload page runs AI preview after compression and keeps fields editable', 
   assert.match(uploadProcessing, /entry\.meta\.ai_status\s*=\s*'done'/);
 });
 
+test('upload queue thumbnails show AI preview status before upload', () => {
+  assert.match(view, /entry\.status === 'ready' && entry\.aiStatus === 'pending'/);
+  assert.match(view, /AI分析中/);
+  assert.match(view, /entry\.status === 'ready' && entry\.aiStatus === 'done'/);
+  assert.match(view, /AI分析完成/);
+  assert.match(view, /entry\.status === 'ready' && entry\.aiStatus === 'failed'/);
+  assert.match(view, /AI分析失败/);
+});
+
 test('upload page limits processing AI and upload concurrency instead of serializing whole batches', () => {
   assert.match(uploadProcessing, /const\s+PROCESS_CONCURRENCY\s*=\s*2/);
   assert.match(uploadProcessing, /const\s+AI_CONCURRENCY\s*=\s*2/);

@@ -52,6 +52,9 @@ const emit = defineEmits<{
           <span v-if="entry.status === 'processing'" class="thumb-badge is-busy">处理中</span>
           <span v-else-if="entry.status === 'uploading'" class="thumb-badge is-busy">上传中</span>
           <span v-else-if="entry.duplicate" class="thumb-badge is-dup">已存在</span>
+          <span v-else-if="entry.status === 'ready' && entry.aiStatus === 'pending'" class="thumb-badge is-busy">AI分析中</span>
+          <span v-else-if="entry.status === 'ready' && entry.aiStatus === 'done'" class="thumb-badge is-ok">AI分析完成</span>
+          <span v-else-if="entry.status === 'ready' && entry.aiStatus === 'failed'" class="thumb-badge is-error">AI分析失败</span>
           <span
             v-else-if="entry.status === 'done'"
             class="thumb-badge"
