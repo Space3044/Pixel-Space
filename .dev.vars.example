@@ -1,0 +1,30 @@
+# Telegram original image archive.
+TG_BOT_TOKEN=
+TG_CHAT_ID=
+
+# OpenAI-compatible AI proxy auth key.
+PROXY_KEY=
+
+# AMap frontend JS API config for domestic maps.
+AMAP_JS_KEY=
+AMAP_SECURITY_JS_CODE=
+
+# AMap Web Service key for server-side domestic static maps.
+AMAP_WEB_KEY=
+
+# Mapbox public token for global maps and static map generation.
+MAPBOX_PUBLIC_TOKEN=
+
+# MapTiler key for global geocoding.
+MAPTILER_KEY=
+
+# Cloudflare Turnstile visitor challenge.
+TURNSTILE_SECRET_KEY=
+VITE_TURNSTILE_SITE_KEY=
+
+# Cloudflare Access production admin auth.
+CF_ACCESS_AUD=
+CF_ACCESS_TEAM_DOMAIN=
+
+# Local-only role override. Use admin or visitor.
+LOCAL_ROLE=
