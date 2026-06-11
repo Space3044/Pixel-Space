@@ -40,6 +40,7 @@ const MAPTILER_GEOCODING_BASE_URL = 'https://api.maptiler.com/geocoding/';
 const MAPBOX_GEOCODING_BASE_URL = 'https://api.mapbox.com/geocoding/v5/mapbox.places/';
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
 const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
+const GLOBAL_GEOCODE_LANGUAGE = 'en';
 
 const normalizeQuery = (request: Request): string => {
   const value = new URL(request.url).searchParams.get('q') ?? '';
@@ -133,6 +134,7 @@ const fetchMapTiler = async (query: string, env: Env): Promise<ProviderResults> 
   const url = new URL(`${encodeURIComponent(query)}.json`, MAPTILER_GEOCODING_BASE_URL);
   url.searchParams.set('key', key);
   url.searchParams.set('limit', '5');
+  url.searchParams.set('language', GLOBAL_GEOCODE_LANGUAGE);
 
   const response = await fetch(url.toString(), {
     headers: { accept: 'application/json' },
@@ -157,7 +159,7 @@ const fetchMapbox = async (query: string, env: Env): Promise<ProviderResults> =>
   const url = new URL(`${encodeURIComponent(query)}.json`, MAPBOX_GEOCODING_BASE_URL);
   url.searchParams.set('access_token', token);
   url.searchParams.set('limit', '5');
-  url.searchParams.set('language', 'zh,en');
+  url.searchParams.set('language', GLOBAL_GEOCODE_LANGUAGE);
 
   const response = await fetch(url.toString(), {
     headers: { accept: 'application/json' },
@@ -182,6 +184,7 @@ const fetchMapTilerReverse = async (coordinate: ReverseCoordinate, env: Env): Pr
   const url = new URL(`${coordinate.lng},${coordinate.lat}.json`, MAPTILER_GEOCODING_BASE_URL);
   url.searchParams.set('key', key);
   url.searchParams.set('limit', '1');
+  url.searchParams.set('language', GLOBAL_GEOCODE_LANGUAGE);
 
   const response = await fetch(url.toString(), {
     headers: { accept: 'application/json' },
@@ -205,7 +208,7 @@ const fetchMapboxReverse = async (coordinate: ReverseCoordinate, env: Env): Prom
 
   const url = new URL(`${coordinate.lng},${coordinate.lat}.json`, MAPBOX_GEOCODING_BASE_URL);
   url.searchParams.set('access_token', token);
-  url.searchParams.set('language', 'zh,en');
+  url.searchParams.set('language', GLOBAL_GEOCODE_LANGUAGE);
 
   const response = await fetch(url.toString(), {
     headers: { accept: 'application/json' },
@@ -229,7 +232,7 @@ const fetchNominatim = async (query: string, request: Request): Promise<GeocodeR
   url.searchParams.set('q', query);
   url.searchParams.set('limit', '5');
   url.searchParams.set('addressdetails', '1');
-  url.searchParams.set('accept-language', 'zh-CN,zh,en');
+  url.searchParams.set('accept-language', GLOBAL_GEOCODE_LANGUAGE);
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -258,7 +261,7 @@ const fetchNominatimReverse = async (
   url.searchParams.set('lon', String(coordinate.lng));
   url.searchParams.set('zoom', '18');
   url.searchParams.set('addressdetails', '1');
-  url.searchParams.set('accept-language', 'zh-CN,zh,en');
+  url.searchParams.set('accept-language', GLOBAL_GEOCODE_LANGUAGE);
 
   const response = await fetch(url.toString(), {
     headers: {

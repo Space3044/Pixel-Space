@@ -100,3 +100,9 @@ test('single image maps use pin markers anchored at the coordinate point', () =>
   assert.match(pickMap, /anchor:\s*'bottom-center'/);
   assert.match(pickMap, /anchor:\s*'bottom'/);
 });
+
+test('upload picker focuses selected locations at an about 2km viewport', () => {
+  assert.match(pickMap, /const PICK_FOCUS_ZOOM = 14/);
+  assert.match(pickMap, /setZoomAndCenter\(Math\.max\(map\.getZoom\(\), PICK_FOCUS_ZOOM\), position\)/);
+  assert.match(pickMap, /flyTo\(\{ center: position, zoom: Math\.max\(map\.getZoom\(\), PICK_FOCUS_ZOOM\) \}\)/);
+});

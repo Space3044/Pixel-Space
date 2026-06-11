@@ -98,6 +98,7 @@ await test('GET /api/admin/geocode proxies Nominatim and returns normalized WGS8
   const headers = new Headers(requests[0].init.headers);
   assert.match(headers.get('user-agent'), /imgbed-geocoder/i);
   assert.equal(headers.get('referer'), 'http://localhost/');
+  assert.equal(requestUrl.searchParams.get('accept-language'), 'en');
 });
 
 await test('GET /api/admin/geocode keeps domestic searches out of the backend', async () => {
@@ -161,7 +162,7 @@ await test('GET /api/admin/geocode uses Mapbox first for global searches', async
   assert.equal(requestUrl.pathname, '/geocoding/v5/mapbox.places/Tokyo%20Tower.json');
   assert.equal(requestUrl.searchParams.get('access_token'), 'pk.mapbox-token');
   assert.equal(requestUrl.searchParams.get('limit'), '5');
-  assert.equal(requestUrl.searchParams.get('language'), 'zh,en');
+  assert.equal(requestUrl.searchParams.get('language'), 'en');
 });
 
 await test('GET /api/admin/geocode falls back to MapTiler for global searches', async () => {
@@ -204,6 +205,7 @@ await test('GET /api/admin/geocode falls back to MapTiler for global searches', 
   assert.equal(requestUrl.pathname, '/geocoding/Tokyo%20Tower.json');
   assert.equal(requestUrl.searchParams.get('key'), 'maptiler-key');
   assert.equal(requestUrl.searchParams.get('limit'), '5');
+  assert.equal(requestUrl.searchParams.get('language'), 'en');
 });
 
 await test('GET /api/admin/geocode uses Mapbox first for global reverse geocoding', async () => {
@@ -244,7 +246,7 @@ await test('GET /api/admin/geocode uses Mapbox first for global reverse geocodin
   assert.equal(requestUrl.pathname, '/geocoding/v5/mapbox.places/2.294481,48.85837.json');
   assert.equal(requestUrl.searchParams.get('access_token'), 'pk.mapbox-token');
   assert.equal(requestUrl.searchParams.get('limit'), null);
-  assert.equal(requestUrl.searchParams.get('language'), 'zh,en');
+  assert.equal(requestUrl.searchParams.get('language'), 'en');
 });
 
 await test('GET /api/admin/geocode falls back to MapTiler for global reverse geocoding', async () => {
@@ -285,6 +287,7 @@ await test('GET /api/admin/geocode falls back to MapTiler for global reverse geo
   assert.equal(requestUrl.pathname, '/geocoding/2.294481,48.85837.json');
   assert.equal(requestUrl.searchParams.get('key'), 'maptiler-key');
   assert.equal(requestUrl.searchParams.get('limit'), '1');
+  assert.equal(requestUrl.searchParams.get('language'), 'en');
 });
 
 await test('GET /api/admin/geocode falls back to Nominatim for global reverse geocoding', async () => {
@@ -329,6 +332,7 @@ await test('GET /api/admin/geocode falls back to Nominatim for global reverse ge
   const headers = new Headers(requests[0].init.headers);
   assert.match(headers.get('user-agent'), /imgbed-geocoder/i);
   assert.equal(headers.get('referer'), 'http://localhost/');
+  assert.equal(requestUrl.searchParams.get('accept-language'), 'en');
 });
 
 await test('GET /api/admin/geocode stops after Nominatim for global searches', async () => {
