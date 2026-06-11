@@ -243,7 +243,7 @@ await test('GET /api/admin/geocode uses Mapbox first for global reverse geocodin
   assert.equal(requestUrl.origin, 'https://api.mapbox.com');
   assert.equal(requestUrl.pathname, '/geocoding/v5/mapbox.places/2.294481,48.85837.json');
   assert.equal(requestUrl.searchParams.get('access_token'), 'pk.mapbox-token');
-  assert.equal(requestUrl.searchParams.get('limit'), '1');
+  assert.equal(requestUrl.searchParams.get('limit'), null);
   assert.equal(requestUrl.searchParams.get('language'), 'zh,en');
 });
 

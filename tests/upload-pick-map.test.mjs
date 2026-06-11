@@ -49,6 +49,36 @@ const createAdapter = (calls) => {
   };
 };
 
+const createDeferredAdapter = (calls) => {
+  let readyHandler = null;
+  let pickHandler = null;
+  let ready = false;
+  return {
+    async init(container, onReady, onPick) {
+      calls.push(['init', container]);
+      readyHandler = onReady;
+      pickHandler = onPick;
+    },
+    setMarker(stored, center) {
+      if (!ready) return;
+      calls.push(['setMarker', stored, center]);
+    },
+    resize() {
+      calls.push(['resize']);
+    },
+    destroy() {
+      calls.push(['destroy']);
+    },
+    ready() {
+      ready = true;
+      readyHandler?.();
+    },
+    pick(stored) {
+      pickHandler?.(stored);
+    },
+  };
+};
+
 await test('useUploadPickMap maps search regions and writes selected coordinates', async () => {
   assert.equal(regionFromPickRegion('cn'), 'china');
   assert.equal(regionFromPickRegion('global'), 'global');
@@ -107,4 +137,25 @@ await test('useUploadPickMap remounts adapters when selected entry restores anot
   assert.equal(current.value.meta.location_lat, 35.6764);
   assert.equal(current.value.meta.location_lng, 139.65);
   assert.equal(current.value.meta.location_region, 'global');
+});
+
+await test('useUploadPickMap preserves centering when coordinates arrive during a region remount', async () => {
+  const current = ref(createEntry('e_1', 'china'));
+  const calls = [];
+  const chinaAdapter = createAdapter(calls);
+  const worldAdapter = createDeferredAdapter(calls);
+  const picker = useUploadPickMap({
+    currentEntry: current,
+    createChinaAdapter: () => chinaAdapter,
+    createWorldAdapter: () => worldAdapter,
+  });
+
+  picker.mapRef.value = {};
+  await picker.mountMap();
+
+  void picker.onSearchRegionChange('global');
+  picker.setEntryCoordinates(current.value, 48.85837, 2.294481, true, 'global');
+  worldAdapter.ready();
+
+  assert.deepEqual(calls.at(-1), ['setMarker', { lng: 2.294481, lat: 48.85837 }, true]);
 });

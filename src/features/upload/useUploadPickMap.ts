@@ -38,6 +38,7 @@ export const useUploadPickMap = <Entry extends UploadPickEntry>({
   const mapLoadState = ref<MapLoadState>('loading');
   const pickRegion = ref<GeocodeRegion>('cn');
   let pickAdapter: PickMapAdapter | null = null;
+  let pendingCenterOnReady = false;
 
   const currentStoredCoordinate = (): LngLat | null => {
     const entry = currentEntry.value;
@@ -47,6 +48,7 @@ export const useUploadPickMap = <Entry extends UploadPickEntry>({
   };
 
   const syncMarker = (center = false) => {
+    if (center && mapLoadState.value !== 'ready') pendingCenterOnReady = true;
     pickAdapter?.setMarker(currentStoredCoordinate(), center);
   };
 
@@ -73,7 +75,9 @@ export const useUploadPickMap = <Entry extends UploadPickEntry>({
       () => {
         if (pickAdapter !== adapter) return;
         mapLoadState.value = 'ready';
-        adapter.setMarker(currentStoredCoordinate(), false);
+        const shouldCenter = pendingCenterOnReady;
+        pendingCenterOnReady = false;
+        adapter.setMarker(currentStoredCoordinate(), shouldCenter);
       },
       (stored) => {
         const entry = currentEntry.value;

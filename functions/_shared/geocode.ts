@@ -205,7 +205,6 @@ const fetchMapboxReverse = async (coordinate: ReverseCoordinate, env: Env): Prom
 
   const url = new URL(`${coordinate.lng},${coordinate.lat}.json`, MAPBOX_GEOCODING_BASE_URL);
   url.searchParams.set('access_token', token);
-  url.searchParams.set('limit', '1');
   url.searchParams.set('language', 'zh,en');
 
   const response = await fetch(url.toString(), {
