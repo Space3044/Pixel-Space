@@ -224,12 +224,12 @@ LOCAL_ROLE=admin
 | `TG_BOT_TOKEN` | 是 | Telegram Bot token，用于原图归档和下载 |
 | `TG_CHAT_ID` | 是 | Telegram 私有频道或群组 ID |
 | `PUBLIC_BASE_URL` | 已默认配置 | 公开压缩图访问前缀，默认在 `wrangler.toml` 中为 `/api/public` |
-| `PROXY_KEY` | AI 可选 | OpenAI 兼容代理鉴权 |
-| `AMAP_JS_KEY` | 地图可选 | 高德 JS API Key |
-| `AMAP_SECURITY_JS_CODE` | 地图可选 | 高德 JS API 安全密钥 |
-| `AMAP_WEB_KEY` | 国内静态地图可选 | 高德 Web 服务 Key，只在服务端生成国内静态地图时使用 |
-| `MAPBOX_PUBLIC_TOKEN` | 海外地图可选 | Mapbox public token，用于前端海外底图、海外静态图，以及海外位置正查 / 反查的优先 provider |
-| `MAPTILER_KEY` | 地理编码可选 | MapTiler Geocoding key，只用于海外位置正查 / 反查的第二层兜底，不参与底图和静态图 |
+| `PROXY_KEY` | AI 建议 | OpenAI 兼容代理鉴权 |
+| `AMAP_JS_KEY` | 地图建议 | 高德 JS API Key |
+| `AMAP_SECURITY_JS_CODE` | 地图建议 | 高德 JS API 安全密钥 |
+| `AMAP_WEB_KEY` | 国内静态地图建议 | 高德 Web 服务 Key，只在服务端生成国内静态地图时使用 |
+| `MAPBOX_PUBLIC_TOKEN` | 海外地图建议 | Mapbox public token，用于前端海外底图、海外静态图，以及海外位置正查 / 反查的优先 provider |
+| `MAPTILER_KEY` | 地理编码建议 | MapTiler Geocoding key，只用于海外位置正查 / 反查的第二层兜底，不参与底图和静态图 |
 | `TURNSTILE_SECRET_KEY` | 生产建议，本地可空 | Cloudflare Turnstile secret key，和 site key 同时存在时启用访客挑战 |
 | `VITE_TURNSTILE_SITE_KEY` | 生产建议，本地可空 | Cloudflare Turnstile site key，和 secret key 同时存在时前端渲染挑战 |
 | `CF_ACCESS_TEAM_DOMAIN` | 生产必需 | Cloudflare Access team domain，例如 `team.cloudflareaccess.com` |
