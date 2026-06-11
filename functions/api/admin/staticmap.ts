@@ -8,6 +8,7 @@ import {
   StaticMapError,
   staticMapLocationFromUrl,
   staticMapObjectResponse,
+  staticMapRefererFromRequest,
 } from '../../_shared/static-map';
 
 export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/staticmap', async ({ request, env }, logger) => {
@@ -29,7 +30,7 @@ export const onRequestGet: PagesFunction<Env> = withRequestLogging('/api/admin/s
   }
 
   try {
-    return await generateAndCacheStaticMap(env, location, logger);
+    return await generateAndCacheStaticMap(env, location, logger, staticMapRefererFromRequest(request));
   } catch (error) {
     logger.error('GET /api/admin/staticmap generation failed', {
       error,

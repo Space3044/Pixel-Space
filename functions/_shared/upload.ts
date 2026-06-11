@@ -21,7 +21,7 @@ import {
 import { createImageKey } from './keys';
 import { archiveOriginalAfterUpload } from './archive';
 import { requireSameOrigin } from './security';
-import { createStaticMapCacheTask } from './static-map';
+import { createStaticMapCacheTask, staticMapRefererFromRequest } from './static-map';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
 
@@ -217,6 +217,8 @@ export const handleUploadPost = async (
       return json(rowToRecord(existing, env.PUBLIC_BASE_URL), 200);
     }
 
+    const staticMapReferer = staticMapRefererFromRequest(request);
+
     await env.BUCKET.put(key, compressed, {
       httpMetadata: {
         contentType: compressed.type,
@@ -259,14 +261,15 @@ export const handleUploadPost = async (
       .run();
     d1ImageInserted = true;
 
-    const staticMapTask = createStaticMapCacheTask(env, meta.location_lat, meta.location_lng, meta.location_region, logger);
-    if (staticMapTask) {
-      if (typeof context.waitUntil === 'function') {
-        context.waitUntil(staticMapTask);
-      } else {
-        await staticMapTask;
-      }
-    }
+    const staticMapTask = createStaticMapCacheTask(
+      env,
+      meta.location_lat,
+      meta.location_lng,
+      meta.location_region,
+      logger,
+      staticMapReferer,
+    );
+    if (staticMapTask) await staticMapTask;
 
     const archiveTask = archiveOriginalAfterUpload(env, original, key, logger);
     if (typeof context.waitUntil === 'function') {

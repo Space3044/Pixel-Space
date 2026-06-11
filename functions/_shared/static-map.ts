@@ -87,6 +87,11 @@ const readAmapWebKey = (env: Pick<Env, 'AMAP_WEB_KEY'>): string => {
   return key;
 };
 
+export const staticMapRefererFromRequest = (request: Request): string => {
+  const origin = request.headers.get('origin') ?? new URL(request.url).origin;
+  return origin.endsWith('/') ? origin : `${origin}/`;
+};
+
 export const staticMapCacheKey = (location: StaticMapLocation): string => {
   const lngStr = location.lng.toFixed(6);
   const latStr = location.lat.toFixed(6);
@@ -141,10 +146,11 @@ const fetchStaticMap = async (
   requestUrl: string,
   errorPrefix: string,
   logger?: RequestLogger,
+  init?: RequestInit,
 ): Promise<{ bytes: ArrayBuffer; contentType: string }> => {
   let upstream: Response;
   try {
-    upstream = await fetch(requestUrl);
+    upstream = await fetch(requestUrl, init);
   } catch {
     throw new StaticMapError(`${errorPrefix}_unreachable`);
   }
@@ -185,7 +191,8 @@ const fetchAmapStaticMap = async (
 const fetchMapboxStaticMap = async (
   env: Pick<Env, 'MAPBOX_PUBLIC_TOKEN'>,
   location: StaticMapLocation,
-  logger?: RequestLogger,
+  logger: RequestLogger | undefined,
+  referer: string,
 ): Promise<{ bytes: ArrayBuffer; contentType: string }> => {
   const tokenResult = readMapboxPublicToken(env);
   if ('error' in tokenResult) throw new StaticMapError(tokenResult.error);
@@ -195,17 +202,18 @@ const fetchMapboxStaticMap = async (
   const marker = `pin-s+${MARKER_COLOR}(${lngStr},${latStr})`;
   const position = `${lngStr},${latStr},${location.zoom}`;
   const requestUrl = `${MAPBOX_STATIC_BASE}/${MAPBOX_STYLE}/static/${marker}/${position}/${SIZE}@2x?access_token=${encodeURIComponent(tokenResult.token)}`;
-  return fetchStaticMap(requestUrl, 'mapbox_staticmap', logger);
+  return fetchStaticMap(requestUrl, 'mapbox_staticmap', logger, { headers: { referer } });
 };
 
 export const generateAndCacheStaticMap = async (
   env: Pick<Env, 'BUCKET' | 'AMAP_WEB_KEY' | 'MAPBOX_PUBLIC_TOKEN'>,
   location: StaticMapLocation,
-  logger?: RequestLogger,
+  logger: RequestLogger | undefined,
+  referer: string,
 ): Promise<Response> => {
   const { bytes, contentType } = location.region === 'china'
     ? await fetchAmapStaticMap(env, location, logger)
-    : await fetchMapboxStaticMap(env, location, logger);
+    : await fetchMapboxStaticMap(env, location, logger, referer);
 
   await env.BUCKET.put(staticMapCacheKey(location), bytes, {
     httpMetadata: { contentType, cacheControl: CACHE_CONTROL },
@@ -220,12 +228,13 @@ export const generateAndCacheStaticMap = async (
 const cacheStaticMap = async (
   env: Pick<Env, 'BUCKET' | 'AMAP_WEB_KEY' | 'MAPBOX_PUBLIC_TOKEN'>,
   location: StaticMapLocation,
-  logger?: RequestLogger,
+  logger: RequestLogger | undefined,
+  referer: string,
 ): Promise<void> => {
   try {
     const cached = await getCachedStaticMap(env, location);
     if (cached) return;
-    await generateAndCacheStaticMap(env, location, logger);
+    await generateAndCacheStaticMap(env, location, logger, referer);
   } catch (error) {
     logger?.error('Static map precache failed', {
       error,
@@ -244,11 +253,12 @@ export const createStaticMapCacheTask = (
   lat: number | null,
   lng: number | null,
   region: LocationRegion | null,
-  logger?: RequestLogger,
+  logger: RequestLogger | undefined,
+  referer: string,
 ): Promise<void> | null => {
   const location = normalizeLocation(lat, lng, region);
   if (!location) return null;
   if (location.region === 'china' && !env.AMAP_WEB_KEY?.trim()) return null;
   if (location.region === 'global' && 'error' in readMapboxPublicToken(env)) return null;
-  return location ? cacheStaticMap(env, location, logger) : null;
+  return cacheStaticMap(env, location, logger, referer);
 };

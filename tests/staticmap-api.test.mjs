@@ -213,8 +213,8 @@ await test('GET /api/admin/staticmap lets admins generate and cache a missing gl
   const requests = [];
   const { env, puts } = makeEnv();
   const response = await withMockedFetch(
-    async (url) => {
-      requests.push(String(url));
+    async (url, init) => {
+      requests.push({ url: String(url), init });
       return pngResponse();
     },
     () => callAdmin(env, 'http://localhost/api/admin/staticmap?lat=48.8566&lng=2.3522&region=global'),
@@ -224,12 +224,14 @@ await test('GET /api/admin/staticmap lets admins generate and cache a missing gl
   assert.equal(response.headers.get('content-type'), 'image/png');
   assert.equal(requests.length, 1);
 
-  const url = new URL(requests[0]);
+  const url = new URL(requests[0].url);
+  const headers = new Headers(requests[0].init?.headers);
   assert.equal(url.origin, 'https://api.mapbox.com');
   assert.ok(url.pathname.includes('/styles/v1/mapbox/dark-v11/static/'), 'uses the dark Mapbox style');
   assert.equal(url.searchParams.get('access_token'), 'pk.mb-token');
   assert.ok(url.pathname.includes('pin-s+ff4fd8(2.352200,48.856600)'), 'pink marker at the raw coordinate');
   assert.ok(url.pathname.includes('2.352200,48.856600,12'), 'center uses raw WGS-84 + zoom');
+  assert.equal(headers.get('referer'), 'http://localhost/');
 
   assert.equal(puts.length, 1);
   assert.equal(puts[0].key, 'staticmap/mapbox_48.856600_2.352200_z12_600x360.png');

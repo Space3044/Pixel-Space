@@ -323,7 +323,7 @@ await test('POST /api/admin/upload pre-caches the stored location static map in 
   const response = await withMockedFetch(async (url, init) => {
     const requestUrl = String(url);
     if (requestUrl.startsWith('https://restapi.amap.com/') || requestUrl.startsWith('https://api.mapbox.com/')) {
-      staticMapRequests.push(requestUrl);
+      staticMapRequests.push({ url: requestUrl, init });
       return pngResponse();
     }
     return telegramSuccessFetch(calls)(url, init);
@@ -331,12 +331,105 @@ await test('POST /api/admin/upload pre-caches the stored location static map in 
 
   assert.equal(response.status, 201);
   assert.equal(staticMapRequests.length, 1);
-  assert.equal(new URL(staticMapRequests[0]).origin, 'https://restapi.amap.com');
+  assert.equal(new URL(staticMapRequests[0].url).origin, 'https://restapi.amap.com');
   const staticMapKey = 'staticmap/amap_31.230400_121.473700_z12_600x360.png';
   assert.equal(calls.gets.includes(staticMapKey), true);
   const staticMapPut = calls.puts.find((put) => put.key === staticMapKey);
   assert.ok(staticMapPut, 'static map must be written to R2 during upload');
   assert.equal(staticMapPut.options.httpMetadata.contentType, 'image/png');
+});
+
+await test('POST /api/admin/upload pre-caches global location static map with Mapbox in R2', async () => {
+  const { env, calls } = makeEnv({ mapboxToken: 'pk.mb-token' });
+  const request = makeUploadRequest({
+    meta: {
+      location_name: 'Eiffel Tower, Paris, France',
+      location_lat: 48.85837,
+      location_lng: 2.294481,
+      location_region: 'global',
+    },
+  });
+  const staticMapRequests = [];
+
+  const response = await withMockedFetch(async (url, init) => {
+    const requestUrl = String(url);
+    if (requestUrl.startsWith('https://restapi.amap.com/') || requestUrl.startsWith('https://api.mapbox.com/')) {
+      staticMapRequests.push({ url: requestUrl, init });
+      return pngResponse();
+    }
+    return telegramSuccessFetch(calls)(url, init);
+  }, () => uploadPost({ env, request, params: {} }));
+
+  assert.equal(response.status, 201);
+  assert.equal(staticMapRequests.length, 1);
+  const url = new URL(staticMapRequests[0].url);
+  const headers = new Headers(staticMapRequests[0].init?.headers);
+  assert.equal(url.origin, 'https://api.mapbox.com');
+  assert.match(url.pathname, /\/styles\/v1\/mapbox\/dark-v11\/static\//);
+  assert.equal(url.searchParams.get('access_token'), 'pk.mb-token');
+  assert.equal(headers.get('referer'), 'http://localhost/');
+
+  const staticMapKey = 'staticmap/mapbox_48.858370_2.294481_z12_600x360.png';
+  assert.equal(calls.gets.includes(staticMapKey), true);
+  const staticMapPut = calls.puts.find((put) => put.key === staticMapKey);
+  assert.ok(staticMapPut, 'global static map must be written to R2 during upload');
+  assert.equal(staticMapPut.options.httpMetadata.contentType, 'image/png');
+});
+
+await test('POST /api/admin/upload waits for global static map cache before returning with waitUntil', async () => {
+  const { env, calls } = makeEnv({ mapboxToken: 'pk.mb-token' });
+  const request = makeUploadRequest({
+    meta: {
+      location_name: 'Eiffel Tower, Paris, France',
+      location_lat: 48.85837,
+      location_lng: 2.294481,
+      location_region: 'global',
+    },
+  });
+  const waitUntilTasks = [];
+  let releaseStaticMap;
+  const staticMapGate = new Promise((resolve) => {
+    releaseStaticMap = resolve;
+  });
+
+  const responsePromise = withMockedFetch(
+    async (url, init) => {
+      const requestUrl = String(url);
+      if (requestUrl.startsWith('https://api.mapbox.com/')) {
+        await staticMapGate;
+        return pngResponse();
+      }
+      return telegramSuccessFetch(calls)(url, init);
+    },
+    () =>
+      uploadPost({
+        env,
+        request,
+        params: {},
+        waitUntil: (task) => waitUntilTasks.push(task),
+      }),
+  );
+
+  const earlyResult = await Promise.race([
+    responsePromise,
+    new Promise((resolve) => setTimeout(() => resolve('timed_out'), 20)),
+  ]);
+
+  if (earlyResult !== 'timed_out') {
+    releaseStaticMap();
+    await Promise.allSettled(waitUntilTasks);
+    assert.fail('upload response returned before the global static map was cached');
+  }
+
+  const staticMapKey = 'staticmap/mapbox_48.858370_2.294481_z12_600x360.png';
+  assert.equal(calls.puts.some((put) => put.key === staticMapKey), false);
+
+  releaseStaticMap();
+  const response = await responsePromise;
+
+  assert.equal(response.status, 201);
+  assert.equal(calls.puts.some((put) => put.key === staticMapKey), true);
+  assert.equal(waitUntilTasks.length, 1);
 });
 
 await test('POST /api/admin/upload pre-caches hidden visitor locations', async () => {

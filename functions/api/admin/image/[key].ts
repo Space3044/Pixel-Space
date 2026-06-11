@@ -14,7 +14,7 @@ import {
 import { deleteTelegramMessage } from '../../../_shared/telegram';
 import { keyFromRouteParam } from '../../../_shared/keys';
 import { requireSameOrigin } from '../../../_shared/security';
-import { createStaticMapCacheTask, deleteUnusedStaticMapCache } from '../../../_shared/static-map';
+import { createStaticMapCacheTask, deleteUnusedStaticMapCache, staticMapRefererFromRequest } from '../../../_shared/static-map';
 
 const DETAIL_SQL = `
 SELECT ${IMAGE_SELECT_COLUMNS}
@@ -185,7 +185,14 @@ export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin
       }
     }
 
-    const staticMapTask = createStaticMapCacheTask(env, row.location_lat, row.location_lng, row.location_region, logger);
+    const staticMapTask = createStaticMapCacheTask(
+      env,
+      row.location_lat,
+      row.location_lng,
+      row.location_region,
+      logger,
+      staticMapRefererFromRequest(request),
+    );
     if (staticMapTask) {
       if (typeof context.waitUntil === 'function') {
         context.waitUntil(staticMapTask);
