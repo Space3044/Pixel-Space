@@ -6,7 +6,7 @@ import { mapLngLatFromStored, storedLngLatFromMap } from './map-coordinate';
 import type { LngLat } from './map-coordinate';
 
 // 上传页取景地图与足迹页同源：国内高德 grey（GCJ-02 显示），国外 Mapbox dark（WGS-84 直用）。
-// 差异只在引擎，点选交互（点地图落点 + 单个标记）收敛到 adapter，坐标对外一律 WGS-84。
+// 点选交互（点地图落点 + 单个标记）收敛到 adapter，坐标对外一律 WGS-84。
 
 export interface PickMapAdapter {
   init(container: HTMLElement, onReady: () => void, onPick: (stored: LngLat) => void): Promise<void>;
@@ -31,7 +31,7 @@ const createPinElement = (): HTMLSpanElement => {
 const CHINA_DEFAULT: LngLat = { lng: 121.4737, lat: 31.2304 };
 const CHINA_FLAT_ZOOM = 9;
 
-// 高德 adapter：grey 个性化样式（需对该 key 开通自定义地图），点选坐标 GCJ→WGS 落库。
+// 高德 adapter：grey 个性化样式，点选坐标 GCJ→WGS 落库。
 export const createChinaPickAdapter = (): PickMapAdapter => {
   let map: AMapMap | null = null;
   let amap: AMapNamespace | null = null;
