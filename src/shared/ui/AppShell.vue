@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { devRole as currentDevRole, isAdmin, isDev, setDevRole } from '@/shared/auth/useAdmin';
+import { devRole as currentDevRole, isAdmin, isDev, logoutAdmin, setDevRole } from '@/shared/auth/useAdmin';
 
 defineProps<{ fluid?: boolean }>();
 
@@ -62,10 +62,6 @@ const adminNavLinks: NavLink[] = [
 const scrollY = ref(0);
 
 const isScrolled = computed(() => scrollY.value > 8);
-const accessEntry = computed(() => ({
-  to: isAdmin.value ? '/library' : '/login',
-  label: isAdmin.value ? '已接入' : '接入',
-}));
 
 const handleScroll = () => {
   scrollY.value = window.scrollY;
@@ -160,14 +156,26 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
             </svg>
           </a>
 
+          <button
+            v-if="isAdmin"
+            type="button"
+            class="login-btn group flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium tracking-wide text-neon-cyan transition-all duration-200 hover:-translate-y-px hover:text-white hover:shadow-[0_2px_8px_rgba(53,243,255,0.15)]"
+            @click="logoutAdmin"
+          >
+            <svg :viewBox="ICONS.plug.vb" fill="currentColor" class="h-3 w-3 opacity-90 transition-transform group-hover:rotate-12" aria-hidden="true">
+              <path :d="ICONS.plug.d" />
+            </svg>
+            <span>注销</span>
+          </button>
           <RouterLink
-            :to="accessEntry.to"
+            v-else
+            to="/login"
             class="login-btn group flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium tracking-wide text-neon-cyan transition-all duration-200 hover:-translate-y-px hover:text-white hover:shadow-[0_2px_8px_rgba(53,243,255,0.15)]"
           >
             <svg :viewBox="ICONS.plug.vb" fill="currentColor" class="h-3 w-3 opacity-90 transition-transform group-hover:rotate-12" aria-hidden="true">
               <path :d="ICONS.plug.d" />
             </svg>
-            <span>{{ accessEntry.label }}</span>
+            <span>接入</span>
           </RouterLink>
         </div>
 
@@ -317,7 +325,10 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
 }
 
 .login-btn {
+  border: 0;
+  background: transparent;
   backdrop-filter: blur(8px);
+  cursor: pointer;
 }
 
 .scan-line {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 const shell = readFileSync('src/shared/ui/AppShell.vue', 'utf8');
+const adminAuth = readFileSync('src/shared/auth/useAdmin.ts', 'utf8');
 const router = readFileSync('src/app/router.ts', 'utf8');
 const i18nPath = 'src/shared/i18n/useLanguage.ts';
 const legacyPath = ['/', 'h', 'ive'].join('');
@@ -54,13 +55,22 @@ test('AppShell shows upload only in the admin nav before console', () => {
   assert.match(router, /path:\s*'\/upload'[\s\S]*requiresAdmin:\s*true/);
 });
 
-test('AppShell turns the access entry into a connected console link for admins', () => {
+test('AppShell turns the connected access entry into an admin logout button', () => {
   assert.match(
     shell,
-    /const accessEntry = computed\(\(\) => \(\{\s*to:\s*isAdmin\.value \? '\/library' : '\/login',\s*label:\s*isAdmin\.value \? '已接入' : '接入',\s*\}\)\);/,
+    /import \{ devRole as currentDevRole,\s*isAdmin,\s*isDev,\s*logoutAdmin,\s*setDevRole \} from '@\/shared\/auth\/useAdmin'/,
   );
-  assert.match(shell, /:to="accessEntry\.to"/);
-  assert.match(shell, /\{\{\s*accessEntry\.label\s*\}\}/);
+  assert.match(shell, /<button\s+v-if="isAdmin"[\s\S]*@click="logoutAdmin"[\s\S]*>\s*[\s\S]*<span>注销<\/span>\s*<\/button>/);
+  assert.match(shell, /<RouterLink\s+v-else\s+to="\/login"[\s\S]*>\s*[\s\S]*<span>接入<\/span>\s*<\/RouterLink>/);
+  assert.doesNotMatch(shell, /已接入|accessEntry/);
+});
+
+test('logoutAdmin signs out through Cloudflare Access and returns to login', () => {
+  assert.match(adminAuth, /const ACCESS_LOGOUT_PATH = '\/cdn-cgi\/access\/logout';/);
+  assert.match(adminAuth, /const LOGOUT_REDIRECT_PATH = '\/login';/);
+  assert.match(adminAuth, /export const logoutAdmin = \(\): void => \{[\s\S]*window\.location\.assign\(logoutUrl\.toString\(\)\);[\s\S]*\};/);
+  assert.match(adminAuth, /logoutUrl\.searchParams\.set\('redirect_url', new URL\(LOGOUT_REDIRECT_PATH, window\.location\.origin\)\.toString\(\)\);/);
+  assert.match(adminAuth, /useAdmin = \(\) => \([\s\S]*logoutAdmin,[\s\S]*\}\);/);
 });
 
 test('router keeps /library but titles it as console', () => {
