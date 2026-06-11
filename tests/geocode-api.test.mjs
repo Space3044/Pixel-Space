@@ -121,7 +121,50 @@ await test('GET /api/admin/geocode keeps domestic searches out of the backend', 
   assert.equal(fetchCalled, false);
 });
 
-await test('GET /api/admin/geocode uses MapTiler first for global searches', async () => {
+await test('GET /api/admin/geocode uses Mapbox first for global searches', async () => {
+  const requests = [];
+
+  const response = await withMockedFetch(
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      return Response.json({
+        features: [
+          {
+            place_name: 'Tokyo Tower, Tokyo, Japan',
+            geometry: {
+              coordinates: [139.745433, 35.658581],
+            },
+          },
+        ],
+      });
+    },
+    () =>
+      onRequestGet({
+        request: new Request('http://localhost/api/admin/geocode?q=Tokyo%20Tower&region=global'),
+        env: makeEnv({ MAPBOX_PUBLIC_TOKEN: 'pk.mapbox-token', MAPTILER_KEY: 'maptiler-key' }),
+        params: {},
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), [
+    {
+      name: 'Tokyo Tower, Tokyo, Japan',
+      lat: 35.658581,
+      lng: 139.745433,
+    },
+  ]);
+
+  assert.equal(requests.length, 1);
+  const requestUrl = new URL(requests[0].url);
+  assert.equal(requestUrl.origin, 'https://api.mapbox.com');
+  assert.equal(requestUrl.pathname, '/geocoding/v5/mapbox.places/Tokyo%20Tower.json');
+  assert.equal(requestUrl.searchParams.get('access_token'), 'pk.mapbox-token');
+  assert.equal(requestUrl.searchParams.get('limit'), '5');
+  assert.equal(requestUrl.searchParams.get('language'), 'zh,en');
+});
+
+await test('GET /api/admin/geocode falls back to MapTiler for global searches', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
@@ -163,7 +206,48 @@ await test('GET /api/admin/geocode uses MapTiler first for global searches', asy
   assert.equal(requestUrl.searchParams.get('limit'), '5');
 });
 
-await test('GET /api/admin/geocode uses MapTiler first for global reverse geocoding', async () => {
+await test('GET /api/admin/geocode uses Mapbox first for global reverse geocoding', async () => {
+  const requests = [];
+
+  const response = await withMockedFetch(
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      return Response.json({
+        features: [
+          {
+            place_name: 'Eiffel Tower, Paris, France',
+            center: [2.294481, 48.85837],
+          },
+        ],
+      });
+    },
+    () =>
+      onRequestGet({
+        request: new Request('http://localhost/api/admin/geocode?lat=48.85837&lng=2.294481&region=global'),
+        env: makeEnv({ MAPBOX_PUBLIC_TOKEN: 'pk.mapbox-token', MAPTILER_KEY: 'maptiler-key' }),
+        params: {},
+      }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), [
+    {
+      name: 'Eiffel Tower, Paris, France',
+      lat: 48.85837,
+      lng: 2.294481,
+    },
+  ]);
+
+  assert.equal(requests.length, 1);
+  const requestUrl = new URL(requests[0].url);
+  assert.equal(requestUrl.origin, 'https://api.mapbox.com');
+  assert.equal(requestUrl.pathname, '/geocoding/v5/mapbox.places/2.294481,48.85837.json');
+  assert.equal(requestUrl.searchParams.get('access_token'), 'pk.mapbox-token');
+  assert.equal(requestUrl.searchParams.get('limit'), '1');
+  assert.equal(requestUrl.searchParams.get('language'), 'zh,en');
+});
+
+await test('GET /api/admin/geocode falls back to MapTiler for global reverse geocoding', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
@@ -247,90 +331,49 @@ await test('GET /api/admin/geocode falls back to Nominatim for global reverse ge
   assert.equal(headers.get('referer'), 'http://localhost/');
 });
 
-await test('GET /api/admin/geocode falls back to Photon when Nominatim is unreachable', async () => {
+await test('GET /api/admin/geocode stops after Nominatim for global searches', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
     async (url, init) => {
       requests.push({ url: String(url), init });
-      if (requests.length === 1) throw new TypeError('fetch failed');
-      return Response.json({
-        features: [
-          {
-            properties: {
-              name: '清水宫',
-              city: '湖里区',
-              country: '中国',
-            },
-            geometry: {
-              coordinates: [118.1086221, 24.5315568],
-            },
-          },
-        ],
-      });
+      return Response.json([]);
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/admin/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
+        request: new Request('http://localhost/api/admin/geocode?q=Unknown%20Place&region=global'),
         env: makeEnv(),
         params: {},
       }),
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), [
-    {
-      name: '清水宫，湖里区，中国',
-      lat: 24.5315568,
-      lng: 118.1086221,
-    },
-  ]);
+  assert.deepEqual(await response.json(), []);
   assert.equal(new URL(requests[0].url).origin, 'https://nominatim.openstreetmap.org');
-  assert.equal(new URL(requests[1].url).origin, 'https://photon.komoot.io');
+  assert.equal(requests.length, 1);
 });
 
-await test('GET /api/admin/geocode retries Photon with city-spaced Chinese query when exact query is empty', async () => {
+await test('GET /api/admin/geocode stops after Nominatim for global reverse geocoding', async () => {
   const requests = [];
 
   const response = await withMockedFetch(
-    async (url) => {
-      requests.push(String(url));
-      if (requests.length === 1) throw new TypeError('fetch failed');
-      if (requests.length === 2) return Response.json({ features: [] });
-      return Response.json({
-        features: [
-          {
-            properties: {
-              name: '清水宫',
-              city: '湖里区',
-              state: '福建省',
-              country: '中国',
-            },
-            geometry: {
-              coordinates: [118.1086221, 24.5315568],
-            },
-          },
-        ],
-      });
+    async (url, init) => {
+      requests.push({ url: String(url), init });
+      return Response.json({});
     },
     () =>
       onRequestGet({
-        request: new Request('http://localhost/api/admin/geocode?q=%E5%8E%A6%E9%97%A8%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
+        request: new Request('http://localhost/api/admin/geocode?lat=48.85837&lng=2.294481&region=global'),
         env: makeEnv(),
         params: {},
       }),
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), [
-    {
-      name: '清水宫，湖里区，福建省，中国',
-      lat: 24.5315568,
-      lng: 118.1086221,
-    },
-  ]);
-  assert.equal(new URL(requests[1]).searchParams.get('q'), '厦门清水宫');
-  assert.equal(new URL(requests[2]).searchParams.get('q'), '厦门 清水宫');
+  assert.deepEqual(await response.json(), []);
+  assert.equal(new URL(requests[0].url).origin, 'https://nominatim.openstreetmap.org');
+  assert.equal(new URL(requests[0].url).pathname, '/reverse');
+  assert.equal(requests.length, 1);
 });
 
 await test('GET /api/admin/geocode logs the provider fallback path without the full search query', async () => {
@@ -338,17 +381,15 @@ await test('GET /api/admin/geocode logs the provider fallback path without the f
     const response = await withMockedFetch(
       async (url) => {
         const origin = new URL(String(url)).origin;
-        if (origin === 'https://nominatim.openstreetmap.org') throw new TypeError('fetch failed');
+        if (origin === 'https://nominatim.openstreetmap.org') {
+          throw new TypeError('Nominatim should not be called after MapTiler hits');
+        }
         return Response.json({
           features: [
             {
-              properties: {
-                name: '清水宫',
-                city: '湖里区',
-                country: '中国',
-              },
+              place_name: 'Tokyo Tower, Tokyo, Japan',
               geometry: {
-                coordinates: [118.1086221, 24.5315568],
+                coordinates: [139.745433, 35.658581],
               },
             },
           ],
@@ -356,8 +397,8 @@ await test('GET /api/admin/geocode logs the provider fallback path without the f
       },
       () =>
         onRequestGet({
-          request: new Request('http://localhost/api/admin/geocode?q=%E6%B8%85%E6%B0%B4%E5%AE%AB&region=global'),
-          env: makeEnv(),
+          request: new Request('http://localhost/api/admin/geocode?q=Tokyo%20Tower&region=global'),
+          env: makeEnv({ MAPTILER_KEY: 'maptiler-key' }),
           params: {},
         }),
     );
@@ -371,13 +412,12 @@ await test('GET /api/admin/geocode logs the provider fallback path without the f
   assert.deepEqual(
     providerLog.context.attempts.map(({ provider, outcome, resultCount }) => ({ provider, outcome, resultCount })),
     [
-      { provider: 'maptiler', outcome: 'skipped', resultCount: 0 },
-      { provider: 'nominatim', outcome: 'error', resultCount: 0 },
-      { provider: 'photon', outcome: 'hit', resultCount: 1 },
+      { provider: 'mapbox', outcome: 'skipped', resultCount: 0 },
+      { provider: 'maptiler', outcome: 'hit', resultCount: 1 },
     ],
   );
   assert.equal(providerLog.context.query, undefined);
-  assert.doesNotMatch(lines.join('\n'), /清水宫/);
+  assert.doesNotMatch(lines.join('\n'), /Tokyo/);
   assert.ok(providerLog.context.attempts.every((attempt) => typeof attempt.durationMs === 'number'));
 });
 
@@ -408,7 +448,10 @@ await test('GET /api/admin/geocode logs reverse provider hits without exact coor
   assert.equal(providerLog.context.kind, 'reverse');
   assert.deepEqual(
     providerLog.context.attempts.map(({ provider, outcome, resultCount }) => ({ provider, outcome, resultCount })),
-    [{ provider: 'maptiler', outcome: 'hit', resultCount: 1 }],
+    [
+      { provider: 'mapbox', outcome: 'skipped', resultCount: 0 },
+      { provider: 'maptiler', outcome: 'hit', resultCount: 1 },
+    ],
   );
   assert.equal(providerLog.context.coordinate, undefined);
   assert.doesNotMatch(lines.join('\n'), /48\.85837|2\.294481/);
@@ -439,9 +482,9 @@ await test('GET /api/admin/geocode error log keeps provider errors summarized', 
   assert.deepEqual(
     failureLog.context.attempts.map(({ provider, outcome, resultCount }) => ({ provider, outcome, resultCount })),
     [
+      { provider: 'mapbox', outcome: 'skipped', resultCount: 0 },
       { provider: 'maptiler', outcome: 'skipped', resultCount: 0 },
       { provider: 'nominatim', outcome: 'error', resultCount: 0 },
-      { provider: 'photon', outcome: 'error', resultCount: 0 },
     ],
   );
   assert.doesNotMatch(lines.join('\n'), /Tokyo/);

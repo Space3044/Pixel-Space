@@ -6,7 +6,7 @@ import { dedupeGeocodeResults, validCoordinate, type GeocodeResult } from '../..
 
 type GeocodeRegion = 'cn' | 'global';
 type ProviderResults = GeocodeResult[] | null;
-type ProviderName = 'maptiler' | 'nominatim' | 'photon';
+type ProviderName = 'mapbox' | 'maptiler' | 'nominatim';
 type ProviderOutcome = 'skipped' | 'empty' | 'error' | 'hit';
 type ReverseCoordinate = { lng: number; lat: number };
 type GeocodeInput =
@@ -36,41 +36,10 @@ interface NominatimResult {
   lon?: unknown;
 }
 
-interface PhotonFeature {
-  properties?: {
-    name?: unknown;
-    city?: unknown;
-    state?: unknown;
-    country?: unknown;
-  };
-  geometry?: {
-    coordinates?: unknown;
-  };
-}
-
 const MAPTILER_GEOCODING_BASE_URL = 'https://api.maptiler.com/geocoding/';
+const MAPBOX_GEOCODING_BASE_URL = 'https://api.mapbox.com/geocoding/v5/mapbox.places/';
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
 const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
-const PHOTON_SEARCH_URL = 'https://photon.komoot.io/api/';
-const PHOTON_REVERSE_URL = 'https://photon.komoot.io/reverse';
-const CITY_PREFIXES = [
-  '北京',
-  '上海',
-  '天津',
-  '重庆',
-  '广州',
-  '深圳',
-  '厦门',
-  '杭州',
-  '南京',
-  '苏州',
-  '成都',
-  '武汉',
-  '西安',
-  '长沙',
-  '青岛',
-  '福州',
-];
 
 const normalizeQuery = (request: Request): string => {
   const value = new URL(request.url).searchParams.get('q') ?? '';
@@ -154,33 +123,8 @@ const normalizeNominatimReverseResult = (
   };
 };
 
-const normalizePhotonFeature = (feature: PhotonFeature): GeocodeResult | null => {
-  const coordinates = parseLngLat(feature.geometry?.coordinates);
-  if (!coordinates) return null;
-
-  const name = compactParts([
-    feature.properties?.name,
-    feature.properties?.city,
-    feature.properties?.state,
-    feature.properties?.country,
-  ]).join('，');
-  if (!name) return null;
-
-  return { name, lat: coordinates.lat, lng: coordinates.lng };
-};
-
 const errorMessage = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error);
-
-const queryVariants = (query: string): string[] => {
-  const variants = [query];
-  if (/\s/.test(query)) return variants;
-
-  const city = CITY_PREFIXES.find((prefix) => query.startsWith(prefix) && query.length > prefix.length);
-  if (city) variants.push(`${city} ${query.slice(city.length)}`);
-
-  return variants;
-};
 
 const fetchMapTiler = async (query: string, env: Env): Promise<ProviderResults> => {
   const key = env.MAPTILER_KEY?.trim();
@@ -206,6 +150,31 @@ const fetchMapTiler = async (query: string, env: Env): Promise<ProviderResults> 
   );
 };
 
+const fetchMapbox = async (query: string, env: Env): Promise<ProviderResults> => {
+  const token = env.MAPBOX_PUBLIC_TOKEN?.trim();
+  if (!token) return null;
+
+  const url = new URL(`${encodeURIComponent(query)}.json`, MAPBOX_GEOCODING_BASE_URL);
+  url.searchParams.set('access_token', token);
+  url.searchParams.set('limit', '5');
+  url.searchParams.set('language', 'zh,en');
+
+  const response = await fetch(url.toString(), {
+    headers: { accept: 'application/json' },
+  });
+
+  if (!response.ok) throw new Error(`mapbox_http_${response.status}`);
+
+  const data = (await response.json()) as { features?: unknown };
+  if (!Array.isArray(data.features)) return [];
+
+  return dedupeGeocodeResults(
+    data.features
+      .map((feature) => normalizeMapTilerFeature(feature as MapTilerFeature))
+      .filter((row): row is GeocodeResult => row !== null),
+  );
+};
+
 const fetchMapTilerReverse = async (coordinate: ReverseCoordinate, env: Env): Promise<ProviderResults> => {
   const key = env.MAPTILER_KEY?.trim();
   if (!key) return null;
@@ -219,6 +188,31 @@ const fetchMapTilerReverse = async (coordinate: ReverseCoordinate, env: Env): Pr
   });
 
   if (!response.ok) throw new Error(`maptiler_http_${response.status}`);
+
+  const data = (await response.json()) as { features?: unknown };
+  if (!Array.isArray(data.features)) return [];
+
+  return dedupeGeocodeResults(
+    data.features
+      .map((feature) => normalizeMapTilerFeature(feature as MapTilerFeature))
+      .filter((row): row is GeocodeResult => row !== null),
+  );
+};
+
+const fetchMapboxReverse = async (coordinate: ReverseCoordinate, env: Env): Promise<ProviderResults> => {
+  const token = env.MAPBOX_PUBLIC_TOKEN?.trim();
+  if (!token) return null;
+
+  const url = new URL(`${coordinate.lng},${coordinate.lat}.json`, MAPBOX_GEOCODING_BASE_URL);
+  url.searchParams.set('access_token', token);
+  url.searchParams.set('limit', '1');
+  url.searchParams.set('language', 'zh,en');
+
+  const response = await fetch(url.toString(), {
+    headers: { accept: 'application/json' },
+  });
+
+  if (!response.ok) throw new Error(`mapbox_http_${response.status}`);
 
   const data = (await response.json()) as { features?: unknown };
   if (!Array.isArray(data.features)) return [];
@@ -282,77 +276,24 @@ const fetchNominatimReverse = async (
   return result ? [result] : [];
 };
 
-const fetchPhoton = async (query: string): Promise<GeocodeResult[]> => {
-  const url = new URL(PHOTON_SEARCH_URL);
-  url.searchParams.set('q', query);
-  url.searchParams.set('limit', '5');
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      accept: 'application/json',
-      'user-agent': 'imgbed-geocoder/0.1',
-    },
-  });
-
-  if (!response.ok) throw new Error(`photon_http_${response.status}`);
-
-  const data = (await response.json()) as { features?: unknown };
-  if (!Array.isArray(data.features)) return [];
-  return dedupeGeocodeResults(
-    data.features
-      .map((feature) => normalizePhotonFeature(feature as PhotonFeature))
-      .filter((row): row is GeocodeResult => row !== null),
-  );
-};
-
-const fetchPhotonReverse = async (coordinate: ReverseCoordinate): Promise<GeocodeResult[]> => {
-  const url = new URL(PHOTON_REVERSE_URL);
-  url.searchParams.set('lat', String(coordinate.lat));
-  url.searchParams.set('lon', String(coordinate.lng));
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      accept: 'application/json',
-      'user-agent': 'imgbed-geocoder/0.1',
-    },
-  });
-
-  if (!response.ok) throw new Error(`photon_http_${response.status}`);
-
-  const data = (await response.json()) as { features?: unknown };
-  if (!Array.isArray(data.features)) return [];
-  return dedupeGeocodeResults(
-    data.features
-      .map((feature) => normalizePhotonFeature(feature as PhotonFeature))
-      .filter((row): row is GeocodeResult => row !== null),
-  );
-};
-
-const fetchPhotonVariants = async (query: string): Promise<GeocodeResult[]> => {
-  for (const variant of queryVariants(query)) {
-    const results = await fetchPhoton(variant);
-    if (results.length > 0) return results;
-  }
-  return [];
-};
-
 const providerOrder = (
   request: Request,
   env: Env,
   input: GeocodeInput,
 ): Array<[name: ProviderName, search: () => Promise<ProviderResults>]> => {
   if (input.kind === 'reverse') {
-    return [
+    const providers: Array<[name: ProviderName, search: () => Promise<ProviderResults>]> = [
+      ['mapbox', () => fetchMapboxReverse(input.coordinate, env)],
       ['maptiler', () => fetchMapTilerReverse(input.coordinate, env)],
-      ['nominatim', () => fetchNominatimReverse(input.coordinate, request)],
-      ['photon', () => fetchPhotonReverse(input.coordinate)],
     ];
+    providers.push(['nominatim', () => fetchNominatimReverse(input.coordinate, request)]);
+    return providers;
   }
 
   return [
+    ['mapbox', () => fetchMapbox(input.query, env)],
     ['maptiler', () => fetchMapTiler(input.query, env)],
     ['nominatim', () => fetchNominatim(input.query, request)],
-    ['photon', () => fetchPhotonVariants(input.query)],
   ];
 };
 
