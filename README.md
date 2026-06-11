@@ -228,7 +228,7 @@ LOCAL_ROLE=admin
 | `AMAP_JS_KEY` | 地图可选 | 高德 JS API Key |
 | `AMAP_SECURITY_JS_CODE` | 地图可选 | 高德 JS API 安全密钥 |
 | `AMAP_WEB_KEY` | 国内静态地图可选 | 高德 Web 服务 Key，只在服务端生成国内静态地图时使用 |
-| `MAPBOX_PUBLIC_TOKEN` | 海外地图建议配置 | Mapbox public token，用于前端海外底图、海外静态图，以及海外位置正查 / 反查的优先 provider；如果 token 开启 URL restrictions，需要允许生产站点 origin |
+| `MAPBOX_PUBLIC_TOKEN` | 海外地图可选 | Mapbox public token，用于前端海外底图、海外静态图，以及海外位置正查 / 反查的优先 provider |
 | `MAPTILER_KEY` | 地理编码可选 | MapTiler Geocoding key，只用于海外位置正查 / 反查的第二层兜底，不参与底图和静态图 |
 | `TURNSTILE_SECRET_KEY` | 生产建议，本地可空 | Cloudflare Turnstile secret key，和 site key 同时存在时启用访客挑战 |
 | `VITE_TURNSTILE_SITE_KEY` | 生产建议，本地可空 | Cloudflare Turnstile site key，和 secret key 同时存在时前端渲染挑战 |
