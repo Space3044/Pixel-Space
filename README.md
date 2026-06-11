@@ -338,9 +338,9 @@ pnpm build
 - 新增图片字段时，需要同步前端类型、Functions 类型、迁移、`IMAGE_SELECT_COLUMNS` 和相关测试。
 
 ## 致谢
-
 - 足迹页的边界地球交互参考并改写自 [lsy2246/newechoes](https://github.com/lsy2246/newechoes) 的 `WorldHeatmap` 实现。
 - 中国行政区 GeoJSON 边界数据来自 [GeoJSON.CN](https://geojson.cn)，文件内保留了原始版权信息。
+- 感谢 [LinuxDo](https://linux.do/) 社区的支持与推广  
 
 ## License
 
