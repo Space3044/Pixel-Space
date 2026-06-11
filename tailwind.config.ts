@@ -6,7 +6,7 @@ export default {
     extend: {
       colors: {
         // 全部走 CSS 变量，让 `bg-void/90` / `text-neon-cyan/60` 等 alpha 变体
-        // 在 light/dark 两套主题下自动切换。
+        // 直接消费当前主题 token。
         void: 'rgb(var(--c-bg) / <alpha-value>)',
         panel: 'rgb(var(--c-panel) / <alpha-value>)',
         overlay: 'rgb(var(--c-overlay) / <alpha-value>)',
