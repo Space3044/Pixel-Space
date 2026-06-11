@@ -94,6 +94,11 @@ test('FootprintFlatMap clusters dense projected markers and supports expanded cl
   assert.match(flatMap, /height:\s*38px;/);
 });
 
+test('FootprintFlatMap keeps MapLibre marker positioning out of animated transforms', () => {
+  assert.match(flatMap, /:deep\(\.maplibregl-marker\.footprint-marker\)\s*\{[^}]*transition:\s*filter 180ms ease;/s);
+  assert.doesNotMatch(flatMap, /:deep\(\.maplibregl-marker\.footprint-marker\)\s*\{[^}]*transition:[^}]*transform/s);
+});
+
 test('footprint map adapters expose screen projection for shared clustering', () => {
   assert.match(footprintMap, /project\(lng: number, lat: number\)/);
   assert.match(footprintMap, /lngLatToContainer/);

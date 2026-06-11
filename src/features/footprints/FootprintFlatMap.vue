@@ -491,6 +491,11 @@ onBeforeUnmount(() => {
   z-index: 2;
 }
 
+:deep(.maplibregl-marker.footprint-marker) {
+  transition: filter 180ms ease;
+  will-change: auto;
+}
+
 :deep(.footprint-marker.is-spidered) {
   z-index: 8;
   filter: drop-shadow(0 0 10px rgba(53, 243, 255, 0.45));
