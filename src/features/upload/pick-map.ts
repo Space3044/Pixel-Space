@@ -15,7 +15,7 @@ export interface PickMapAdapter {
   destroy(): void;
 }
 
-const PICK_FOCUS_ZOOM = 11;
+const PICK_FOCUS_ZOOM = 13;
 const round6 = (value: number): number => Number(value.toFixed(6));
 
 const createPinElement = (): HTMLSpanElement => {
