@@ -15,7 +15,7 @@ export interface PickMapAdapter {
   destroy(): void;
 }
 
-const PICK_FOCUS_ZOOM = 14;
+const PICK_FOCUS_ZOOM = 11;
 const round6 = (value: number): number => Number(value.toFixed(6));
 
 const createPinElement = (): HTMLSpanElement => {
@@ -74,7 +74,7 @@ export const createChinaPickAdapter = (): PickMapAdapter => {
       } else {
         marker.setPosition(position);
       }
-      if (center) map.setZoomAndCenter(Math.max(map.getZoom(), PICK_FOCUS_ZOOM), position);
+      if (center) map.setZoomAndCenter(PICK_FOCUS_ZOOM, position);
     },
     resize() {
       map?.resize?.();
@@ -139,7 +139,7 @@ export const createWorldPickAdapter = (): PickMapAdapter => {
       } else {
         marker.setLngLat(position);
       }
-      if (center) map.flyTo({ center: position, zoom: Math.max(map.getZoom(), PICK_FOCUS_ZOOM) });
+      if (center) map.flyTo({ center: position, zoom: PICK_FOCUS_ZOOM });
     },
     resize() {
       map?.resize();
