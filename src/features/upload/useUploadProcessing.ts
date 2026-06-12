@@ -226,6 +226,7 @@ export const useUploadProcessing = ({
         return;
       }
 
+      entry.originalHash = hash;
       const nextExif = await readExif(entry.file);
       const nextCompressed = await compressToWebp(entry.file);
       const nextDimensions = await readImageDimensions(nextCompressed);
@@ -328,10 +329,11 @@ export const useUploadProcessing = ({
   };
 
   const uploadEntry = async (entry: UploadEntry) => {
-    if (!entry.compressedFile || !entry.compressedDimensions) return;
+    if (!entry.originalHash || !entry.compressedFile || !entry.compressedDimensions) return;
     const formData = buildUploadFormData({
       original: entry.file,
       compressed: entry.compressedFile,
+      hash: entry.originalHash,
       exif: entry.exif,
       meta: { ...entry.meta, folder_id: batchFolderId.value || null },
       dimensions: entry.compressedDimensions,

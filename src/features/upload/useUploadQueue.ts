@@ -11,6 +11,7 @@ export interface UploadEntry {
   file: File;
   previewUrl: string | null;
   previewObjectUrl: string | null;
+  originalHash: string | null;
   compressedFile: File | null;
   compressedDimensions: UploadDimensions | null;
   aiPreviewFile: File | null;
@@ -72,6 +73,7 @@ export const useUploadQueue = (options: UploadQueueOptions = {}) => {
       file,
       previewUrl: previewObjectUrl,
       previewObjectUrl,
+      originalHash: null,
       compressedFile: null,
       compressedDimensions: null,
       aiPreviewFile: null,
@@ -102,6 +104,7 @@ export const useUploadQueue = (options: UploadQueueOptions = {}) => {
     file: new File([], ''),
     previewUrl: null,
     previewObjectUrl: null,
+    originalHash: null,
     compressedFile: null,
     compressedDimensions: null,
     aiPreviewFile: null,

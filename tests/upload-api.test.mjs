@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { onRequestPost as uploadPost } from '../functions/api/admin/upload.ts';
+import { handleUploadPost } from '../functions/_shared/upload.ts';
 
 const test = async (name, fn) => {
   try {
@@ -14,6 +15,17 @@ const test = async (name, fn) => {
 const sha256Hex = async (file) => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const defaultOriginalFile = () => new File(['original-bytes'], 'cat.jpg', { type: 'image/jpeg' });
+const defaultCompressedFile = () => new File(['webp-bytes'], 'cat.webp', { type: 'image/webp' });
+const DEFAULT_ORIGINAL_HASH = await sha256Hex(defaultOriginalFile());
+
+const silentLogger = {
+  requestId: 'test-request',
+  info: () => {},
+  warn: () => {},
+  error: () => {},
 };
 
 const withMockedFetch = async (fetchImpl, fn) => {
@@ -41,16 +53,19 @@ const pngResponse = () =>
     headers: { 'content-type': 'image/png' },
   });
 
-const makeUploadRequest = (overrides = {}) => {
+const makeUploadFormData = (overrides = {}) => {
   const formData = new FormData();
+  const original = overrides.original ?? defaultOriginalFile();
+  const compressed = overrides.compressed ?? defaultCompressedFile();
   formData.append(
     'original',
-    overrides.original ?? new File(['original-bytes'], 'cat.jpg', { type: 'image/jpeg' }),
+    original,
   );
   formData.append(
     'compressed',
-    overrides.compressed ?? new File(['webp-bytes'], 'cat.webp', { type: 'image/webp' }),
+    compressed,
   );
+  formData.append('hash', overrides.hash ?? DEFAULT_ORIGINAL_HASH);
   formData.append(
     'exif',
     JSON.stringify({
@@ -84,8 +99,20 @@ const makeUploadRequest = (overrides = {}) => {
     }),
   );
   formData.append('dimensions', JSON.stringify(overrides.dimensions ?? { width: 1280, height: 853 }));
+  return formData;
+};
+
+const makeUploadRequest = (overrides = {}) => {
+  const formData = makeUploadFormData(overrides);
   return new Request('http://localhost/api/admin/upload', { method: 'POST', body: formData });
 };
+
+const makeFormDataRequest = (formData) => ({
+  url: 'http://localhost/api/admin/upload',
+  method: 'POST',
+  headers: new Headers(),
+  formData: async () => formData,
+});
 
 const makeEnv = (options = {}) => {
   const calls = {
@@ -302,6 +329,34 @@ await test('POST /api/admin/upload stores compressed WebP in R2, writes D1 metad
   assert.equal(calls.selectedKey, data.key);
 });
 
+await test('POST /api/admin/upload uses the submitted original hash without rereading original bytes', async () => {
+  const { env, calls } = makeEnv();
+  const original = defaultOriginalFile();
+  Object.defineProperty(original, 'arrayBuffer', {
+    value: () => {
+      throw new Error('server_must_not_read_original_bytes');
+    },
+  });
+  const formData = makeUploadFormData({ original, hash: DEFAULT_ORIGINAL_HASH });
+  const waitUntilTasks = [];
+
+  const response = await withMockedFetch(telegramSuccessFetch(calls), () =>
+    handleUploadPost(
+      {
+        env,
+        request: makeFormDataRequest(formData),
+        params: {},
+        waitUntil: (task) => waitUntilTasks.push(task),
+      },
+      silentLogger,
+    ),
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(calls.insert.values[8], DEFAULT_ORIGINAL_HASH);
+  await Promise.allSettled(waitUntilTasks);
+});
+
 await test('POST /api/admin/upload returns admin object URLs for uploaded images', async () => {
   const { env, calls } = makeEnv();
   const request = makeUploadRequest();
@@ -392,44 +447,49 @@ await test('POST /api/admin/upload waits for global static map cache before retu
     releaseStaticMap = resolve;
   });
 
-  const responsePromise = withMockedFetch(
-    async (url, init) => {
-      const requestUrl = String(url);
-      if (requestUrl.startsWith('https://api.mapbox.com/')) {
-        await staticMapGate;
-        return pngResponse();
-      }
-      return telegramSuccessFetch(calls)(url, init);
-    },
-    () =>
-      uploadPost({
-        env,
-        request,
-        params: {},
-        waitUntil: (task) => waitUntilTasks.push(task),
-      }),
-  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    const requestUrl = String(url);
+    if (requestUrl.startsWith('https://api.mapbox.com/')) {
+      await staticMapGate;
+      return pngResponse();
+    }
+    return telegramSuccessFetch(calls)(url, init);
+  };
 
-  const earlyResult = await Promise.race([
-    responsePromise,
-    new Promise((resolve) => setTimeout(() => resolve('timed_out'), 20)),
-  ]);
+  let responsePromise;
+  try {
+    responsePromise = uploadPost({
+      env,
+      request,
+      params: {},
+      waitUntil: (task) => waitUntilTasks.push(task),
+    });
 
-  if (earlyResult !== 'timed_out') {
+    const earlyResult = await Promise.race([
+      responsePromise,
+      new Promise((resolve) => setTimeout(() => resolve('timed_out'), 20)),
+    ]);
+
+    if (earlyResult !== 'timed_out') {
+      releaseStaticMap();
+      await Promise.allSettled(waitUntilTasks);
+      assert.fail('upload response returned before the global static map was cached');
+    }
+
+    const staticMapKey = 'staticmap/mapbox_48.858370_2.294481_z12_600x360.png';
+    assert.equal(calls.puts.some((put) => put.key === staticMapKey), false);
+
     releaseStaticMap();
+    const response = await responsePromise;
+
+    assert.equal(response.status, 201);
+    assert.equal(calls.puts.some((put) => put.key === staticMapKey), true);
+    assert.equal(waitUntilTasks.length, 1);
     await Promise.allSettled(waitUntilTasks);
-    assert.fail('upload response returned before the global static map was cached');
+  } finally {
+    globalThis.fetch = originalFetch;
   }
-
-  const staticMapKey = 'staticmap/mapbox_48.858370_2.294481_z12_600x360.png';
-  assert.equal(calls.puts.some((put) => put.key === staticMapKey), false);
-
-  releaseStaticMap();
-  const response = await responsePromise;
-
-  assert.equal(response.status, 201);
-  assert.equal(calls.puts.some((put) => put.key === staticMapKey), true);
-  assert.equal(waitUntilTasks.length, 1);
 });
 
 await test('POST /api/admin/upload pre-caches hidden visitor locations', async () => {
@@ -484,53 +544,64 @@ await test('POST /api/admin/upload schedules Telegram archive without delaying t
   const request = makeUploadRequest();
   const waitUntilTasks = [];
   let releaseTelegram;
+  let markTelegramStarted;
+  const telegramStarted = new Promise((resolve) => {
+    markTelegramStarted = resolve;
+  });
   const telegramGate = new Promise((resolve) => {
     releaseTelegram = resolve;
   });
 
-  const responsePromise = withMockedFetch(
-    async (url, init) => {
-      calls.events.push('telegram');
-      calls.telegramRequests.push({ url: String(url), init });
-      await telegramGate;
-      return Response.json({
-        ok: true,
-        result: {
-          message_id: 77,
-          chat: { id: -100123 },
-          document: { file_id: 'telegram-file-id' },
-        },
-      });
-    },
-    () =>
-      uploadPost({
-        env,
-        request,
-        params: {},
-        waitUntil: (task) => waitUntilTasks.push(task),
-      }),
-  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.events.push('telegram');
+    calls.telegramRequests.push({ url: String(url), init });
+    markTelegramStarted();
+    await telegramGate;
+    return Response.json({
+      ok: true,
+      result: {
+        message_id: 77,
+        chat: { id: -100123 },
+        document: { file_id: 'telegram-file-id' },
+      },
+    });
+  };
 
-  const earlyResult = await Promise.race([
-    responsePromise,
-    new Promise((resolve) => setTimeout(() => resolve('timed_out'), 20)),
-  ]);
+  let responsePromise;
+  try {
+    responsePromise = uploadPost({
+      env,
+      request,
+      params: {},
+      waitUntil: (task) => waitUntilTasks.push(task),
+    });
 
-  if (earlyResult === 'timed_out') {
+    const earlyResult = await Promise.race([
+      responsePromise,
+      new Promise((resolve) => setTimeout(() => resolve('timed_out'), 20)),
+    ]);
+
+    if (earlyResult === 'timed_out') {
+      releaseTelegram();
+      await responsePromise.catch(() => {});
+      assert.fail('upload response waited for Telegram archive');
+    }
+
+    assert.equal(earlyResult.status, 201);
+    assert.equal(waitUntilTasks.length, 1);
+    assert.deepEqual(calls.events, ['r2', 'insert']);
+    assert.equal(calls.telegramRequests.length, 0);
+
+    await telegramStarted;
+    assert.deepEqual(calls.events, ['r2', 'insert', 'telegram']);
     releaseTelegram();
-    await responsePromise.catch(() => {});
-    assert.fail('upload response waited for Telegram archive');
+    await waitUntilTasks[0];
+    assert.equal(calls.updates.length, 1);
+    assert.match(calls.updates[0].sql, /tg_status\s*=\s*'done'/i);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
-
-  assert.equal(earlyResult.status, 201);
-  assert.equal(waitUntilTasks.length, 1);
-  assert.deepEqual(calls.events, ['r2', 'insert', 'telegram']);
-  assert.equal(calls.updates.length, 0);
-
-  releaseTelegram();
-  await waitUntilTasks[0];
-  assert.equal(calls.updates.length, 1);
-  assert.match(calls.updates[0].sql, /tg_status\s*=\s*'done'/i);
 });
 
 await test('POST /api/admin/upload does not infer location_region from coordinate bounds', async () => {

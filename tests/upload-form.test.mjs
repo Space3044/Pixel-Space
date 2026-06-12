@@ -11,13 +11,15 @@ const test = (name, fn) => {
   }
 };
 
-test('buildUploadFormData includes files, metadata, EXIF, and compressed dimensions', () => {
+test('buildUploadFormData includes files, hash, metadata, EXIF, and compressed dimensions', () => {
   const original = new File(['raw-bytes'], 'cat.jpg', { type: 'image/jpeg' });
   const compressed = new File(['webp-bytes'], 'cat.webp', { type: 'image/webp' });
+  const hash = 'a'.repeat(64);
 
   const formData = buildUploadFormData({
     original,
     compressed,
+    hash,
     exif: {
       taken_at: '2025-08-26T02:08:37.000Z',
       camera: 'Nikon Zf',
@@ -56,6 +58,7 @@ test('buildUploadFormData includes files, metadata, EXIF, and compressed dimensi
   assert.equal(compressedField.type, compressed.type);
   assert.equal(compressedField.size, compressed.size);
   assert.deepEqual(JSON.parse(String(formData.get('dimensions'))), { width: 1280, height: 853 });
+  assert.equal(formData.get('hash'), hash);
   assert.equal(JSON.parse(String(formData.get('exif'))).focal_length, 40);
   const meta = JSON.parse(String(formData.get('meta')));
   assert.equal(meta.location_name, '上海');

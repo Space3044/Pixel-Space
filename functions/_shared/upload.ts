@@ -24,6 +24,7 @@ import { requireSameOrigin } from './security';
 import { createStaticMapCacheTask, staticMapRefererFromRequest } from './static-map';
 
 const MAX_ORIGINAL_BYTES = 50 * 1024 * 1024;
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/i;
 
 const INSERT_SQL = `
 INSERT INTO images (
@@ -102,6 +103,13 @@ const fileFromForm = (formData: FormData, name: string): File | null => {
   return value && typeof value !== 'string' ? value : null;
 };
 
+const hashFromForm = (formData: FormData): string | null => {
+  const value = formData.get('hash');
+  if (typeof value !== 'string') return null;
+  const hash = value.trim();
+  return SHA256_HEX_PATTERN.test(hash) ? hash.toLowerCase() : null;
+};
+
 const objectFromJsonField = (formData: FormData, name: string): Record<string, unknown> | null => {
   const value = formData.get(name);
   if (typeof value !== 'string') return null;
@@ -157,10 +165,12 @@ const normalizeDimensions = (raw: Record<string, unknown>): UploadDimensions | n
   return { width, height };
 };
 
-const sha256Hex = async (file: File): Promise<string> => {
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
+const deferTask = (task: () => Promise<void>): Promise<void> =>
+  new Promise((resolve, reject) => {
+    setTimeout(() => {
+      task().then(resolve, reject);
+    }, 0);
+  });
 
 export const handleUploadPost = async (
   context: EventContext<Env, string, Record<string, unknown>>,
@@ -180,11 +190,12 @@ export const handleUploadPost = async (
 
   const original = fileFromForm(formData, 'original');
   const compressed = fileFromForm(formData, 'compressed');
+  const hash = hashFromForm(formData);
   const rawExif = objectFromJsonField(formData, 'exif');
   const rawMeta = objectFromJsonField(formData, 'meta');
   const rawDimensions = objectFromJsonField(formData, 'dimensions');
 
-  if (!original || !compressed || !rawExif || !rawMeta || !rawDimensions) {
+  if (!original || !compressed || !hash || !rawExif || !rawMeta || !rawDimensions) {
     return badRequest('missing_upload_fields');
   }
   if (!original.type.startsWith('image/')) return badRequest('invalid_original_mime');
@@ -198,7 +209,6 @@ export const handleUploadPost = async (
   const exif = normalizeExif(rawExif);
   const key = createImageKey();
   const originalFilename = original.name.trim() || key;
-  const hash = await sha256Hex(original);
 
   if (meta.folder_id) {
     const folderRow = await env.DB
@@ -271,11 +281,10 @@ export const handleUploadPost = async (
     );
     if (staticMapTask) await staticMapTask;
 
-    const archiveTask = archiveOriginalAfterUpload(env, original, key, logger);
     if (typeof context.waitUntil === 'function') {
-      context.waitUntil(archiveTask);
+      context.waitUntil(deferTask(() => archiveOriginalAfterUpload(env, original, key, logger)));
     } else {
-      await archiveTask;
+      await archiveOriginalAfterUpload(env, original, key, logger);
     }
 
     const row = await env.DB.prepare(SELECT_SQL).bind(key).first<ImageRow>();
