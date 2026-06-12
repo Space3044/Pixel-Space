@@ -101,6 +101,17 @@ test('LibraryView uses the shared explore image sorting control for each directo
   assert.match(view, /<section v-if="currentImages\.length > 0" class="image-section">[\s\S]*<header class="image-section-header">[\s\S]*<SelectPopover v-model="sortMode" :options="imageSortOptions" aria-label="排序方式">[\s\S]*<\/SelectPopover>/);
 });
 
+test('LibraryView navigates previous and next lightbox images inside the current directory', () => {
+  assert.match(view, /const showAdjacentImage = \(offset: -1 \| 1\) => \{/);
+  assert.match(view, /const items = currentImages\.value/);
+  assert.match(view, /const nextIndex = \(currentIndex \+ offset \+ items\.length\) % items\.length/);
+  assert.match(view, /lightboxImage\.value = items\[nextIndex\]/);
+  assert.match(view, /const showPreviousImage = \(\) => showAdjacentImage\(-1\)/);
+  assert.match(view, /const showNextImage = \(\) => showAdjacentImage\(1\)/);
+  assert.match(view, /@prev="showPreviousImage"/);
+  assert.match(view, /@next="showNextImage"/);
+});
+
 test('library.api exposes AI settings helpers for proxy URL, model and prompt only', () => {
   assert.match(api, /export interface AiSettings \{\s*proxy_url:\s*string;\s*model:\s*string;\s*prompt:\s*string;\s*\}/);
   assert.match(api, /export function fetchAiSettings\(\): Promise<AiSettings>/);

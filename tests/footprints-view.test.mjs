@@ -61,6 +61,19 @@ test('FootprintsView keeps the stats, selection detail and globe', () => {
   assert.match(view, /const visitedCoordinates = computed/);
 });
 
+test('FootprintsView navigates previous and next images inside the active footprint lightbox', () => {
+  assert.match(view, /const footprintLightboxImages = computed<ImageRecord\[\]>\(\(\) => /);
+  assert.match(view, /activeFootprint\.value\?\.images/);
+  assert.match(view, /const showAdjacentImage = \(offset: -1 \| 1\) => \{/);
+  assert.match(view, /const items = footprintLightboxImages\.value/);
+  assert.match(view, /const nextIndex = \(currentIndex \+ offset \+ items\.length\) % items\.length/);
+  assert.match(view, /lightboxImage\.value = items\[nextIndex\]/);
+  assert.match(view, /const showPreviousImage = \(\) => showAdjacentImage\(-1\)/);
+  assert.match(view, /const showNextImage = \(\) => showAdjacentImage\(1\)/);
+  assert.match(view, /@prev="showPreviousImage"/);
+  assert.match(view, /@next="showNextImage"/);
+});
+
 test('FootprintsView lets the globe card size to mobile content instead of desktop height', () => {
   assert.match(view, /@media \(max-width:\s*640px\)\s*\{[\s\S]*\.globe-boundary-card\s*\{[\s\S]*min-height:\s*auto;[\s\S]*padding:\s*0\.75rem;/);
 });

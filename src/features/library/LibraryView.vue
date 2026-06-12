@@ -78,6 +78,18 @@ const openLightbox = (img: ImageRecord) => {
   lightboxOpen.value = true;
 };
 
+const showAdjacentImage = (offset: -1 | 1) => {
+  const items = currentImages.value;
+  if (!lightboxImage.value || items.length === 0) return;
+  const currentIndex = items.findIndex((item) => item.key === lightboxImage.value?.key);
+  if (currentIndex === -1) return;
+  const nextIndex = (currentIndex + offset + items.length) % items.length;
+  lightboxImage.value = items[nextIndex];
+};
+
+const showPreviousImage = () => showAdjacentImage(-1);
+const showNextImage = () => showAdjacentImage(1);
+
 const replaceImage = (img: ImageRecord) => {
   images.value = images.value.map((item) => (item.key === img.key ? img : item));
   lightboxImage.value = img;
@@ -153,6 +165,8 @@ onMounted(refreshAll);
       :open="lightboxOpen"
       :image="lightboxImage"
       @close="lightboxOpen = false"
+      @prev="showPreviousImage"
+      @next="showNextImage"
       @updated="replaceImage"
       @deleted="removeImage"
     />
