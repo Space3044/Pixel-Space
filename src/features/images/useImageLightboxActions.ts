@@ -95,11 +95,12 @@ export const useImageLightboxActions = ({
         location_lng: image.value.location_lng,
         location_region: image.value.location_region,
         tags: editForm.tags,
+        search_content: editForm.search_content,
         dominant_color: editForm.dominant_color,
         palette: editForm.palette,
         composition: editForm.composition,
-        is_public: editForm.is_public,
-        location_public: editForm.location_public,
+        is_public: image.value.is_public === 0 ? 0 : 1,
+        location_public: image.value.location_public === 0 ? 0 : 1,
       });
       emit('updated', updated);
       resetForm(updated);
@@ -159,6 +160,7 @@ export const useImageLightboxActions = ({
         location_lng: editForm.location_lng === '' ? null : Number(editForm.location_lng),
         location_region: editForm.location_region,
         tags: tagsTextFromImage(image.value),
+        search_content: image.value.search_content ?? '',
         dominant_color: image.value.dominant_color ?? '',
         palette: paletteTextFromImage(image.value),
         composition: image.value.composition ?? '',
@@ -204,6 +206,7 @@ export const useImageLightboxActions = ({
         location_lng: image.value.location_lng,
         location_region: image.value.location_region,
         tags: tagsTextFromImage(image.value),
+        search_content: image.value.search_content ?? '',
         dominant_color: image.value.dominant_color ?? '',
         palette: paletteTextFromImage(image.value),
         composition: image.value.composition ?? '',

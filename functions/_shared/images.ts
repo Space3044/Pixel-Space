@@ -23,6 +23,7 @@ export interface ImageRecord {
   exif_shutter: string | null;
   exif_focal_length: number | null;
   tags_json: string | null;
+  search_content?: string | null;
   dominant_color: string | null;
   color_palette_json: string | null;
   composition: string | null;
@@ -36,7 +37,7 @@ export interface ImageRecord {
 }
 
 export const IMAGE_SELECT_COLUMNS =
-  'key, title, caption, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, location_region, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, dominant_color, color_palette_json, composition, ai_status, tg_status, created_at, updated_at, is_public, location_public, folder_id';
+  'key, title, caption, original_filename, width, height, format, bytes_compressed, location_name, location_lat, location_lng, location_region, exif_taken_at, exif_camera, exif_iso, exif_aperture, exif_shutter, exif_focal_length, tags_json, search_content, dominant_color, color_palette_json, composition, ai_status, tg_status, created_at, updated_at, is_public, location_public, folder_id';
 
 // D1 表里的原始行形状（只声明 list / detail 接口会用到的列）。
 export interface ImageRow {
@@ -59,6 +60,7 @@ export interface ImageRow {
   exif_shutter: string | null;
   exif_focal_length: number | null;
   tags_json: string | null;
+  search_content: string | null;
   dominant_color: string | null;
   color_palette_json: string | null;
   composition: string | null;
@@ -133,6 +135,7 @@ export function rowToRecord(row: ImageRow, publicBaseUrl: string): ImageRecord {
     exif_shutter: row.exif_shutter,
     exif_focal_length: row.exif_focal_length,
     tags_json: row.tags_json,
+    search_content: row.search_content,
     dominant_color: row.dominant_color,
     color_palette_json: row.color_palette_json,
     composition: row.composition,
@@ -166,13 +169,17 @@ export function rowToAdminRecord(row: ImageRow): ImageRecord {
 // 把记录按访客视角清洗：location_public=0 时擦掉地名与经纬度。
 // 管理员视角不应调用此函数。
 export function scrubRecordForVisitor(record: ImageRecord): ImageRecord {
-  if (record.location_public !== 0) return record;
+  const { search_content: _searchContent, ...visitorRecord } = record;
   return {
-    ...record,
-    location_name: null,
-    location_lat: null,
-    location_lng: null,
-    location_region: null,
+    ...visitorRecord,
+    ...(visitorRecord.location_public === 0
+      ? {
+          location_name: null,
+          location_lat: null,
+          location_lng: null,
+          location_region: null,
+        }
+      : {}),
   };
 }
 

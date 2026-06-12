@@ -37,6 +37,7 @@ SET title = ?,
     location_lng = ?,
     location_region = ?,
     tags_json = ?,
+    search_content = ?,
     dominant_color = ?,
     color_palette_json = ?,
     composition = ?,
@@ -71,6 +72,7 @@ interface EditablePayload {
   location_lng: number | null;
   location_region: 'china' | 'global' | null;
   tags_json: string | null;
+  search_content: string | null;
   dominant_color: string | null;
   color_palette_json: string | null;
   composition: string | null;
@@ -98,6 +100,7 @@ const payloadFromRequest = async (request: Request): Promise<EditablePayload | n
     location_lng: locationLng,
     location_region: normalizeRegion(raw.location_region, locationLat, locationLng),
     tags_json: normalizeTagsJson(raw.tags),
+    search_content: stringOrNull(raw.search_content),
     dominant_color: stringOrNull(raw.dominant_color),
     color_palette_json: normalizeColorPaletteJson(raw.palette),
     composition: stringOrNull(raw.composition),
@@ -162,6 +165,7 @@ export const onRequestPatch: PagesFunction<Env> = withRequestLogging('/api/admin
         payload.location_lng,
         payload.location_region,
         payload.tags_json,
+        payload.search_content,
         payload.dominant_color,
         payload.color_palette_json,
         payload.composition,

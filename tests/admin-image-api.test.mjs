@@ -113,6 +113,7 @@ const imageRow = {
   dominant_color: '深蓝色 #0F172A',
   color_palette_json: '["#0F172A","#F59E0B"]',
   composition: '中心构图',
+  search_content: '旧搜索内容',
   ai_status: 'pending',
   created_at: '2026-05-20 10:11:12',
   updated_at: '2026-05-21 12:13:14',
@@ -194,6 +195,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
         location_lat: 31.2304,
         location_lng: 121.4737,
         tags: '猫, 城市, 夜景',
+        search_content: '猫 城市 夜景 可搜索内容',
         dominant_color: '暖橙色 #F59E0B',
         palette: '#F59E0B, #0F172A',
         composition: '三分法构图',
@@ -220,6 +222,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.equal(data.dominant_color, '深蓝色 #0F172A');
   assert.equal(data.color_palette_json, '["#0F172A","#F59E0B"]');
   assert.equal(data.composition, '中心构图');
+  assert.equal(data.search_content, '旧搜索内容');
   assert.equal('ai_proxy_url' in data, false);
   assert.equal('ai_model' in data, false);
   assert.equal('ai_error' in data, false);
@@ -230,6 +233,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
   assert.match(calls.updates[0].sql, /\blocation_lat\b/i);
   assert.match(calls.updates[0].sql, /\blocation_region\b/i);
   assert.match(calls.updates[0].sql, /\btags_json\b/i);
+  assert.match(calls.updates[0].sql, /\bsearch_content\b/i);
   assert.match(calls.updates[0].sql, /\bdominant_color\b/i);
   assert.match(calls.updates[0].sql, /\bcolor_palette_json\b/i);
   assert.match(calls.updates[0].sql, /\bcomposition\b/i);
@@ -241,6 +245,7 @@ await test('PATCH /api/admin/image/:key updates editable metadata and returns Im
     121.4737,
     null,
     '["猫","城市","夜景"]',
+    '猫 城市 夜景 可搜索内容',
     '暖橙色 #F59E0B',
     '["#F59E0B","#0F172A"]',
     '三分法构图',

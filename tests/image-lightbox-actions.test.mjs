@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 const lightbox = readFileSync('src/features/images/ImageLightbox.vue', 'utf8').replace(/\r\n/g, '\n');
 const actionsPath = 'src/features/images/useImageLightboxActions.ts';
 const actions = existsSync(actionsPath) ? readFileSync(actionsPath, 'utf8').replace(/\r\n/g, '\n') : '';
+const aiSectionPath = 'src/features/images/ImageLightboxAiSection.vue';
+const aiSection = existsSync(aiSectionPath) ? readFileSync(aiSectionPath, 'utf8').replace(/\r\n/g, '\n') : '';
 
 const test = (name, fn) => {
   try {
@@ -49,7 +51,14 @@ test('image lightbox actions own admin image mutations and AI preview refresh', 
   assert.match(actions, /adminPublicImageUrl\(image\.value\.key\)/);
   assert.match(actions, /previewAiAnnotation\(aiImage\)/);
   assert.match(actions, /await copyValue\(buildPublicPageUrl\(image\.value,\s*origin\),\s*'分享链接'\)/);
+  assert.match(actions, /search_content:\s*editForm\.search_content/);
 
   assert.doesNotMatch(lightbox, /from '\.\/images\.api'/);
   assert.doesNotMatch(lightbox, /updateImage\(|deleteImage\(/);
+});
+
+test('AI metadata editor updates hidden search content without exposing visibility toggle', () => {
+  assert.match(aiSection, /v-model="editForm\.search_content"/);
+  assert.doesNotMatch(aiSection, /公开到探索/);
+  assert.doesNotMatch(aiSection, /editForm\.is_public/);
 });

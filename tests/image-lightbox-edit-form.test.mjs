@@ -43,6 +43,7 @@ const image = {
   dominant_color: 'Blue #336699',
   color_palette_json: '["#336699"," #ffffff "]',
   composition: 'Centered',
+  search_content: 'cat window snow searchable',
   ai_status: 'done',
   tg_status: 'done',
   created_at: '2026-01-01T00:00:00.000Z',
@@ -61,6 +62,7 @@ test('image lightbox edit form restores metadata and saved map region', () => {
   assert.equal(state.editForm.caption, 'Window light');
   assert.equal(state.editForm.tags, 'cat, snow');
   assert.equal(state.editForm.palette, '#336699, #ffffff');
+  assert.equal(state.editForm.search_content, 'cat window snow searchable');
   assert.equal(state.editForm.location_name, 'Paris');
   assert.equal(state.editForm.location_lat, 48.8566);
   assert.equal(state.editForm.location_lng, 2.3522);
@@ -115,7 +117,7 @@ test('image lightbox edit form applies AI preview results to editable fields', (
     title: 'AI Title',
     caption: 'AI caption',
     tags: ['city', 'night'],
-    search_content: 'ignored search content',
+    search_content: 'AI searchable city night',
     dominant_color: 'Neon cyan #22D3EE',
     palette: ['#22D3EE', '#111827'],
     composition: 'Wide angle',
@@ -127,6 +129,7 @@ test('image lightbox edit form applies AI preview results to editable fields', (
   assert.equal(state.editForm.dominant_color, 'Neon cyan #22D3EE');
   assert.equal(state.editForm.palette, '#22D3EE, #111827');
   assert.equal(state.editForm.composition, 'Wide angle');
+  assert.equal(state.editForm.search_content, 'AI searchable city night');
   assert.equal(state.editForm.location_name, 'Paris');
   assert.equal(state.editForm.is_public, 0);
 });

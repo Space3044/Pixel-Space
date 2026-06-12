@@ -10,6 +10,7 @@ export interface ImageLightboxEditForm {
   title: string;
   caption: string;
   tags: string;
+  search_content: string;
   dominant_color: string;
   palette: string;
   composition: string;
@@ -34,6 +35,7 @@ export const applyAiPreviewResultToEditForm = (
   editForm.title = result.title || editForm.title;
   editForm.caption = result.caption;
   editForm.tags = result.tags.join(', ');
+  editForm.search_content = result.search_content;
   editForm.dominant_color = result.dominant_color;
   editForm.palette = result.palette.join(', ');
   editForm.composition = result.composition;
@@ -59,6 +61,7 @@ export const useImageLightboxEditForm = () => {
     title: '',
     caption: '',
     tags: '',
+    search_content: '',
     dominant_color: '',
     palette: '',
     composition: '',
@@ -88,6 +91,7 @@ export const useImageLightboxEditForm = () => {
     editForm.title = image?.title ?? '';
     editForm.caption = image?.caption ?? '';
     editForm.tags = tagsTextFromImage(image);
+    editForm.search_content = image?.search_content ?? '';
     editForm.dominant_color = image?.dominant_color ?? '';
     editForm.palette = paletteTextFromImage(image);
     editForm.composition = image?.composition ?? '';

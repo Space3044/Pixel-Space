@@ -120,6 +120,10 @@ const emit = defineEmits<{
         <textarea v-model="editForm.tags" rows="2" placeholder="用逗号或换行分隔" />
       </label>
       <label class="edit-field">
+        <span>搜索内容</span>
+        <textarea v-model="editForm.search_content" rows="3" />
+      </label>
+      <label class="edit-field">
         <span>主色调</span>
         <input v-model="editForm.dominant_color" type="text" placeholder="暮光橙 #F59E0B" />
       </label>
@@ -130,25 +134,6 @@ const emit = defineEmits<{
       <label class="edit-field">
         <span>构图</span>
         <textarea v-model="editForm.composition" rows="2" />
-      </label>
-      <label class="edit-toggle" :class="{ 'is-on': editForm.is_public === 1 }">
-        <span class="edit-toggle-text">
-          <span class="edit-toggle-title">公开到探索</span>
-          <span class="edit-toggle-hint">
-            {{
-              editForm.is_public === 1
-                ? '出现在图库、随机和足迹等公开聚合'
-                : '私藏，仅凭直链可见'
-            }}
-          </span>
-        </span>
-        <input
-          type="checkbox"
-          class="edit-toggle-input"
-          :checked="editForm.is_public === 1"
-          @change="editForm.is_public = ($event.target as HTMLInputElement).checked ? 1 : 0"
-        />
-        <span class="edit-toggle-switch" aria-hidden="true"></span>
       </label>
       <div class="edit-actions">
         <button type="submit" class="action-btn" :disabled="saving || deleting || aiPreviewing">

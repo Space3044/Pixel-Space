@@ -11,6 +11,7 @@ export interface ImageUpdatePayload {
   location_lng: number | null;
   location_region: string | null;
   tags: string;
+  search_content: string;
   dominant_color: string;
   palette: string;
   composition: string;
