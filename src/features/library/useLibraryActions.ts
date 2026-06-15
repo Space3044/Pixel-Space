@@ -108,6 +108,11 @@ export const useLibraryActions = ({
     selectedKeys.value = next;
   };
 
+  const selectKey = (key: string) => {
+    if (currentReadonly.value || selectedKeys.value.has(key)) return;
+    selectedKeys.value = new Set([...selectedKeys.value, key]);
+  };
+
   const selectAllCurrent = () => {
     if (currentReadonly.value) return;
     selectedKeys.value = new Set(currentImages.value.map((img) => img.key));
@@ -327,6 +332,7 @@ export const useLibraryActions = ({
     refreshAll,
     enterFolder,
     toggleSelection,
+    selectKey,
     selectAllCurrent,
     clearSelection,
     clearGrantResult,

@@ -4,9 +4,10 @@ import { imageSortOptions, type ImageSortMode } from '@/features/images/image-so
 import SelectPopover from '@/shared/ui/SelectPopover.vue';
 import DownloadGrantManager from './DownloadGrantManager.vue';
 import type { DownloadGrantRecord, FolderRecord } from './library.api';
+import { useLibraryDragSelection } from './useLibraryDragSelection';
 import { VIRTUAL_DOWNLOAD_GRANTS, type VirtualFolder } from './useLibraryDirectory';
 
-defineProps<{
+const props = defineProps<{
   currentFolderId: string | null;
   currentImages: ImageRecord[];
   currentReadonly: boolean;
@@ -27,8 +28,26 @@ const emit = defineEmits<{
   openLightbox: [image: ImageRecord];
   selectAllCurrent: [];
   toggleSelection: [key: string];
+  dragSelect: [key: string];
   updateGrant: [id: string, expiresAt: string];
 }>();
+
+const {
+  isDragSelecting,
+  onTilePointerDown,
+  onTilePointerEnter,
+  onTilePointerUp,
+  onTilePointerCancel,
+  shouldSuppressClick,
+} = useLibraryDragSelection({
+  canSelect: () => !props.currentReadonly,
+  select: (key) => emit('dragSelect', key),
+});
+
+const handleTileClick = (img: ImageRecord) => {
+  if (shouldSuppressClick()) return;
+  emit('openLightbox', img);
+};
 </script>
 
 <template>
@@ -101,19 +120,23 @@ const emit = defineEmits<{
           取消选择
         </button>
       </header>
-      <div class="image-grid">
+      <div class="image-grid" :class="{ 'is-drag-selecting': isDragSelecting }">
         <button
           v-for="img in currentImages"
           :key="img.key"
           type="button"
           class="image-tile"
           :class="{ 'is-selected': selectedKeys.has(img.key) }"
+          @pointerdown="onTilePointerDown(img.key, $event)"
+          @pointerenter="onTilePointerEnter(img.key)"
+          @pointerup="onTilePointerUp($event)"
+          @pointercancel="onTilePointerCancel($event)"
           @click.shift.prevent="emit('toggleSelection', img.key)"
           @click.ctrl.prevent="emit('toggleSelection', img.key)"
           @click.meta.prevent="emit('toggleSelection', img.key)"
-          @click.exact="emit('openLightbox', img)"
+          @click.exact="handleTileClick(img)"
         >
-          <img :src="img.public_url" :alt="img.title" loading="lazy" />
+          <img :src="img.public_url" :alt="img.title" loading="lazy" draggable="false" @dragstart.prevent />
           <span class="image-caption">{{ img.title || img.original_filename }}</span>
           <button
             v-if="!currentReadonly"
@@ -121,6 +144,7 @@ const emit = defineEmits<{
             class="select-toggle"
             :class="{ 'is-on': selectedKeys.has(img.key) }"
             :aria-label="selectedKeys.has(img.key) ? '取消选中' : '选中'"
+            @pointerdown.stop
             @click.stop="emit('toggleSelection', img.key)"
           >
             <svg v-if="selectedKeys.has(img.key)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">

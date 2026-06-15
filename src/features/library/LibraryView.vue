@@ -50,6 +50,7 @@ const {
   refreshAll,
   enterFolder,
   toggleSelection,
+  selectKey,
   selectAllCurrent,
   clearSelection,
   clearGrantResult,
@@ -146,6 +147,7 @@ onMounted(refreshAll);
         @select-all-current="selectAllCurrent"
         @clear-selection="clearSelection"
         @toggle-selection="toggleSelection"
+        @drag-select="selectKey"
         @open-lightbox="openLightbox"
       />
 

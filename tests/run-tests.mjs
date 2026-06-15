@@ -48,6 +48,7 @@ for (const path of [
   './image-management-ui.test.mjs',
   './library-actions.test.mjs',
   './library-directory.test.mjs',
+  './library-drag-selection.test.mjs',
   './library-view.test.mjs',
   './download-grant-expiry.test.mjs',
   './download-grants-ui.test.mjs',

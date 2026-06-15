@@ -374,6 +374,11 @@
   gap: 0.65rem;
 }
 
+.image-grid.is-drag-selecting {
+  cursor: cell;
+  user-select: none;
+}
+
 .image-tile {
   position: relative;
   display: block;
@@ -390,6 +395,10 @@
 .image-tile:hover {
   border-color: rgba(53, 243, 255, 0.45);
   transform: translateY(-1px);
+}
+
+.image-grid.is-drag-selecting .image-tile {
+  cursor: cell;
 }
 
 .image-tile.is-selected {

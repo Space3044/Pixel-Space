@@ -112,6 +112,20 @@ test('LibraryView navigates previous and next lightbox images inside the current
   assert.match(view, /@next="showNextImage"/);
 });
 
+test('LibraryView supports mouse hold drag selection without opening the lightbox', () => {
+  assert.match(view, /import \{ useLibraryDragSelection \} from '\.\/useLibraryDragSelection'/);
+  assert.match(view, /const handleTileClick = \(img: ImageRecord\) => \{/);
+  assert.match(view, /if \(shouldSuppressClick\(\)\) return;/);
+  assert.match(view, /@click\.exact="handleTileClick\(img\)"/);
+  assert.match(view, /@pointerdown="onTilePointerDown\(img\.key,\s*\$event\)"/);
+  assert.match(view, /@pointerenter="onTilePointerEnter\(img\.key\)"/);
+  assert.match(view, /@pointerup="onTilePointerUp\(\$event\)"/);
+  assert.match(view, /@pointercancel="onTilePointerCancel\(\$event\)"/);
+  assert.match(view, /:class="\{ 'is-drag-selecting': isDragSelecting \}"/);
+  assert.match(view, /@drag-select="selectKey"/);
+  assert.match(actions, /const selectKey = \(key: string\) => \{/);
+});
+
 test('library.api exposes AI settings helpers for proxy URL, model and prompt only', () => {
   assert.match(api, /export interface AiSettings \{\s*proxy_url:\s*string;\s*model:\s*string;\s*prompt:\s*string;\s*\}/);
   assert.match(api, /export function fetchAiSettings\(\): Promise<AiSettings>/);
