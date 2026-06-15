@@ -496,13 +496,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 767px) {
+  .folder-picker {
+    position: static;
+  }
+
   .folder-popover {
-    position: fixed;
+    position: absolute;
     left: 0.75rem;
     right: 0.75rem;
-    top: calc(4.75rem + env(safe-area-inset-top, 0px));
-    bottom: calc(5rem + env(safe-area-inset-bottom));
+    top: calc(100% + 0.5rem);
+    bottom: auto;
     z-index: 60;
+    height: min(28rem, calc(100dvh - 10rem));
     width: auto;
     max-height: none;
   }
@@ -511,6 +516,7 @@ onBeforeUnmount(() => {
     flex: 1;
     min-height: 0;
     max-height: none;
+    overflow-y: auto;
   }
 }
 </style>

@@ -79,9 +79,11 @@ test('GalleryView keeps image titles visible by default on mobile', () => {
   assert.match(gallery, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.gallery-card-title\s*\{[\s\S]*?transform:\s*translateY\(0\);[\s\S]*?opacity:\s*1;/);
 });
 
-test('FolderPickerPopover keeps the mobile folder panel inside the viewport', () => {
-  assert.match(folderPicker, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.folder-popover\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?left:\s*0\.75rem;[\s\S]*?right:\s*0\.75rem;[\s\S]*?top:\s*calc\(4\.75rem \+ env\(safe-area-inset-top,\s*0px\)\);[\s\S]*?bottom:\s*calc\(5rem \+ env\(safe-area-inset-bottom\)\);[\s\S]*?width:\s*auto;/);
-  assert.match(folderPicker, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.folder-tree\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-height:\s*0;[\s\S]*?max-height:\s*none;/);
+test('FolderPickerPopover keeps the mobile folder panel visible without fixed-position clipping', () => {
+  assert.match(folderPicker, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.folder-picker\s*\{[\s\S]*?position:\s*static;/);
+  assert.match(folderPicker, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.folder-popover\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*0\.75rem;[\s\S]*?right:\s*0\.75rem;[\s\S]*?top:\s*calc\(100% \+ 0\.5rem\);[\s\S]*?bottom:\s*auto;[\s\S]*?height:\s*min\(28rem,\s*calc\(100dvh - 10rem\)\);[\s\S]*?width:\s*auto;/);
+  assert.doesNotMatch(folderPicker, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.folder-popover\s*\{[\s\S]*?position:\s*fixed;/);
+  assert.match(folderPicker, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.folder-tree\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-height:\s*0;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*auto;/);
 });
 
 test('images.api exposes admin update and delete helpers', () => {
