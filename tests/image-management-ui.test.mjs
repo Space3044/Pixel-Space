@@ -72,6 +72,12 @@ test('GalleryView handles lightbox previous and next navigation', () => {
   assert.match(gallery, /@next="showNextImage"/);
 });
 
+test('GalleryView keeps image titles visible by default on mobile', () => {
+  assert.match(gallery, /class="[^"]*gallery-card-title[^"]*"/);
+  assert.match(gallery, /\{\{\s*displayImages\[i\]\.title \|\| displayImages\[i\]\.original_filename\s*\}\}/);
+  assert.match(gallery, /@media \(max-width:\s*767px\)\s*\{[\s\S]*?\.gallery-card-title\s*\{[\s\S]*?transform:\s*translateY\(0\);[\s\S]*?opacity:\s*1;/);
+});
+
 test('images.api exposes admin update and delete helpers', () => {
   assert.match(imagesApi, /from '@\/shared\/api\/http'/);
   assert.match(imagesApi, /export function listImages\(query = '', options: ListImagesOptions = \{\}\)/);

@@ -275,7 +275,7 @@ const clearSearch = async () => {
             class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
           />
           <div
-            class="pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-void/92 via-void/55 to-transparent px-3 pb-2 pt-7 opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100"
+            class="gallery-card-title pointer-events-none absolute inset-x-0 bottom-0 translate-y-2 bg-gradient-to-t from-void/92 via-void/55 to-transparent px-3 pb-2 pt-7 opacity-0 transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100"
           >
             <p class="truncate text-xs font-semibold tracking-wide text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
               {{ displayImages[i].title || displayImages[i].original_filename }}
@@ -540,6 +540,13 @@ const clearSearch = async () => {
   }
   .gallery-search {
     flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .gallery-card-title {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 
