@@ -494,4 +494,23 @@ onBeforeUnmount(() => {
 .folder-tree::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@media (max-width: 767px) {
+  .folder-popover {
+    position: fixed;
+    left: 0.75rem;
+    right: 0.75rem;
+    top: calc(4.75rem + env(safe-area-inset-top, 0px));
+    bottom: calc(5rem + env(safe-area-inset-bottom));
+    z-index: 60;
+    width: auto;
+    max-height: none;
+  }
+
+  .folder-tree {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
+}
 </style>
