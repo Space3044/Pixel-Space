@@ -26,6 +26,15 @@ const pointerTarget = () => ({
   },
 });
 
+const touchPointer = (pointerId, clientX, clientY, target) => ({
+  button: 0,
+  pointerId,
+  pointerType: 'touch',
+  clientX,
+  clientY,
+  currentTarget: target,
+});
+
 test('useImageZoom centralizes zoom controls and pointer panning', () => {
   const zoom = useImageZoom();
   assert.equal(zoom.zoomScale.value, 1);
@@ -64,6 +73,31 @@ test('useImageZoom centralizes zoom controls and pointer panning', () => {
   assert.equal(zoom.zoomScale.value, 1);
   assert.equal(zoom.zoomX.value, 0);
   assert.equal(zoom.zoomY.value, 0);
+});
+
+test('useImageZoom supports two-finger pinch zoom from the minimum scale', () => {
+  const zoom = useImageZoom();
+  const target = pointerTarget();
+
+  zoom.onImagePointerDown(touchPointer(1, 0, 0, target));
+  zoom.onImagePointerDown(touchPointer(2, 100, 0, target));
+  zoom.onImagePointerMove({ pointerId: 2, clientX: 180, clientY: 0 });
+
+  assert.equal(zoom.zoomScale.value, 1.8);
+  assert.equal(zoom.canZoomOut.value, true);
+  assert.deepEqual(target.captured, [1, 2]);
+
+  zoom.onImagePointerMove({ pointerId: 1, clientX: 10, clientY: 0 });
+  zoom.onImagePointerMove({ pointerId: 2, clientX: 190, clientY: 0 });
+
+  assert.equal(zoom.zoomScale.value, 1.8);
+  assert.equal(zoom.zoomX.value, 10);
+
+  zoom.onImagePointerUp({ pointerId: 1, currentTarget: target });
+  zoom.onImagePointerUp({ pointerId: 2, currentTarget: target });
+
+  assert.equal(zoom.isPanning.value, false);
+  assert.deepEqual(target.released, [1, 2]);
 });
 
 test('useClipboardFeedback centralizes clipboard copy state', async () => {

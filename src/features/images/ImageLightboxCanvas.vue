@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { ImageRecord } from './image.types';
 import { ICONS } from './image-lightbox-icons';
+import { useImageSwipeNavigation } from './useImageSwipeNavigation';
 
-defineProps<{
+const props = defineProps<{
   image?: ImageRecord | null;
   detailsOpen: boolean;
   imageControlsHidden: boolean;
@@ -28,6 +29,43 @@ const emit = defineEmits<{
   toggleControls: [];
   zoomBy: [factor: number];
 }>();
+
+const {
+  onSwipePointerDown,
+  onSwipePointerMove,
+  onSwipePointerUp,
+  onSwipePointerCancel,
+  shouldSuppressClick,
+} = useImageSwipeNavigation({
+  canSwipe: () => props.zoomScale <= 1 + 1e-3 && !props.isPanning,
+  onPrevious: () => emit('prev'),
+  onNext: () => emit('next'),
+});
+
+const handleImageClick = () => {
+  if (shouldSuppressClick()) return;
+  emit('toggleControls');
+};
+
+const handleImagePointerDown = (event: PointerEvent) => {
+  onSwipePointerDown(event);
+  emit('imagePointerDown', event);
+};
+
+const handleImagePointerMove = (event: PointerEvent) => {
+  onSwipePointerMove(event);
+  emit('imagePointerMove', event);
+};
+
+const handleImagePointerUp = (event: PointerEvent) => {
+  onSwipePointerUp(event);
+  emit('imagePointerUp', event);
+};
+
+const handleImagePointerCancel = (event: PointerEvent) => {
+  onSwipePointerCancel(event);
+  emit('imagePointerUp', event);
+};
 </script>
 
 <template>
@@ -40,12 +78,12 @@ const emit = defineEmits<{
       :class="{ 'is-panning': isPanning, 'is-zoomed': zoomScale > 1 }"
       :style="{ transform: zoomTransform }"
       draggable="false"
-      @click.stop="emit('toggleControls')"
+      @click.stop="handleImageClick"
       @wheel.prevent="emit('imageWheel', $event)"
-      @pointerdown="emit('imagePointerDown', $event)"
-      @pointermove="emit('imagePointerMove', $event)"
-      @pointerup="emit('imagePointerUp', $event)"
-      @pointercancel="emit('imagePointerUp', $event)"
+      @pointerdown="handleImagePointerDown"
+      @pointermove="handleImagePointerMove"
+      @pointerup="handleImagePointerUp"
+      @pointercancel="handleImagePointerCancel"
       @dblclick.stop="emit('imageDoubleClick', $event)"
       @dragstart.prevent
     />

@@ -4,6 +4,7 @@ for (const path of [
   './image-meta.test.mjs',
   './image-sort.test.mjs',
   './image-zoom.test.mjs',
+  './image-swipe.test.mjs',
   './location-name.test.mjs',
   './http-api.test.mjs',
   './logger.test.mjs',

@@ -241,11 +241,24 @@ test('ImageLightbox toggles the bottom zoom controls from image clicks', () => {
   assert.match(lightbox, /const imageControlsHidden = ref\(false\)/);
   assert.match(lightbox, /const toggleImageControls = \(\) => \{/);
   assert.match(lightbox, /imageControlsHidden\.value = !imageControlsHidden\.value/);
-  assert.match(lightbox, /@click\.stop="emit\('toggleControls'\)"/);
+  assert.match(lightbox, /@click\.stop="handleImageClick"/);
   assert.match(lightbox, /@toggle-controls="toggleImageControls"/);
   assert.match(lightbox, /v-if="image && !imageControlsHidden" class="image-controls"/);
   assert.match(lightbox, /imageControlsHidden\.value = false/);
   assert.doesNotMatch(lightbox, /previewHidden|togglePreview|preview-hidden-state|隐藏图片预览|预览已隐藏/);
+});
+
+test('ImageLightbox supports touch swipe navigation without fighting zoom gestures', () => {
+  assert.match(lightbox, /import \{ useImageSwipeNavigation \} from '\.\/useImageSwipeNavigation'/);
+  assert.match(lightbox, /canSwipe:\s*\(\) => props\.zoomScale <= 1 \+ 1e-3 && !props\.isPanning/);
+  assert.match(lightbox, /onPrevious:\s*\(\) => emit\('prev'\)/);
+  assert.match(lightbox, /onNext:\s*\(\) => emit\('next'\)/);
+  assert.match(lightbox, /const handleImageClick = \(\) => \{/);
+  assert.match(lightbox, /if \(shouldSuppressClick\(\)\) return;/);
+  assert.match(lightbox, /@pointerdown="handleImagePointerDown"/);
+  assert.match(lightbox, /@pointermove="handleImagePointerMove"/);
+  assert.match(lightbox, /@pointerup="handleImagePointerUp"/);
+  assert.match(lightbox, /@pointercancel="handleImagePointerCancel"/);
 });
 
 test('ImageLightbox uses a bottom details sheet on mobile instead of a full-width side drawer', () => {
