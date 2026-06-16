@@ -24,7 +24,7 @@ test('WorldBoundaryGlobe uses the original Three and WASM boundary pipeline', ()
   assert.match(component, /import\('@\/assets\/wasm\/geo\/geo_wasm\.js'\)/);
   assert.match(component, /new wasm\.GeoProcessor\(\)/);
   assert.match(component, /\.process_geojson\(/);
-  assert.match(component, /JSON\.stringify\(props\.visitedPlaces\)/);
+  assert.match(component, /JSON\.stringify\(initialVisitedPlaces\)/);
   assert.match(component, /,\s*2\.01,\s*\)/);
   assert.match(component, /geoProcessor\.get_boundary_lines\(\)/);
   assert.match(component, /fetch\('\/maps\/world\.zh\.json'/);
@@ -53,12 +53,22 @@ test('WorldBoundaryGlobe resolves lit regions from latitude and longitude before
   assert.match(component, /import \{ buildGeoHitIndex,\s*findRegionByLngLat,\s*vectorToLngLat \} from '\.\/geo-hit'/);
   assert.match(component, /hitIndex:\s*GeoHitIndex/);
   assert.match(component, /buildGeoHitIndex\(world,\s*china\)/);
+  assert.match(component, /const hasVisitedCoordinates = \(\) =>/);
+  assert.match(component, /Number\.isFinite\(coordinate\.lat\)\s*&&\s*Number\.isFinite\(coordinate\.lng\)/);
   assert.match(component, /const resolveVisitedPlaces = \(/);
   assert.match(component, /props\.visitedCoordinates \?\?/);
+  assert.match(component, /const resolvedPlaces = new Set\(\s*hasVisitedCoordinates\(\)\s*\?\s*\[\]\s*:\s*props\.visitedPlaces\.map/s);
   assert.match(component, /findRegionByLngLat\(mapDataCache\?\.hitIndex\s*\?\?\s*null,\s*coordinate\.lat,\s*coordinate\.lng\)/);
   assert.match(component, /geoProcessor\.find_nearest_country\(\s*point\.x,\s*point\.y,\s*point\.z,\s*2\.01,\s*\)/s);
+  assert.match(component, /const initialVisitedPlaces = hasVisitedCoordinates\(\) \? \[\] : props\.visitedPlaces/);
   assert.match(component, /JSON\.stringify\(resolvedVisitedPlaces\)/);
   assert.match(component, /props\.visitedCoordinates\?\.map\(\(coordinate\) => `\$\{coordinate\.lat\},\$\{coordinate\.lng\}`\)\.join\('\\u0000'\)/);
+});
+
+test('WorldBoundaryGlobe does not fuzzy-match place names when coordinates are available', () => {
+  assert.match(component, /if \(sceneState\?\.visitedCountryNames\.has\(countryName\)\) return true/);
+  assert.match(component, /if \(hasVisitedCoordinates\(\)\) return false/);
+  assert.match(component, /return props\.visitedPlaces\.some/);
 });
 
 test('WorldBoundaryGlobe creates a Three sphere with the original camera and renderer settings', () => {

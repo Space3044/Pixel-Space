@@ -92,8 +92,14 @@ const normalizePlace = (place: string) =>
     .replace(/\s+/g, '')
     .replace(/(省|市|自治区|特别行政区|壮族|回族|维吾尔|地区|共和国|王国|联邦|民主共和国|合众国)$/g, '');
 
+const hasVisitedCoordinates = () =>
+  (props.visitedCoordinates ?? []).some((coordinate) => (
+    Number.isFinite(coordinate.lat) && Number.isFinite(coordinate.lng)
+  ));
+
 const isVisitedCountry = (countryName: string) => {
   if (sceneState?.visitedCountryNames.has(countryName)) return true;
+  if (hasVisitedCoordinates()) return false;
 
   const normalizedCountry = normalizePlace(countryName.replace(/^中国-/, ''));
   return props.visitedPlaces.some((place) => {
@@ -131,7 +137,9 @@ const loadMapData = async () => {
 };
 
 const resolveVisitedPlaces = (geoProcessor: GeoProcessorType) => {
-  const resolvedPlaces = new Set(props.visitedPlaces.map((place) => place.trim()).filter(Boolean));
+  const resolvedPlaces = new Set(
+    hasVisitedCoordinates() ? [] : props.visitedPlaces.map((place) => place.trim()).filter(Boolean),
+  );
 
   for (const coordinate of props.visitedCoordinates ?? []) {
     if (!Number.isFinite(coordinate.lat) || !Number.isFinite(coordinate.lng)) continue;
@@ -574,10 +582,11 @@ const initializeGlobe = async () => {
     if (!mounted || version !== initVersion) return;
 
     const nextGeoProcessor = new wasm.GeoProcessor();
+    const initialVisitedPlaces = hasVisitedCoordinates() ? [] : props.visitedPlaces;
     nextGeoProcessor.process_geojson(
       JSON.stringify(mapData.world),
       JSON.stringify(mapData.china),
-      JSON.stringify(props.visitedPlaces),
+      JSON.stringify(initialVisitedPlaces),
       2.01,
     );
     const resolvedVisitedPlaces = resolveVisitedPlaces(nextGeoProcessor);
