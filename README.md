@@ -2,6 +2,8 @@
 
 个人自用图床和旅行足迹。上传时在浏览器侧压缩图片、提取 EXIF、补充位置与 AI 标注；边缘 API 把压缩图写入 Cloudflare R2，把原图归档到 Telegram 私有频道，把元数据写入 Cloudflare D1。访客看到公开图片，管理员可以管理目录、可见性、AI 配置和原图通行码。
 
+演示地址：[https://pixel-space.ofy.us.ci/](https://pixel-space.ofy.us.ci/)
+
 ## 功能概览
 
 - 图片上传：多图队列、SHA-256 去重、WebP 压缩、EXIF 读取、位置搜索、地图选点、批量目录、上传进度。
