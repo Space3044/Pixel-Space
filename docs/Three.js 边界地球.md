@@ -2,7 +2,7 @@
 
 > **💡 推荐查阅：** 如需查询 Three.js API 和示例，请访问官方文档 👉 [Three.js Docs](https://threejs.org/docs/) [Three.js Manual](https://threejs.org/manual/) [Three.js Examples](https://threejs.org/examples/)
 
-Pixel Space 的足迹页里有一个 Three.js 世界边界地球。它不是只放一个普通球体，而是把世界和中国的 GeoJSON 边界处理成 3D 线段，再用鼠标悬停识别国家或地区。本文主要介绍实现过程。
+Pixel Space 的足迹页里有一个 Three.js 世界边界地球。它不是只放一个普通球体，而是把世界和中国的 GeoJSON 边界处理成 3D 线段，再用鼠标悬停识别国家或地区。本文主要介绍实现过程以及 Three.js 相关的知识。
 
 ---
 
@@ -134,7 +134,7 @@ pnpm dev
 
 页面能看到 `Three.js stage ready`，说明页面入口、样式文件、TS 入口和 `#stage` 容器已经连通。
 
-![image-20260625153004658](./Three.js 边界地球.assets/image-20260625153004658.png)
+![image-20260625153004658](./Threejs-Boundary-Earth.assets/image-20260625153004658.png)
 
 ### 初始化 Three.js 地球
 
@@ -222,7 +222,7 @@ renderer.render(scene, camera);
 
 `Scene` 是场景，`Camera` 决定从哪里看，`Renderer` 把画面渲染到浏览器的 `canvas`。`Group` 是对象容器，球面和线框先放进 `globeGroup`，后面边界线也会放进去。
 
-![image-20260627164459373](./Three.js 边界地球.assets/image-20260627164459373.png)
+![image-20260627164459373](./Threejs-Boundary-Earth.assets/image-20260627164459373.png)
 
 ### 加入动画和鼠标控制
 
@@ -257,7 +257,7 @@ animate();
 
 `requestAnimationFrame(animate)` 会让浏览器在下一帧继续执行 `animate`。`controls.update()` 用来更新鼠标控制器状态。
 
-![加入 OrbitControls 后的鼠标拖拽效果](./Three.js 边界地球.assets/鼠标拖拽.gif)
+![加入 OrbitControls 后的鼠标拖拽效果](./Threejs-Boundary-Earth.assets/鼠标拖拽.gif)
 
 ## 从经纬度到真实边界
 
@@ -351,7 +351,7 @@ globeGroup.add(equatorLine);
 
 `lineRadius` 比地球半径大一点，让线略高于球面，避免和球面重叠闪烁。
 
-![image-20260628104221250](./Three.js 边界地球.assets/image-20260628104221250.png)
+![image-20260628104221250](./Threejs-Boundary-Earth.assets/image-20260628104221250.png)
 
 接着把赤道线数据换成更接近 GeoJSON 的 `Polygon.coordinates` 结构。在 `main.ts` 里，把原来的赤道坐标：
 
@@ -399,7 +399,7 @@ globeGroup.add(...polygonLines);
 
 这一步之后，页面上显示的是模拟的 Polygon 边界线。
 
-![image-20260629083758825](./Three.js 边界地球.assets/image-20260629083758825.png)
+![image-20260629083758825](./Threejs-Boundary-Earth.assets/image-20260629083758825.png)
 
 ### 接入真实 GeoJSON 并画河北
 
@@ -524,7 +524,7 @@ const polygonLines = polygonCoordinates.map((ring) =>
 
 `new URL('./data/china.json', import.meta.url)` 得到当前模块旁边的 JSON 文件地址。`fetch` 读取这个文件。`chinaResponse.json()` 把响应内容解析成 JS 对象。`as GeoJsonFeatureCollection` 告诉 TS：这份 JSON 按 `GeoJsonFeatureCollection` 的结构来理解。
 
-![image-20260629145551358](./Three.js 边界地球.assets/image-20260629145551358.png)
+![image-20260629145551358](./Threejs-Boundary-Earth.assets/image-20260629145551358.png)
 
 确认第一条 ring 能画出来后，把：
 
@@ -540,7 +540,7 @@ const polygonCoordinates = hebeiRings;
 
 这样 `polygonLines` 会为河北的每条 ring 创建一条 `THREE.Line`，完整河北边界就画出来了。
 
-![image-20260629145454309](./Three.js 边界地球.assets/image-20260629145454309.png)
+![image-20260629145454309](./Threejs-Boundary-Earth.assets/image-20260629145454309.png)
 
 ### 画完整中国边界
 
@@ -692,7 +692,7 @@ void loadChinaBoundary();
 
 因为线条要加到 `globeGroup` 里，所以 `globeGroup` 要先创建，再调用 `loadChinaBoundary`。这一步完成后，页面上应该能看到完整中国省级边界和十段线。
 
-![image-20260629170934954](./Three.js 边界地球.assets/image-20260629170934954.png)
+![image-20260629170934954](./Threejs-Boundary-Earth.assets/image-20260629170934954.png)
 
 ### 同时加载中国和世界边界
 
@@ -743,7 +743,7 @@ void loadBoundary(worldJsonUrl, '#f8fafc');
 
 这一步完成后，球面上会同时出现中国省级边界和世界国家边界。
 
-![image-20260629173330972](./Three.js 边界地球.assets/image-20260629173330972.png)
+![image-20260629173330972](./Threejs-Boundary-Earth.assets/image-20260629173330972.png)
 
 ### 优化边界线绘制结构
 
@@ -1068,7 +1068,7 @@ renderer.domElement.addEventListener('mouseleave', handleMouseLeave);
 
 这一步完成后，鼠标移动到地球上时，地球下方会显示当前经纬度。鼠标离开画布后，状态栏恢复成 `lng: -, lat: -`。
 
-![image-20260630095147977](./Three.js 边界地球.assets/image-20260630095147977.png)
+![image-20260630095147977](./Threejs-Boundary-Earth.assets/image-20260630095147977.png)
 
 ### 用经纬度判断区域名称
 
@@ -1415,7 +1415,7 @@ const setHoveredRegion = (regionName: string | null) => {
 };
 ```
 
-`hoveredRegionName` 用来避免鼠标在同一个区域内移动时反复重画。`hoveredBoundary` 是额外加到 `globeGroup` 里的高亮线。清理时要从场景里移除，也要释放 `geometry` 和 `material`。
+`hoveredRegionName` 用来避免鼠标在同一个区域内移动时反复重画。`hoveredBoundary` 是额外加到 `globeGroup` 里的高亮线。清理时要从场景里移除，也要释放 `geometry` 和 `material`。`dispose` 用来释放 Three.js 里占用 GPU/内存的资源。
 
 之前的 `loadBoundary` 只负责画边界线。现在同一份 `china.json` 和 `world.zh.json` 还要拿来构建命中索引，所以删除 `loadBoundary` 函数、`chinaJsonUrl`、`worldJsonUrl` 和两个 `void loadBoundary(...)` 调用，换成 `loadMapData`：
 
@@ -1514,6 +1514,522 @@ const handleMouseLeave = () => {
   -> 显示国家或省份名称
 ```
 
-![image-20260630172207549](./Three.js 边界地球.assets/image-20260630172207549.png)
+![image-20260630172207549](./Threejs-Boundary-Earth.assets/image-20260630172207549.png)
 
 至此，我们已经完成了一个可交互的足迹地球。它可以加载真实的中国和世界边界，也可以通过鼠标悬停识别所在区域，并把对应边界高亮出来。
+
+## 补充：常用的 Three.js 知识
+
+上面围绕边界地球展开，已经覆盖了 `Scene`、`Camera`、`Renderer`、`Mesh`、`SphereGeometry`、`LineSegments`、`OrbitControls`、`Raycaster`、坐标转换、边界高亮和资源释放。下面继续补充一下知识：
+
+### Object3D：对象层级和世界坐标
+
+边界地球里用到了 `Group`，球体、线框、边界线和高亮线都放在 `globeGroup` 里。但本文没有深入讲 `Object3D` 的局部坐标、世界坐标和父子层级变换。
+
+最小例子：
+
+```ts
+const parent = new THREE.Group();
+parent.position.set(10, 0, 0);
+scene.add(parent);
+
+const marker = new THREE.Mesh(
+  new THREE.SphereGeometry(0.1, 16, 16),
+  new THREE.MeshBasicMaterial({ color: '#facc15' }),
+);
+marker.position.set(1, 0, 0);
+parent.add(marker);
+```
+
+这里有两个位置：
+
+```text
+parent.position.x = 10
+marker.position.x = 1
+```
+
+`marker.position.x` 只表示它相对 `parent` 往右偏了 `1`。但在整个场景里，`parent` 自己已经往右偏了 `10`，所以 `marker` 真正出现在场景里的 x 位置是 `11`。
+
+这就是局部坐标和世界坐标的区别：
+
+```text
+局部坐标：对象相对父对象的位置
+世界坐标：对象在整个 scene 里的位置
+```
+
+代码里可以这样拿世界坐标：
+
+```ts
+const worldPosition = new THREE.Vector3();
+
+parent.updateMatrixWorld(true);
+marker.getWorldPosition(worldPosition);
+
+console.log(marker.position.x); // 1
+console.log(worldPosition.x); // 11
+```
+
+回到边界地球，`globeGroup` 就是父容器。球体、线框、边界线和高亮线都加在它里面。如果以后把 `globeGroup` 移动、旋转或缩放，里面的对象也会跟着变。
+
+这时读子对象自己的 `position`，只能看到它相对 `globeGroup` 的位置。读 `getWorldPosition()`，才能拿到它在整个场景里的位置：
+
+```ts
+const worldPosition = new THREE.Vector3();
+
+if (hoveredBoundary) {
+  globeGroup.updateMatrixWorld(true);
+  hoveredBoundary.getWorldPosition(worldPosition);
+  console.log(worldPosition.x, worldPosition.y, worldPosition.z);
+}
+```
+
+以后做标记跟随、相机追踪、对象对齐时，这部分会很常用。比如一个标记挂在模型内部，但你要知道它在整个场景里的真实位置，就会用到 `getWorldPosition()`。
+
+### Clock：让动画速度不受帧率影响
+
+本文用 `requestAnimationFrame` 做动画循环，但没有展开 `Clock` 和 `delta`。如果只是让 `OrbitControls` 更新拖拽、缩放和阻尼，当前写法已经够用：
+
+```text
+requestAnimationFrame + controls.update + renderer.render
+```
+
+但如果要让地球自动旋转、让边界线呼吸发光、让粒子持续移动，就不能简单每帧加一个固定值。不同设备帧率不同，固定值会导致动画速度不一致。
+
+`Clock` 的作用是告诉你上一帧到这一帧过去了多久。动画变化量应该根据这段时间计算，而不是根据帧数计算。
+
+最小用法是创建一个 `Clock`，每帧用 `getDelta()` 拿到时间差：
+
+```ts
+const clock = new THREE.Clock();
+
+const animate = () => {
+  const delta = clock.getDelta();
+
+  globeGroup.rotation.y += delta * 0.25;
+
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+};
+
+animate();
+```
+
+这里的 `0.25` 可以理解成“每秒旋转多少”。用了 `delta` 后，代码控制的是每秒变化量，不是每帧变化量。
+
+如果不用 `delta`，而是这样写：
+
+```ts
+globeGroup.rotation.y += 0.01;
+```
+
+问题是帧率会直接影响速度：
+
+```text
+60 FPS：一秒执行 60 次，约转 0.6
+30 FPS：一秒执行 30 次，约转 0.3
+```
+
+同一段动画在高帧率设备上更快，在低帧率设备上更慢。
+
+用 `delta` 后，帧率高时每帧的 `delta` 小，但一秒内执行次数多；帧率低时每帧的 `delta` 大，但一秒内执行次数少。最后一秒累积下来的变化量会更接近。
+
+所以 `Clock + delta` 解决的是“自定义动画速度跟着帧率变”的问题。
+
+### Light：让材质产生明暗和真实质感
+
+边界地球主要使用 `MeshBasicMaterial`。它不依赖灯光，所以这篇文章几乎绕开了灯光体系。
+
+普通 3D 模型通常会用 `MeshStandardMaterial` 或类似材质，这时就需要灯光。常见入口是 `AmbientLight`、`DirectionalLight` 和 `PointLight`。
+
+可以这样理解：`AmbientLight` 提供整体亮度，`DirectionalLight` 像太阳光，`PointLight` 像一个灯泡。
+
+最小用法是把材质换成需要光照的材质，再给场景加灯：
+
+```ts
+const material = new THREE.MeshStandardMaterial({
+  color: '#38bdf8',
+  roughness: 0.55,
+  metalness: 0.1,
+});
+
+const sphere = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 64, 32),
+  material,
+);
+scene.add(sphere);
+
+const ambientLight = new THREE.AmbientLight('#ffffff', 0.6);
+scene.add(ambientLight);
+
+const directionalLight = new THREE.DirectionalLight('#ffffff', 2);
+directionalLight.position.set(3, 4, 5);
+scene.add(directionalLight);
+```
+
+如果使用 `MeshBasicMaterial`，加灯也看不出明暗变化。要测试灯光，至少换成 `MeshStandardMaterial` 或 `MeshPhongMaterial`。
+
+### Texture 和颜色管理：让贴图不偏色
+
+本文的地球主体是透明蓝色球体，没有使用真实地球贴图，所以没有展开 `TextureLoader`。
+
+如果后面要加地球表面、云层、夜光城市、模型贴图，就会用到纹理加载。图片进入 Three.js 后，不只是贴到模型上这么简单，还要关注颜色空间。
+
+Three.js 新版本里经常会遇到 `texture.colorSpace`、`renderer.outputColorSpace` 和 `toneMapping`。如果这些配置不对，画面可能发灰、过亮，或者和原图颜色不一致。
+
+最小用法是加载图片，设置颜色空间，再把它放进材质：
+
+```ts
+const textureLoader = new THREE.TextureLoader();
+const earthTexture = textureLoader.load('/textures/earth.jpg');
+earthTexture.colorSpace = THREE.SRGBColorSpace;
+
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1;
+
+const material = new THREE.MeshBasicMaterial({
+  map: earthTexture,
+});
+
+const earth = new THREE.Mesh(
+  new THREE.SphereGeometry(1, 64, 32),
+  material,
+);
+scene.add(earth);
+```
+
+`TextureLoader` 负责把图片加载成 Three.js 能用的纹理。`earthTexture` 不是普通图片路径，而是可以放进材质里的贴图对象。
+
+```ts
+earthTexture.colorSpace = THREE.SRGBColorSpace;
+```
+
+先告诉 Three.js 这张图片按什么颜色空间解释。像 `earth.jpg` 这种普通颜色图片，通常按 `SRGBColorSpace` ，处理法线图、粗糙度图这类非颜色数据贴图不要这样处理。
+
+```ts
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1;
+```
+
+然后设置渲染器最终输出，`outputColorSpace` 控制最终画面输出到屏幕时使用的颜色空间。`toneMapping` 和 `toneMappingExposure` 控制整体亮度和高光压缩，常见于更接近真实光照的场景。
+
+```ts
+const material = new THREE.MeshBasicMaterial({
+  map: earthTexture,
+});
+```
+
+最后是把贴图放进材质，再用这个材质创建球体。`map` 就是材质的颜色贴图。这里的球体不再只是一个纯色球，而是把 `earth.jpg` 贴到球面上。
+
+### GLTFLoader：加载真实 3D 模型
+
+边界地球没有加载外部 3D 模型，所以没有用到 `GLTFLoader`。
+
+实际 Three.js 项目里，`.glb` 和 `.gltf` 是很常见的模型格式。加载模型时要处理加载中、加载失败、模型缩放、材质贴图和资源释放。
+
+最小用法是从 examples 里导入加载器，再把加载到的 `gltf.scene` 加进场景：
+
+```ts
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+const loader = new GLTFLoader();
+
+loader.load(
+  '/models/satellite.glb',
+  (gltf) => {
+    gltf.scene.position.set(0, 0, 0);
+    gltf.scene.scale.setScalar(0.5);
+    scene.add(gltf.scene);
+  },
+  (event) => {
+    const progress = event.total > 0 ? event.loaded / event.total : 0;
+    console.log(`model loading: ${(progress * 100).toFixed(1)}%`);
+  },
+  (error) => {
+    console.error('Model load failed', error);
+  },
+);
+```
+
+加载进来的模型通常也是一棵对象树。需要改位置、缩放、隐藏模型的某个零件时，可以通过 `gltf.scene.traverse(...)` 寻找。
+
+### renderer.info：先看见性能问题
+
+本文讲了把很多边界线合成 `LineSegments`，也讲了 `dispose()`。但没有展开怎么观察性能。
+
+`renderer.info` 可以看到渲染调用次数、几何体数量、纹理数量等信息。排查卡顿时，先看这些数字，比直接猜问题更可靠。
+
+比如边界线对象太多、贴图太多、draw call 太高，都能从这里开始定位。
+
+最小用法是在渲染后打印 `renderer.info`：
+
+```ts
+renderer.render(scene, camera);
+
+console.log({
+  calls: renderer.info.render.calls,
+  triangles: renderer.info.render.triangles,
+  geometries: renderer.info.memory.geometries,
+  textures: renderer.info.memory.textures,
+});
+```
+
+`calls` 可以粗略理解为这帧发给 GPU 的绘制次数。对象很多时，它通常会升高。边界线从很多个 `Line` 合并成 `LineSegments`，就是为了减少这类压力。
+
+### InstancedMesh：大量重复物体别一个个创建
+
+边界地球里的边界线适合用 `LineSegments` 合并。另一类常见场景是大量重复物体，比如星星、点位、标记、树、石头或相同小模型。
+
+如果给每个重复物体都创建一个独立 `Mesh`，对象数量和 draw call 会很快变高。`InstancedMesh` 可以让很多相同几何体和材质的对象走实例化渲染。
+
+它适合“形状和材质相同，只是位置、旋转、缩放不同”的场景。
+
+最小用法是创建一个 `InstancedMesh`，再用矩阵给每个实例设置位置。
+
+这里的矩阵是 `THREE.Matrix4`，也就是一个 4x4 矩阵。Three.js 用这个 4x4 矩阵同时描述一个物体的位置、旋转和缩放：
+
+```text
+[
+  r11, r12, r13, x,
+  r21, r22, r23, y,
+  r31, r32, r33, z,
+  0,   0,   0,   1,
+]
+```
+
+这里的 `x`、`y`、`z` 是这个实例在三维空间里的位置。左上角的 `r11` 到 `r33` 是旋转和缩放合成出来的结果。实际写代码时，不需要自己计算这些值，交给 `Object3D.updateMatrix()` 就行。
+
+实际写 `InstancedMesh` 时，通常不用手写矩阵。可以借一个临时的 `Object3D`，先像普通物体一样设置 `position`、`rotation`、`scale`，再让 Three.js 帮我们合成矩阵：
+
+```ts
+const count = 1000;
+const geometry = new THREE.SphereGeometry(0.01, 8, 8);
+const material = new THREE.MeshBasicMaterial({ color: '#facc15' });
+const markers = new THREE.InstancedMesh(geometry, material, count);
+
+const dummy = new THREE.Object3D();
+
+for (let index = 0; index < count; index += 1) {
+  const x = (Math.random() - 0.5) * 4;
+  const y = (Math.random() - 0.5) * 4;
+  const z = (Math.random() - 0.5) * 4;
+
+  dummy.position.set(x, y, z);
+  dummy.rotation.set(0, Math.PI / 4, 0);
+  dummy.scale.setScalar(0.5);
+
+  dummy.updateMatrix();
+  markers.setMatrixAt(index, dummy.matrix);
+}
+
+markers.instanceMatrix.needsUpdate = true;
+scene.add(markers);
+```
+
+`position.set(x, y, z)` 设置实例位置。`rotation.set(rx, ry, rz)` 表示分别绕 x、y、z 三个轴旋转，单位是弧度。`scale.setScalar(0.5)` 表示三个方向都缩小到一半；如果要分开控制三个方向，可以写成 `scale.set(sx, sy, sz)`。
+
+`dummy.updateMatrix()` 会把位置、旋转和缩放合成 `dummy.matrix`。这个矩阵的左上 3x3 部分负责旋转和缩放，最后一列负责位置。`setMatrixAt` 拿到这个矩阵后，就知道第 `index` 个实例应该放在哪里、朝哪个方向、放大或缩小多少。
+
+### 后处理：给最终画面加屏幕效果
+
+后处理不是改变某个单独物体，而是处理最终渲染出来的整张画面。可以把它理解成：先把 3D 场景画成一张图，再对这张图继续加工。
+
+普通渲染是直接把场景画到屏幕上：
+
+```ts
+renderer.render(scene, camera);
+```
+
+用了后处理后，会把渲染交给 `EffectComposer`：
+
+```ts
+composer.render();
+```
+
+`composer` 负责把多个处理步骤按顺序接起来。比如先渲染原始场景，再加辉光，最后把结果输出到屏幕。
+
+后处理适合做这些效果：
+
+```text
+Bloom：让亮的地方发光
+Outline：给物体加轮廓线
+Color grading：统一调整画面颜色
+Depth of field：做景深虚化
+Vignette：加暗角
+Scanline：加扫描线
+```
+
+放到边界地球里，后处理可以用来做地球外圈辉光、边界线发光、悬停区域描边，或者整体画面调色。它更适合在功能稳定后，用来提升最终画面质感：
+
+```ts
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(stage.clientWidth, stage.clientHeight),
+  0.8,
+  0.4,
+  0.85,
+);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+
+const animate = () => {
+  controls.update();
+  composer.render();
+  requestAnimationFrame(animate);
+};
+
+animate();
+```
+
+这段代码里，`RenderPass` 负责先把 `scene` 和 `camera` 渲染成原始画面。`UnrealBloomPass` 负责给亮的部分加辉光。`OutputPass` 负责把最后结果输出到屏幕。
+
+注意这里已经不再调用 `renderer.render(scene, camera)`。动画循环里只调用 `composer.render()`，否则同一帧会被渲染两套流程。
+
+如果页面尺寸变化，不只要更新 `renderer.setSize(...)`，也要更新 `composer.setSize(...)`。因为后处理内部也有自己的渲染目标，它的尺寸需要和画布保持一致。
+
+### Shader：自己控制顶点和像素
+
+Shader 一开始会比较难懂，因为它不是普通 JS。它更像是写给 GPU 的两段小程序。
+
+先不要急着理解所有语法，可以把 `ShaderMaterial` 分成三个部分：
+
+```text
+uniforms
+  JS 传给 Shader 的变量
+
+vertexShader
+  决定顶点最终画在哪里
+
+fragmentShader
+  决定每个像素是什么颜色
+```
+
+下面先写一个最小版本：做一个透明球壳，让它的透明度随时间轻微变化。
+
+```ts
+const shaderMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uColor: { value: new THREE.Color('#38bdf8') },
+  },
+  vertexShader: `
+    void main() {
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float uTime;
+    uniform vec3 uColor;
+
+    void main() {
+      float alpha = 0.35 + 0.25 * sin(uTime);
+      gl_FragColor = vec4(uColor, alpha);
+    }
+  `,
+  transparent: true,
+});
+
+const shell = new THREE.Mesh(
+  new THREE.SphereGeometry(1.05, 64, 32),
+  shaderMaterial,
+);
+scene.add(shell);
+
+const clock = new THREE.Clock();
+
+const animate = () => {
+  shaderMaterial.uniforms.uTime.value += clock.getDelta();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+};
+```
+
+`uniforms` 是 JS 传给 Shader 的参数：
+
+```ts
+uniforms: {
+  uTime: { value: 0 },
+  uColor: { value: new THREE.Color('#38bdf8') },
+}
+```
+
+`uTime` 是时间，`uColor` 是颜色。Shader 不能直接读外面的 JS 变量，所以要通过 `uniforms` 传进去。
+
+动画循环里这句每一帧都会增加时间：
+
+```ts
+shaderMaterial.uniforms.uTime.value += clock.getDelta();
+```
+
+所以 `fragmentShader` 里的 `uTime` 会一直变化。
+
+`vertexShader` 这一段可以先当成固定写法：
+
+```glsl
+void main() {
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+```
+
+它的作用是把球壳的顶点放到屏幕上。这里的 `position`、`modelViewMatrix`、`projectionMatrix` 都是 Three.js 帮我们准备好的。现在先不用手改它。
+
+真正决定颜色的是 `fragmentShader`：
+
+```glsl
+uniform float uTime;
+uniform vec3 uColor;
+
+void main() {
+  float alpha = 0.35 + 0.25 * sin(uTime);
+  gl_FragColor = vec4(uColor, alpha);
+}
+```
+
+`alpha` 是透明度。`sin(uTime)` 会随着时间在 `-1` 到 `1` 之间来回变化，所以 `alpha` 也会来回变化。
+
+这句是最终输出：
+
+```glsl
+gl_FragColor = vec4(uColor, alpha);
+```
+
+它表示：当前像素使用 `uColor` 这个颜色，再使用刚算出来的 `alpha` 作为透明度。
+
+因为材质里写了：
+
+```ts
+transparent: true,
+```
+
+所以这个透明度才会真正生效。
+
+整体数据流是这样：
+
+```text
+JS
+  -> 更新 uniforms.uTime
+  -> ShaderMaterial 把 uTime 传给 fragmentShader
+  -> fragmentShader 根据 uTime 算出 alpha
+  -> 球壳透明度随时间变化
+```
+
+如果不更新 `uTime`，Shader 仍然能显示颜色，但画面不会动。
+
+所以第一次看 Shader，先只记住这三个点：
+
+```text
+uniforms：JS 往 Shader 里传值
+vertexShader：决定顶点位置
+fragmentShader：决定像素颜色
+```
+
+等这个结构熟了，再看 `uv`、渐变、流动光和复杂公式会轻松很多。
