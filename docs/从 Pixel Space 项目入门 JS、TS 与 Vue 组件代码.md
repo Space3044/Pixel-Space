@@ -83,7 +83,24 @@ Vue 的组件、模板和响应式变量放到后面讲。这里先只看 JS/TS 
 
 ### JS 常见写法
 
-#### 模块 import 和 export
+#### 模块导入和导出
+
+JS 代码一般不会把所有内容都写在一个文件里。一个文件可以把自己的一部分内容开放出去，另一个文件再拿来使用，这就是模块。
+
+常见模块写法有两种：
+
+```text
+ES Module：import / export
+CommonJS：require / module.exports / exports
+```
+
+##### ES Module：import 和 export
+
+在 Vue 和现代前端项目里，最常见的是 ES Module。Pixel Space 里的 `.vue` 和 `.ts` 代码基本都用这种写法。
+
+###### 静态导入
+
+静态导入必须写在模块顶层。页面加载这个模块时，这些依赖也会一起被分析和加载。
 
 ```ts
 import { computed, ref } from 'vue';
@@ -106,19 +123,42 @@ from 右边：从哪里拿。
 从当前目录的 footprint 文件里拿 groupFootprints。
 ```
 
-有 `{}` 的是命名导入，名字要和对方 `export` 出来的名字对上。
+###### 动态导入 import()
+
+它的写法像函数调用，运行到这行代码时才加载目标模块。
+
+Pixel Space 的路由里有这种写法：
 
 ```ts
-import { groupFootprints } from './footprint';
+component: () => import('@/features/footprints/FootprintsView.vue');
 ```
 
-没有 `{}` 的是默认导入，导入时可以自己起名字。Vue 组件常见这种写法。
+这句表示：进入足迹页时，再去加载 `FootprintsView.vue`。这样首页第一次打开时，不需要一次性加载所有页面代码。
+
+异步组件也会用动态导入：
 
 ```ts
-import FootprintFlatMap from './FootprintFlatMap.vue';
+const ImageLightbox = defineAsyncComponent(() => import('./ImageLightbox.vue'));
 ```
 
-`export` 表示把当前文件里的东西开放给别的文件使用。
+`import()` 会返回一个 `Promise`，所以在普通函数里也可以配合 `await` 使用：
+
+```ts
+const maplibre = await import('maplibre-gl');
+```
+
+读代码时可以先看形式：
+
+```text
+import ... from ...：静态导入。
+import(...)：动态导入。
+```
+
+###### 命名导出和命名导入
+
+命名导出会把一个具体名字开放出去。导入时要写 `{}`，里面的名字要和导出方对上。
+
+导出方这样写：
 
 ```ts
 export const groupFootprints = (images: ImageRecord[]): FootprintGroup[] => {
@@ -126,17 +166,97 @@ export const groupFootprints = (images: ImageRecord[]): FootprintGroup[] => {
 };
 ```
 
-这句表示：当前文件提供了一个叫 `groupFootprints` 的函数，其他文件可以用 `{ groupFootprints }` 导入它。
+导入方这样写（命名导入也是静态导入，所以也必须写在模块顶层）：
 
-这里的 `export` 是跨文件共享，和 `<script setup>` 里变量能直接给当前模板使用不是一回事。
+```ts
+import { groupFootprints } from './footprint';
+```
 
-路径也要会读：
+也可以先定义变量，再统一命名导出：
+
+```ts
+const zoomMin = 1;
+const zoomMax = 8;
+
+export { zoomMin, zoomMax };
+```
+
+###### 默认导出和默认导入
+
+默认导出表示当前文件默认开放一个东西。一个文件最多只能有一个默认导出。
+
+普通 JS/TS 文件里，导出方可能这样写：
+
+```ts
+export default FootprintFlatMap;
+```
+
+导入默认导出时不写 `{}`，导入方可以自己起名字。
+
+```ts
+import FootprintFlatMap from './FootprintFlatMap.vue';
+```
+
+这句表示从 `FootprintFlatMap.vue` 导入它默认开放出来的内容，并在当前文件里叫 `FootprintFlatMap`。Vue 组件被其他文件导入时，常见这种默认导入写法。`<script setup>` 里通常不用手写 `export default`。
+
+读的时候可以先看有没有 `{}`：
+
+```text
+有 {}：命名导入，名字要对上。
+没有 {}：默认导入，名字可以由导入方自己取。
+```
+
+```text
+export 是跨文件共享。
+<script setup> 里的变量能直接给当前 template 用，只限当前组件内部。
+这两件事不是同一个机制。
+```
+
+`from` 后的路径怎么读：
 
 ```text
 'vue'：项目安装的包。
-'./footprint'：当前文件旁边的 footprint 文件。
-'@/shared/auth/useAdmin'：项目 src 目录下的文件。
+'./footprint'：当前文件同级目录下的 footprint 文件。
+'@/shared/auth/useAdmin'：项目 src 目录下的 shared/auth/useAdmin 文件。
 ```
+
+##### CommonJS：require 和 module.exports
+
+CommonJS 在一些 Node.js 脚本、老项目或配置文件里会遇到。它不用 `import`，而是用 `require` 导入。
+
+```js
+const fs = require('node:fs');
+const { groupFootprints } = require('./footprint');
+```
+
+CommonJS 导出时常见这样写：
+
+```js
+module.exports = {
+  groupFootprints,
+};
+```
+
+或者这样写：
+
+```js
+exports.groupFootprints = groupFootprints;
+```
+
+对应的导入方式是：
+
+```js
+const { groupFootprints } = require('./footprint');
+```
+
+读代码时可以先看关键字：
+
+```text
+看到 import / export：按 ES Module 读。
+看到 require / module.exports / exports：按 CommonJS 读。
+```
+
+这两套写法都是在解决同一件事：一个文件把内容开放出去，另一个文件拿来使用。只是语法不同。读 Pixel Space 的相关代码时，优先按 ES Module 理解就够了。
 
 #### JS 里容易误读的基础符号
 
