@@ -294,16 +294,16 @@ const coordinate = { lat: footprint.lat, lng: footprint.lng };
 activeFootprintKey.value;
 ```
 
-`{}` 创建对象。`lat` 和 `lng` 是字段名，右边的 `footprint.lat`、`footprint.lng` 是字段值。点号 `.` 用来读取对象里的字段。
+`{}` 创建对象。`lat` 和 `lng` 是属性名，右边的 `footprint.lat`、`footprint.lng` 是属性值；`lat: footprint.lat` 整体是一条属性定义。点号 `.` 用来读取对象里的属性。
 
 通用格式：
 
 ```ts
-const 对象名 = { 字段名: 字段值 };
-对象名.字段名;
+const 对象名 = { 属性名: 属性值 };
+对象名.属性名;
 ```
 
-在项目里，很多变量本质上都是对象。比如 `footprint` 不是一个普通字符串，它是一条足迹数据，里面有 `key`、`lat`、`lng`、`title` 等字段。所以代码里才会写：
+在项目里，很多变量本质上都是对象。比如 `footprint` 不是一个普通字符串，它是一条足迹数据，里面有 `key`、`lat`、`lng`、`title` 等属性。所以代码里才会写：
 
 ```ts
 footprint.key;
@@ -311,9 +311,9 @@ footprint.lat;
 footprint.lng;
 ```
 
-JS 对象常用点号读取字段，也就是 `footprint.key` 这种写法。
+JS 对象常用点号读取属性，也就是 `footprint.key` 这种写法。
 
-同一个字段也可以用方括号读取：
+同一个属性也可以用方括号读取：
 
 ```ts
 const value = footprint['key'];
@@ -457,7 +457,7 @@ const names = [...new Set(visitedPlaces)];
 
 `[]` 左边这种写法是数组解构，用来按位置取值。`...` 是展开，把一组值摊开放进新数组。
 
-数组解构看位置，对象解构看字段名。
+数组解构看位置，对象解构看属性名。
 
 ```ts
 const point = [121.47, 31.23];
@@ -478,7 +478,7 @@ const uniqueNames = [...new Set(allNames)];
 
 ```ts
 const [变量一, 变量二] = 数组;
-const { 字段名 } = 对象;
+const { 属性名 } = 对象;
 const 新数组 = [...旧数组];
 ```
 
@@ -538,10 +538,10 @@ for (const index in names) {
 
 ```text
 for...of：遍历值。
-for...in：遍历键或下标。
+for...in：遍历属性名或数组下标。
 ```
 
-项目里遍历数组时，更多会看到 `for...of`、`map`、`filter`。`for...in` 更适合需要读取对象字段名的场景。
+项目里遍历数组时，更多会看到 `for...of`、`map`、`filter`。`for...in` 更适合需要读取对象属性名的场景。
 
 #### 数组方法和回调函数
 
@@ -643,7 +643,7 @@ Promise.all([...]) 等多个异步任务一起完成。
 动态 import() 加载模块或组件。
 ```
 
-`Promise` 可以理解成“未来会有结果的对象”。它有三种状态：等待中、成功、失败。普通对象可以用 `对象.字段` 取值；Promise 的值还没准备好，所以要用 `await` 或 `.then()` 等它完成。
+`Promise` 可以理解成“未来会有结果的对象”。它有三种状态：等待中、成功、失败。普通对象可以用 `对象.属性名` 读取属性值；Promise 的值还没准备好，所以要用 `await` 或 `.then()` 等它完成。
 
 不要把 `async` 当成加速开关。JS 里浏览器 API 例如 `fetch()` 会返回 Promise；你的函数里要 `await` 它，外层才写 `async`。
 
@@ -855,17 +855,17 @@ interface ProjectedFootprintMarker {
 }
 ```
 
-`interface` 描述对象长什么样。这里表示一个 `ProjectedFootprintMarker` 必须有 `key`、`lng`、`lat`、`imagesCount` 这些字段。
+`interface` 描述对象长什么样。这里表示一个 `ProjectedFootprintMarker` 必须有 `key`、`lng`、`lat`、`imagesCount` 这些属性。
 
 通用格式：
 
 ```ts
 interface 类型名 {
-  字段名: 字段类型;
+  属性名: 属性值类型;
 }
 ```
 
-这里的 `interface` 更适合理解成“对象结构说明”。它不是页面界面，也不会在浏览器里运行。它告诉 TS：这个对象应该有哪些字段，每个字段是什么类型。
+这里的 `interface` 更适合理解成“对象结构说明”。它不是页面界面，也不会在浏览器里运行。它告诉 TS：这个对象应该有哪些属性，每个属性的值是什么类型。
 
 **可选属性**
 
@@ -875,7 +875,7 @@ interface MarkerClusterOptions {
 }
 ```
 
-`?` 写在字段名后面，表示这个字段可有可无。
+`?` 写在属性名后面，表示这个属性可有可无。
 
 这表示 `radius` 可以传，也可以不传。它通常会放在一个配置对象里，比如源码里的 `options` 参数：
 
@@ -888,13 +888,13 @@ export const clusterProjectedMarkers = (
 };
 ```
 
-`options.radius` 的意思是：读取这个配置对象里的 `radius` 字段。
+`options.radius` 的意思是：读取这个配置对象里的 `radius` 属性。
 
 通用格式：
 
 ```ts
 interface 类型名 {
-  可选字段名?: 字段类型;
+  可选属性名?: 属性值类型;
 }
 ```
 
@@ -915,7 +915,7 @@ type Source = 'china' | 'world';
 
 对象结构常用 `interface`；元组、联合类型、固定值组合常用 `type`。
 
-`interface` 的设计重点是描述对象有哪些字段。比如 `ProjectedFootprintMarker` 有 `key`、`lng`、`lat`，这种“一个对象长什么样”的场景，用 `interface` 读起来最直观。
+`interface` 的设计重点是描述对象有哪些属性。比如 `ProjectedFootprintMarker` 有 `key`、`lng`、`lat`，这种“一个对象长什么样”的场景，用 `interface` 读起来最直观。
 
 `type` 更像“给任意类型表达式起名字”。它不只限于对象，也可以给元组、联合类型、固定值组合起名字：
 
@@ -924,7 +924,7 @@ type Coordinate = [number, number];
 type Source = 'china' | 'world';
 ```
 
-这里如果用 `interface` 就不合适，因为 `[number, number]` 不是对象字段结构，`'china' | 'world'` 也不是对象字段结构。
+这里如果用 `interface` 就不合适，因为 `[number, number]` 不是对象属性结构，`'china' | 'world'` 也不是对象属性结构。
 
 它们都只存在于 TS 类型检查阶段，不会变成浏览器里运行的代码。
 
@@ -957,7 +957,7 @@ kind: 'single' | 'cluster';
 
 这里不是在给 `source` 赋值。因为它写在类型定义里，冒号后面仍然是在写类型。
 
-所以 `source: 'china' | 'world'` 的意思是：以后真正创建对象时，`source` 这个字段的值只能是 `'china'` 或 `'world'`。
+所以 `source: 'china' | 'world'` 的意思是：以后真正创建对象时，`source` 这个属性的值只能是 `'china'` 或 `'world'`。
 
 ```ts
 const marker = {
@@ -971,7 +971,7 @@ const marker = {
 通用格式：
 
 ```ts
-字段名: '允许的具体字符串一' | '允许的具体字符串二';
+属性名: '允许的具体字符串一' | '允许的具体字符串二';
 ```
 
 这类写法常用于限制选项。比如地图来源只能是国内或世界，标记类型只能是单点或聚合点。好处是写错时 TS 会提示。
@@ -1146,13 +1146,13 @@ type UpdatePayload = Partial<DownloadGrantRecord>;
 常见读法：
 
 ```text
-Pick<A, 'x' | 'y'>：从 A 里面只挑 x 和 y。
-Record<K, V>：一个对象，键是 K，值是 V。
-Partial<T>：把 T 里面的字段都变成可选。
+Pick<A, 'x' | 'y'>：从 A 里面只挑属性名为 x 和 y 的属性。
+Record<K, V>：一个对象，属性名类型是 K，属性值类型是 V。
+Partial<T>：把 T 里面的属性都变成可选。
 Readonly<T>：只读，不能随便改。
 ```
 
-这些不是运行时函数，不会真的去挑字段或改对象。它们只是在类型层面帮 TS 描述数据。
+这些不是运行时函数，不会真的去挑属性或改对象。它们只是在类型层面帮 TS 描述数据。
 
 项目里还会看到 `typeof` 放在类型位置：
 
@@ -1350,15 +1350,15 @@ source：只能是 china 或 world
 
 ```ts
 const props = defineProps<{
-  字段名: 字段类型;
-  可选字段?: 字段类型;
+  属性名: 属性值类型;
+  可选属性名?: 属性值类型;
 }>();
 ```
 
 抽出来看，父组件模板里对应：
 
 ```vue
-<ChildComponent 固定字段="固定字符串" :动态字段="script里的变量" />
+<ChildComponent 固定属性="固定字符串" :动态属性="script里的变量" />
 ```
 
 ### defineEmits：组件会发出什么事件
@@ -1502,14 +1502,14 @@ const editForm = reactive<ImageLightboxEditForm>({
 });
 ```
 
-使用 `reactive` 时，不需要 `.value`，直接读写对象字段：
+使用 `reactive` 时，不需要 `.value`，直接读写对象属性：
 
 ```ts
 editForm.title = '新的标题';
 editForm.location_name = '上海';
 ```
 
-在 `template` 里也可以直接用对象字段：
+在 `template` 里也可以直接用对象属性：
 
 ```vue
 <template>
@@ -1524,7 +1524,7 @@ editForm.location_name = '上海';
 
 ```text
 ref：一个值外面套一层响应式壳，脚本里用 .value。
-reactive：整个对象变成响应式对象，脚本里直接改字段。
+reactive：整个对象变成响应式对象，脚本里直接改属性。
 ```
 
 通用格式：
@@ -1534,16 +1534,16 @@ const 一个值 = ref<类型>(初始值);
 一个值.value = 新值;
 
 const 一个对象 = reactive<类型>({
-  字段: 初始值,
+  属性名: 初始值,
 });
-一个对象.字段 = 新值;
+一个对象.属性名 = 新值;
 ```
 
 模板里对应：
 
 ```vue
 <p>{{ 一个值 }}</p>
-<input v-model="一个对象.字段" />
+<input v-model="一个对象.属性名" />
 ```
 
 `reactive` 要注意解构问题：
@@ -1554,7 +1554,7 @@ const { title } = editForm;
 
 这句的意思是：从 `editForm` 里取出 `title`，放到一个新的本地变量 `title` 里。
 
-如果 `editForm` 是 `reactive` 对象，这样拆出来的 `title` 通常就不是响应式字段了。后面 `editForm.title` 变了，单独拿出来的 `title` 不会自动跟着变。
+如果 `editForm` 是 `reactive` 对象，这样拆出来的 `title` 通常就不是响应式属性了。后面 `editForm.title` 变了，单独拿出来的 `title` 不会自动跟着变。
 
 所以响应式对象一般这样读写：
 
@@ -1563,7 +1563,7 @@ editForm.title = '新的标题';
 console.log(editForm.title);
 ```
 
-如果确实要把字段拆出来，并且还想保留响应式，要用 `toRefs`：
+如果确实要把属性拆出来，并且还想保留响应式，要用 `toRefs`：
 
 ```ts
 const { title } = toRefs(editForm);
@@ -2144,7 +2144,7 @@ options: MarkerClusterOptions = {}
 三、内部变量
 
 new Set<string>()
-visited 是字符串集合，用来记录已经处理过的 key。
+visited 是字符串集合，用来记录已经处理过的 `key` 属性值。
 
 const clusters: FootprintMarkerCluster[] = []
 clusters 只能放 FootprintMarkerCluster。
